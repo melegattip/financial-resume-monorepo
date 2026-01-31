@@ -1,0 +1,573 @@
+openapi: 3.0.0
+info:
+  title: Financial Resume Engine API
+  version: 1.0.0
+  description: API para gestionar transacciones financieras y generar reportes
+
+servers:
+  - url: http://localhost:8080
+    description: Servidor de desarrollo
+  - url: https://internal-api.niloft.com
+    description: Servidor de producción
+
+components:
+  securitySchemes:
+    CallerId:
+      type: apiKey
+      in: header
+      name: x-caller-id
+      required: true
+
+  schemas:
+    Transaction:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        user_id:
+          type: string
+        amount:
+          type: number
+          format: float
+        description:
+          type: string
+        date:
+          type: string
+          format: date-time
+        category_id:
+          type: string
+          format: uuid
+        paid:
+          type: boolean
+          description: Indica si el gasto está pagado
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+        percentage:
+          type: number
+          format: float
+          description: Porcentaje de la transacción respecto al total de ingresos
+
+    Category:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        description:
+          type: string
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+
+    FinancialReport:
+      type: object
+      properties:
+        total_income:
+          type: number
+          format: float
+        total_expenses:
+          type: number
+          format: float
+        balance:
+          type: number
+          format: float
+        transactions:
+          type: array
+          items:
+            $ref: '#/components/schemas/Transaction'
+        category_summary:
+          type: array
+          description: Resumen de egresos agrupados por categoría
+          items:
+            $ref: '#/components/schemas/CategorySummary'
+
+    CategorySummary:
+      type: object
+      properties:
+        category_id:
+          type: string
+        category_name:
+          type: string
+        total_amount:
+          type: number
+          format: float
+        percentage:
+          type: number
+          format: float
+          description: Porcentaje de la categoría respecto al total de egresos
+
+paths:
+  /api/v1/incomes:
+    post:
+      summary: Crear un nuevo ingreso
+      security:
+        - CallerId: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Transaction'
+      responses:
+        '201':
+          description: Ingreso creado exitosamente
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Transaction'
+        '400':
+          description: Error en la solicitud
+        '401':
+          description: No autorizado
+        '500':
+          description: Error interno del servidor
+
+  /api/v1/incomes/{user_id}:
+    get:
+      summary: Listar ingresos de un usuario
+      security:
+        - CallerId: []
+      parameters:
+        - name: user_id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Lista de ingresos
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Transaction'
+        '401':
+          description: No autorizado
+        '500':
+          description: Error interno del servidor
+
+  /api/v1/incomes/{user_id}/{id}:
+    get:
+      summary: Obtener un ingreso específico
+      security:
+        - CallerId: []
+      parameters:
+        - name: user_id
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Detalles del ingreso
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Transaction'
+        '401':
+          description: No autorizado
+        '404':
+          description: Ingreso no encontrado
+        '500':
+          description: Error interno del servidor
+    patch:
+      summary: Actualizar un ingreso
+      security:
+        - CallerId: []
+      parameters:
+        - name: user_id
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Transaction'
+      responses:
+        '200':
+          description: Ingreso actualizado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Transaction'
+        '400':
+          description: Error en la solicitud
+        '401':
+          description: No autorizado
+        '404':
+          description: Ingreso no encontrado
+        '500':
+          description: Error interno del servidor
+    delete:
+      summary: Eliminar un ingreso
+      security:
+        - CallerId: []
+      parameters:
+        - name: user_id
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '204':
+          description: Ingreso eliminado
+        '401':
+          description: No autorizado
+        '404':
+          description: Ingreso no encontrado
+        '500':
+          description: Error interno del servidor
+
+  /api/v1/expenses:
+    post:
+      summary: Crear un nuevo gasto
+      security:
+        - CallerId: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Transaction'
+      responses:
+        '201':
+          description: Gasto creado exitosamente
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Transaction'
+        '400':
+          description: Error en la solicitud
+        '401':
+          description: No autorizado
+        '500':
+          description: Error interno del servidor
+
+  /api/v1/expenses/{user_id}:
+    get:
+      summary: Listar gastos de un usuario
+      security:
+        - CallerId: []
+      parameters:
+        - name: user_id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Lista de gastos
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Transaction'
+        '401':
+          description: No autorizado
+        '500':
+          description: Error interno del servidor
+
+  /api/v1/expenses/{user_id}/unpaid:
+    get:
+      summary: Listar gastos no pagados de un usuario
+      security:
+        - CallerId: []
+      parameters:
+        - name: user_id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Lista de gastos no pagados
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Transaction'
+        '401':
+          description: No autorizado
+        '500':
+          description: Error interno del servidor
+
+  /api/v1/expenses/{user_id}/{id}:
+    get:
+      summary: Obtener un gasto específico
+      security:
+        - CallerId: []
+      parameters:
+        - name: user_id
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Detalles del gasto
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Transaction'
+        '401':
+          description: No autorizado
+        '404':
+          description: Gasto no encontrado
+        '500':
+          description: Error interno del servidor
+    patch:
+      summary: Actualizar un gasto
+      security:
+        - CallerId: []
+      parameters:
+        - name: user_id
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Transaction'
+      responses:
+        '200':
+          description: Gasto actualizado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Transaction'
+        '400':
+          description: Error en la solicitud
+        '401':
+          description: No autorizado
+        '404':
+          description: Gasto no encontrado
+        '500':
+          description: Error interno del servidor
+    delete:
+      summary: Eliminar un gasto
+      security:
+        - CallerId: []
+      parameters:
+        - name: user_id
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '204':
+          description: Gasto eliminado
+        '401':
+          description: No autorizado
+        '404':
+          description: Gasto no encontrado
+        '500':
+          description: Error interno del servidor
+
+  /api/v1/categories:
+    post:
+      summary: Crear una nueva categoría
+      security:
+        - CallerId: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Category'
+      responses:
+        '201':
+          description: Categoría creada exitosamente
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Category'
+        '400':
+          description: Error en la solicitud
+        '401':
+          description: No autorizado
+        '500':
+          description: Error interno del servidor
+    get:
+      summary: Listar todas las categorías
+      security:
+        - CallerId: []
+      responses:
+        '200':
+          description: Lista de categorías
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Category'
+        '401':
+          description: No autorizado
+        '500':
+          description: Error interno del servidor
+
+  /api/v1/categories/{id}:
+    get:
+      summary: Obtener una categoría específica
+      security:
+        - CallerId: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Detalles de la categoría
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Category'
+        '401':
+          description: No autorizado
+        '404':
+          description: Categoría no encontrada
+        '500':
+          description: Error interno del servidor
+    patch:
+      summary: Actualizar una categoría
+      security:
+        - CallerId: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Category'
+      responses:
+        '200':
+          description: Categoría actualizada
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Category'
+        '400':
+          description: Error en la solicitud
+        '401':
+          description: No autorizado
+        '404':
+          description: Categoría no encontrada
+        '500':
+          description: Error interno del servidor
+    delete:
+      summary: Eliminar una categoría
+      security:
+        - CallerId: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '204':
+          description: Categoría eliminada
+        '401':
+          description: No autorizado
+        '404':
+          description: Categoría no encontrada
+        '500':
+          description: Error interno del servidor
+
+  /api/v1/reports:
+    get:
+      summary: Generar reporte financiero
+      security:
+        - CallerId: []
+      parameters:
+        - name: start_date
+          in: query
+          required: true
+          schema:
+            type: string
+            format: date
+            example: "2024-01-01"
+        - name: end_date
+          in: query
+          required: true
+          schema:
+            type: string
+            format: date
+            example: "2024-12-31"
+      responses:
+        '200':
+          description: Reporte financiero generado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FinancialReport'
+        '400':
+          description: Error en la solicitud
+        '401':
+          description: No autorizado
+        '500':
+          description: Error interno del servidor 

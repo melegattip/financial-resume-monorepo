@@ -1,0 +1,304 @@
+name: 🧹 Cleanup & Maintenance
+
+on:
+  schedule:
+    # Run every Sunday at 2 AM UTC
+    - cron: '0 2 * * 0'
+  workflow_dispatch:
+    inputs:
+      cleanup_type:
+        description: 'Type of cleanup to perform'
+        required: true
+        default: 'all'
+        type: choice
+        options:
+          - all
+          - docker-images
+          - old-deployments
+          - failed-pods
+          - unused-secrets
+      dry_run:
+        description: 'Dry run (preview changes without applying)'
+        required: false
+        default: true
+        type: boolean
+
+env:
+  GCP_PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}
+  GCP_REGION: southamerica-east1
+  GKE_CLUSTER: financial-resume-cluster
+
+jobs:
+  cleanup-docker-images:
+    name: 🐳 Cleanup Docker Images
+    runs-on: ubuntu-latest
+    if: github.event.inputs.cleanup_type == 'docker-images' || github.event.inputs.cleanup_type == 'all' || github.event_name == 'schedule'
+    steps:
+      - name: 🔐 Setup Google Cloud SDK
+        uses: google-github-actions/setup-gcloud@v1
+        with:
+          service_account_key: ${{ secrets.GCP_SERVICE_ACCOUNT_KEY }}
+          project_id: ${{ secrets.GCP_PROJECT_ID }}
+          export_default_credentials: true
+
+      - name: 🐳 Configure Docker for GCR
+        run: |
+          gcloud auth configure-docker gcr.io
+
+      - name: 🔍 List old Docker images
+        run: |
+          echo "=== DOCKER IMAGES OLDER THAN 7 DAYS ==="
+          
+          # List all images in the project
+          gcloud container images list --repository=gcr.io/${{ secrets.GCP_PROJECT_ID }}
+          
+          # List images older than 7 days for each service
+          services=("financial-resume-engine" "financial-gamification-service" "financial-ai-service" "financial-resume-frontend")
+          
+          for service in "${services[@]}"; do
+            echo "--- $service ---"
+            gcloud container images list-tags gcr.io/${{ secrets.GCP_PROJECT_ID }}/$service \
+              --filter="timestamp.datetime < '$(date -d '7 days ago' --iso-8601)'" \
+              --format="table(digest,tags,timestamp)"
+          done
+
+      - name: 🧹 Clean up old images
+        run: |
+          if [ "${{ github.event.inputs.dry_run }}" == "true" ]; then
+            echo "🔍 DRY RUN: Would delete the following images:"
+          else
+            echo "🗑️ DELETING old images..."
+          fi
+          
+          services=("financial-resume-engine" "financial-gamification-service" "financial-ai-service" "financial-resume-frontend")
+          
+          for service in "${services[@]}"; do
+            echo "Processing $service..."
+            
+            # Get digests of images older than 7 days, keep latest 5
+            OLD_IMAGES=$(gcloud container images list-tags gcr.io/${{ secrets.GCP_PROJECT_ID }}/$service \
+              --filter="timestamp.datetime < '$(date -d '7 days ago' --iso-8601)'" \
+              --format="get(digest)" \
+              --sort-by="~timestamp" \
+              --limit=unlimited | tail -n +6)
+            
+            if [ -n "$OLD_IMAGES" ]; then
+              for digest in $OLD_IMAGES; do
+                IMAGE_URL="gcr.io/${{ secrets.GCP_PROJECT_ID }}/$service@$digest"
+                echo "  - $IMAGE_URL"
+                
+                if [ "${{ github.event.inputs.dry_run }}" != "true" ]; then
+                  gcloud container images delete "$IMAGE_URL" --force-delete-tags --quiet
+                fi
+              done
+            else
+              echo "  No old images found for $service"
+            fi
+          done
+
+      - name: 📊 Generate cleanup report
+        run: |
+          echo "=== CLEANUP REPORT ==="
+          echo "Cleanup type: ${{ github.event.inputs.cleanup_type }}"
+          echo "Dry run: ${{ github.event.inputs.dry_run }}"
+          echo "Date: $(date -u +'%Y-%m-%d %H:%M:%S UTC')"
+          echo ""
+          
+          # Current image count
+          services=("financial-resume-engine" "financial-gamification-service" "financial-ai-service" "financial-resume-frontend")
+          total_images=0
+          
+          for service in "${services[@]}"; do
+            count=$(gcloud container images list-tags gcr.io/${{ secrets.GCP_PROJECT_ID }}/$service --format="value(digest)" | wc -l)
+            echo "$service: $count images"
+            total_images=$((total_images + count))
+          done
+          
+          echo "Total images: $total_images"
+          echo ""
+          
+          # Estimated storage savings
+          echo "Storage optimization completed"
+
+  cleanup-kubernetes:
+    name: ☸️ Cleanup Kubernetes Resources
+    runs-on: ubuntu-latest
+    if: github.event.inputs.cleanup_type == 'old-deployments' || github.event.inputs.cleanup_type == 'failed-pods' || github.event.inputs.cleanup_type == 'all' || github.event_name == 'schedule'
+    steps:
+      - name: 🔐 Setup Google Cloud SDK
+        uses: google-github-actions/setup-gcloud@v1
+        with:
+          service_account_key: ${{ secrets.GCP_SERVICE_ACCOUNT_KEY }}
+          project_id: ${{ secrets.GCP_PROJECT_ID }}
+          export_default_credentials: true
+
+      - name: 🔧 Get GKE credentials
+        run: |
+          gcloud container clusters get-credentials ${{ env.GKE_CLUSTER }} \
+            --region ${{ env.GCP_REGION }} \
+            --project ${{ secrets.GCP_PROJECT_ID }}
+
+      - name: 🔍 Identify failed pods
+        run: |
+          echo "=== FAILED PODS ==="
+          
+          # Check beta environment
+          echo "--- Beta Environment ---"
+          kubectl get pods -n beta --field-selector=status.phase=Failed -o wide || echo "No failed pods in beta"
+          
+          # Check production environment  
+          echo "--- Production Environment ---"
+          kubectl get pods -n production --field-selector=status.phase=Failed -o wide || echo "No failed pods in production"
+
+      - name: 🧹 Clean up failed pods
+        run: |
+          if [ "${{ github.event.inputs.dry_run }}" == "true" ]; then
+            echo "🔍 DRY RUN: Would delete failed pods"
+          else
+            echo "🗑️ DELETING failed pods..."
+            
+            # Delete failed pods in beta
+            kubectl delete pods -n beta --field-selector=status.phase=Failed --ignore-not-found=true
+            
+            # Delete failed pods in production
+            kubectl delete pods -n production --field-selector=status.phase=Failed --ignore-not-found=true
+          fi
+
+      - name: 🔍 Check old ReplicaSets
+        run: |
+          echo "=== OLD REPLICA SETS ==="
+          
+          # Check beta environment
+          echo "--- Beta Environment ---"
+          kubectl get rs -n beta --sort-by='.metadata.creationTimestamp' | head -20
+          
+          # Check production environment
+          echo "--- Production Environment ---"
+          kubectl get rs -n production --sort-by='.metadata.creationTimestamp' | head -20
+
+      - name: 🧹 Clean up old ReplicaSets
+        run: |
+          if [ "${{ github.event.inputs.dry_run }}" == "true" ]; then
+            echo "🔍 DRY RUN: Would clean up old ReplicaSets"
+          else
+            echo "🗑️ CLEANING up old ReplicaSets..."
+            
+            # Keep only the latest 3 ReplicaSets per deployment
+            deployments=("financial-resume-engine" "financial-gamification-service" "financial-ai-service" "financial-resume-frontend")
+            
+            for deployment in "${deployments[@]}"; do
+              # Clean up beta environment
+              kubectl get rs -n beta -l app.kubernetes.io/name=$deployment \
+                --sort-by='.metadata.creationTimestamp' \
+                --no-headers | head -n -3 | awk '{print $1}' | \
+                xargs -I {} kubectl delete rs {} -n beta --ignore-not-found=true
+              
+              # Clean up production environment
+              kubectl get rs -n production -l app.kubernetes.io/name=$deployment \
+                --sort-by='.metadata.creationTimestamp' \
+                --no-headers | head -n -3 | awk '{print $1}' | \
+                xargs -I {} kubectl delete rs {} -n production --ignore-not-found=true
+            done
+          fi
+
+      - name: 🔍 Check unused secrets
+        run: |
+          echo "=== UNUSED SECRETS ==="
+          
+          # List all secrets
+          echo "--- Beta Secrets ---"
+          kubectl get secrets -n beta
+          
+          echo "--- Production Secrets ---"
+          kubectl get secrets -n production
+          
+          # Note: We won't automatically delete secrets as they might be needed
+
+      - name: 📊 Generate resource usage report
+        run: |
+          echo "=== RESOURCE USAGE AFTER CLEANUP ==="
+          echo "Date: $(date -u +'%Y-%m-%d %H:%M:%S UTC')"
+          echo ""
+          
+          echo "--- PODS BY NAMESPACE ---"
+          kubectl get pods -A --no-headers | awk '{print $1}' | sort | uniq -c
+          
+          echo "--- PERSISTENT VOLUMES ---"
+          kubectl get pv
+          
+          echo "--- STORAGE CLASSES ---"
+          kubectl get sc
+          
+          echo "--- EVENTS (LAST 10) ---"
+          kubectl get events -A --sort-by='.metadata.creationTimestamp' | tail -10
+
+  maintenance-report:
+    name: 📋 Generate Maintenance Report
+    runs-on: ubuntu-latest
+    needs: [cleanup-docker-images, cleanup-kubernetes]
+    if: always()
+    steps:
+      - name: 📊 Generate comprehensive report
+        run: |
+          echo "=== MAINTENANCE REPORT ==="
+          echo "Generated: $(date -u +'%Y-%m-%d %H:%M:%S UTC')"
+          echo "Triggered by: ${{ github.event_name }}"
+          echo "Cleanup type: ${{ github.event.inputs.cleanup_type || 'scheduled' }}"
+          echo "Dry run: ${{ github.event.inputs.dry_run || 'false' }}"
+          echo ""
+          
+          echo "=== JOBS STATUS ==="
+          echo "Docker cleanup: ${{ needs.cleanup-docker-images.result }}"
+          echo "Kubernetes cleanup: ${{ needs.cleanup-kubernetes.result }}"
+          echo ""
+          
+          echo "=== RECOMMENDATIONS ==="
+          echo "1. Monitor resource usage trends"
+          echo "2. Review failed pods if any"
+          echo "3. Check application logs for errors"
+          echo "4. Verify backup procedures"
+          echo "5. Update documentation if needed"
+
+      - name: 📤 Upload maintenance report
+        run: |
+          cat > maintenance-report.txt << EOF
+          # Maintenance Report - $(date -u +'%Y-%m-%d %H:%M:%S UTC')
+          
+          ## Summary
+          - Cleanup type: ${{ github.event.inputs.cleanup_type || 'scheduled' }}
+          - Dry run: ${{ github.event.inputs.dry_run || 'false' }}
+          - Docker cleanup: ${{ needs.cleanup-docker-images.result }}
+          - Kubernetes cleanup: ${{ needs.cleanup-kubernetes.result }}
+          
+          ## Next Scheduled Maintenance
+          - Next automatic cleanup: Every Sunday at 2 AM UTC
+          - Health checks: Every 5 minutes
+          - Resource monitoring: Continuous
+          
+          ## Manual Actions Available
+          - Rollback deployment: Use rollback workflow
+          - Health check: Use health-checks workflow
+          - Custom cleanup: Use this workflow with manual trigger
+          EOF
+
+      - name: 📤 Save report artifact
+        uses: actions/upload-artifact@v3
+        with:
+          name: maintenance-report-${{ github.run_number }}
+          path: maintenance-report.txt
+          retention-days: 30
+
+      - name: 💬 Create maintenance summary
+        if: github.event_name == 'schedule'
+        uses: actions/github-script@v6
+        with:
+          script: |
+            const issue = await github.rest.issues.create({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              title: '🧹 Weekly Maintenance Report',
+              body: `## 🧹 Weekly Maintenance Completed\n\n✅ **Automated maintenance completed**\n\n**Summary:**\n- 🐳 **Docker cleanup:** ${{ needs.cleanup-docker-images.result }}\n- ☸️ **Kubernetes cleanup:** ${{ needs.cleanup-kubernetes.result }}\n- 📅 **Date:** ${new Date().toISOString()}\n\n**Actions Taken:**\n- Cleaned up old Docker images (>7 days)\n- Removed failed pods\n- Cleaned up old ReplicaSets\n- Generated resource usage report\n\n**Next Maintenance:**\n- Scheduled for next Sunday at 2 AM UTC\n- Health checks continue every 5 minutes\n\n**Manual Actions Available:**\n- Custom cleanup via workflow dispatch\n- Health checks via health-checks workflow\n- Rollback via rollback workflow`,
+              labels: ['maintenance', 'infrastructure', 'automated']
+            });
+            
+            console.log('Created maintenance report:', issue.data.number); 

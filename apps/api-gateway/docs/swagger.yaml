@@ -1,0 +1,779 @@
+basePath: /api/v1
+definitions:
+  domain.Category:
+    properties:
+      id:
+        type: string
+      name:
+        type: string
+    type: object
+  errors.BadRequest:
+    type: object
+  errors.ResourceNotFound:
+    type: object
+  errors.UnauthorizedRequest:
+    type: object
+  expenses.CreateExpenseRequest:
+    properties:
+      amount:
+        type: number
+      category:
+        type: string
+      description:
+        type: string
+      due_date:
+        type: string
+      paid:
+        type: boolean
+      user_id:
+        type: string
+    type: object
+  expenses.CreateExpenseResponse:
+    properties:
+      amount:
+        type: number
+      category:
+        type: string
+      created_at:
+        type: string
+      description:
+        type: string
+      due_date:
+        type: string
+      id:
+        type: string
+      paid:
+        type: boolean
+      updated_at:
+        type: string
+      user_id:
+        type: string
+    type: object
+  expenses.GetExpenseResponse:
+    properties:
+      amount:
+        type: number
+      category:
+        type: string
+      created_at:
+        type: string
+      description:
+        type: string
+      due_date:
+        type: string
+      id:
+        type: string
+      paid:
+        type: boolean
+      updated_at:
+        type: string
+      user_id:
+        type: string
+    type: object
+  expenses.ListExpensesResponse:
+    properties:
+      expenses:
+        items:
+          $ref: '#/definitions/expenses.GetExpenseResponse'
+        type: array
+    type: object
+  expenses.UpdateExpenseRequest:
+    properties:
+      amount:
+        type: number
+      category:
+        type: string
+      description:
+        type: string
+      due_date:
+        type: string
+      paid:
+        type: boolean
+    type: object
+  expenses.UpdateExpenseResponse:
+    properties:
+      amount:
+        type: number
+      category:
+        type: string
+      created_at:
+        type: string
+      description:
+        type: string
+      due_date:
+        type: string
+      id:
+        type: string
+      paid:
+        type: boolean
+      updated_at:
+        type: string
+      user_id:
+        type: string
+    type: object
+  incomes.CreateIncomeRequest:
+    properties:
+      amount:
+        type: number
+      category:
+        type: string
+      description:
+        type: string
+      source:
+        type: string
+      user_id:
+        type: string
+    type: object
+  incomes.CreateIncomeResponse:
+    properties:
+      amount:
+        type: number
+      category:
+        type: string
+      created_at:
+        type: string
+      description:
+        type: string
+      id:
+        type: string
+      source:
+        type: string
+      updated_at:
+        type: string
+      user_id:
+        type: string
+    type: object
+  incomes.GetIncomeResponse:
+    properties:
+      amount:
+        type: number
+      category:
+        type: string
+      created_at:
+        type: string
+      description:
+        type: string
+      id:
+        type: string
+      source:
+        type: string
+      updated_at:
+        type: string
+      user_id:
+        type: string
+    type: object
+  incomes.ListIncomesResponse:
+    properties:
+      incomes:
+        items:
+          $ref: '#/definitions/incomes.GetIncomeResponse'
+        type: array
+    type: object
+  incomes.UpdateIncomeRequest:
+    properties:
+      amount:
+        type: number
+      category:
+        type: string
+      description:
+        type: string
+      source:
+        type: string
+    type: object
+  incomes.UpdateIncomeResponse:
+    properties:
+      amount:
+        type: number
+      category:
+        type: string
+      created_at:
+        type: string
+      description:
+        type: string
+      id:
+        type: string
+      source:
+        type: string
+      updated_at:
+        type: string
+      user_id:
+        type: string
+    type: object
+  insights.MarkUnderstoodRequest:
+    properties:
+      description:
+        description: Descripción del insight entendido
+        type: string
+      insight_id:
+        description: ID del insight que se marca como entendido
+        type: string
+      insight_type:
+        description: Tipo de insight (financial_health, ai_analysis, can_i_buy, credit_plan)
+        type: string
+    type: object
+  insights.MarkUnderstoodResponse:
+    properties:
+      achievements_unlocked:
+        description: Lista de achievements desbloqueados
+        items:
+          type: string
+        type: array
+      message:
+        description: Mensaje de confirmación
+        type: string
+      success:
+        description: Indica si la acción fue registrada exitosamente
+        type: boolean
+      xp_earned:
+        description: XP ganado por marcar el insight como entendido
+        type: integer
+    type: object
+host: localhost:8080
+info:
+  contact:
+    email: support@swagger.io
+    name: API Support
+    url: http://www.swagger.io/support
+  description: API para gestionar ingresos y gastos personales
+  license:
+    name: Apache 2.0
+    url: http://www.apache.org/licenses/LICENSE-2.0.html
+  termsOfService: http://swagger.io/terms/
+  title: Financial Resume Engine API
+  version: "1.0"
+paths:
+  /api/v1/categories:
+    get:
+      consumes:
+      - application/json
+      description: Retorna una lista de todas las categorías disponibles
+      parameters:
+      - description: ID del usuario
+        in: header
+        name: x-caller-id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              $ref: '#/definitions/domain.Category'
+            type: array
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/errors.UnauthorizedRequest'
+      summary: Obtener todas las categorías
+      tags:
+      - categories
+    post:
+      consumes:
+      - application/json
+      description: Crea una nueva categoría con los datos proporcionados
+      parameters:
+      - description: ID del usuario
+        in: header
+        name: x-caller-id
+        required: true
+        type: string
+      - description: Datos de la categoría
+        in: body
+        name: category
+        required: true
+        schema:
+          properties:
+            name:
+              type: string
+          type: object
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/domain.Category'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/errors.BadRequest'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/errors.UnauthorizedRequest'
+      summary: Crear una nueva categoría
+      tags:
+      - categories
+  /api/v1/categories/{id}:
+    delete:
+      consumes:
+      - application/json
+      description: Elimina una categoría existente por su ID
+      parameters:
+      - description: ID del usuario
+        in: header
+        name: x-caller-id
+        required: true
+        type: string
+      - description: ID de la categoría
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "204":
+          description: No Content
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/errors.BadRequest'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/errors.UnauthorizedRequest'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/errors.ResourceNotFound'
+      summary: Eliminar una categoría
+      tags:
+      - categories
+    patch:
+      consumes:
+      - application/json
+      description: Actualiza una categoría existente con los datos proporcionados
+      parameters:
+      - description: ID del usuario
+        in: header
+        name: x-caller-id
+        required: true
+        type: string
+      - description: ID de la categoría
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: Datos de actualización
+        in: body
+        name: category
+        required: true
+        schema:
+          properties:
+            name:
+              type: string
+          type: object
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/domain.Category'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/errors.BadRequest'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/errors.UnauthorizedRequest'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/errors.ResourceNotFound'
+      summary: Actualizar una categoría
+      tags:
+      - categories
+  /api/v1/expenses:
+    get:
+      consumes:
+      - application/json
+      description: Obtiene una lista de todos los gastos del usuario
+      parameters:
+      - description: ID del usuario
+        in: header
+        name: x-caller-id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/expenses.ListExpensesResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/errors.UnauthorizedRequest'
+      summary: Listar gastos
+      tags:
+      - expenses
+    post:
+      consumes:
+      - application/json
+      description: Crea un nuevo gasto para el usuario
+      parameters:
+      - description: ID del usuario
+        in: header
+        name: x-caller-id
+        required: true
+        type: string
+      - description: Datos del gasto
+        in: body
+        name: expense
+        required: true
+        schema:
+          $ref: '#/definitions/expenses.CreateExpenseRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/expenses.CreateExpenseResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/errors.BadRequest'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/errors.UnauthorizedRequest'
+      summary: Crear un nuevo gasto
+      tags:
+      - expenses
+  /api/v1/expenses/{id}:
+    delete:
+      consumes:
+      - application/json
+      description: Elimina un gasto existente
+      parameters:
+      - description: ID del usuario
+        in: header
+        name: x-caller-id
+        required: true
+        type: string
+      - description: ID del gasto
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "204":
+          description: No Content
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/errors.BadRequest'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/errors.UnauthorizedRequest'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/errors.ResourceNotFound'
+      summary: Eliminar un gasto
+      tags:
+      - expenses
+    get:
+      consumes:
+      - application/json
+      description: Obtiene un gasto por su ID
+      parameters:
+      - description: ID del usuario
+        in: header
+        name: x-caller-id
+        required: true
+        type: string
+      - description: ID del gasto
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/expenses.GetExpenseResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/errors.BadRequest'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/errors.UnauthorizedRequest'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/errors.ResourceNotFound'
+      summary: Obtener un gasto específico
+      tags:
+      - expenses
+    patch:
+      consumes:
+      - application/json
+      description: Actualiza los datos de un gasto existente
+      parameters:
+      - description: ID del usuario
+        in: header
+        name: x-caller-id
+        required: true
+        type: string
+      - description: ID del gasto
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: Datos actualizados del gasto
+        in: body
+        name: expense
+        required: true
+        schema:
+          $ref: '#/definitions/expenses.UpdateExpenseRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/expenses.UpdateExpenseResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/errors.BadRequest'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/errors.UnauthorizedRequest'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/errors.ResourceNotFound'
+      summary: Actualizar un gasto
+      tags:
+      - expenses
+  /api/v1/incomes:
+    get:
+      consumes:
+      - application/json
+      description: Obtiene una lista de todos los ingresos del usuario
+      parameters:
+      - description: ID del usuario
+        in: header
+        name: x-caller-id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/incomes.ListIncomesResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/errors.UnauthorizedRequest'
+      summary: Listar ingresos
+      tags:
+      - incomes
+    post:
+      consumes:
+      - application/json
+      description: Crea un nuevo ingreso para el usuario
+      parameters:
+      - description: ID del usuario
+        in: header
+        name: x-caller-id
+        required: true
+        type: string
+      - description: Datos del ingreso
+        in: body
+        name: income
+        required: true
+        schema:
+          $ref: '#/definitions/incomes.CreateIncomeRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/incomes.CreateIncomeResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/errors.BadRequest'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/errors.UnauthorizedRequest'
+      summary: Crear un nuevo ingreso
+      tags:
+      - incomes
+  /api/v1/incomes/{id}:
+    delete:
+      consumes:
+      - application/json
+      description: Elimina un ingreso existente
+      parameters:
+      - description: ID del usuario
+        in: header
+        name: x-caller-id
+        required: true
+        type: string
+      - description: ID del ingreso
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "204":
+          description: No Content
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/errors.BadRequest'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/errors.UnauthorizedRequest'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/errors.ResourceNotFound'
+      summary: Eliminar un ingreso
+      tags:
+      - incomes
+    get:
+      consumes:
+      - application/json
+      description: Obtiene un ingreso por su ID
+      parameters:
+      - description: ID del usuario
+        in: header
+        name: x-caller-id
+        required: true
+        type: string
+      - description: ID del ingreso
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/incomes.GetIncomeResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/errors.BadRequest'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/errors.UnauthorizedRequest'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/errors.ResourceNotFound'
+      summary: Obtener un ingreso específico
+      tags:
+      - incomes
+    patch:
+      consumes:
+      - application/json
+      description: Actualiza los datos de un ingreso existente
+      parameters:
+      - description: ID del usuario
+        in: header
+        name: x-caller-id
+        required: true
+        type: string
+      - description: ID del ingreso
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: Datos actualizados del ingreso
+        in: body
+        name: income
+        required: true
+        schema:
+          $ref: '#/definitions/incomes.UpdateIncomeRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/incomes.UpdateIncomeResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/errors.BadRequest'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/errors.UnauthorizedRequest'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/errors.ResourceNotFound'
+      summary: Actualizar un ingreso
+      tags:
+      - incomes
+  /api/v1/insights/mark-understood:
+    post:
+      consumes:
+      - application/json
+      description: Marca un insight como entendido por el usuario, registrando automáticamente
+        la acción de gamificación
+      parameters:
+      - description: ID del usuario
+        in: header
+        name: x-caller-id
+        required: true
+        type: string
+      - description: Datos del insight entendido
+        in: body
+        name: insight
+        required: true
+        schema:
+          $ref: '#/definitions/insights.MarkUnderstoodRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/insights.MarkUnderstoodResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/errors.BadRequest'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/errors.UnauthorizedRequest'
+      summary: Marcar insight como entendido
+      tags:
+      - insights
+schemes:
+- http
+swagger: "2.0"

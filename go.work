@@ -1,0 +1,9 @@
+go 1.24.4
+
+use (
+	./apps/ai-service
+	./apps/api-gateway
+	./apps/gamification-service
+	./apps/users-service
+	./packages/go-shared
+)

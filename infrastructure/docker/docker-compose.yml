@@ -1,0 +1,166 @@
+services:
+  # === Bases de Datos ===
+  postgres-main:
+    image: postgres:15
+    container_name: fr_postgres_main
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: financial_resume
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_main_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    networks:
+      - financial-network
+
+  postgres-users:
+    image: postgres:15
+    container_name: fr_postgres_users
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: users_db
+    ports:
+      - "5434:5432"
+    volumes:
+      - postgres_users_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    networks:
+      - financial-network
+
+  redis:
+    image: redis:7-alpine
+    container_name: fr_redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+    networks:
+      - financial-network
+
+  # === Backend Services ===
+  api-gateway:
+    build:
+      context: ../../apps/api-gateway
+      dockerfile: Dockerfile
+    container_name: fr_api_gateway
+    ports:
+      - "8080:8080"
+    environment:
+      DB_HOST: postgres-main
+      DB_PORT: 5432
+      DB_USER: postgres
+      DB_PASSWORD: postgres
+      DB_NAME: financial_resume
+      USERS_SERVICE_URL: http://users-service:8083
+      AI_SERVICE_URL: http://ai-service:8082
+      GAMIFICATION_SERVICE_URL: http://gamification-service:8081
+    depends_on:
+      postgres-main:
+        condition: service_healthy
+    networks:
+      - financial-network
+    restart: unless-stopped
+
+  users-service:
+    build:
+      context: ../../apps/users-service
+      dockerfile: Dockerfile
+    container_name: fr_users_service
+    ports:
+      - "8083:8083"
+    environment:
+      DB_HOST: postgres-users
+      DB_PORT: 5432
+      DB_USER: postgres
+      DB_PASSWORD: postgres
+      DB_NAME: users_db
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      JWT_SECRET: ${JWT_SECRET:-financial_resume_secret_key_2024}
+    depends_on:
+      postgres-users:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - financial-network
+    restart: unless-stopped
+
+  ai-service:
+    build:
+      context: ../../apps/ai-service
+      dockerfile: Dockerfile
+    container_name: fr_ai_service
+    ports:
+      - "8082:8082"
+    environment:
+      USE_AI_MOCK: ${USE_AI_MOCK:-true}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      REDIS_URL: redis://redis:6379
+    depends_on:
+      redis:
+        condition: service_healthy
+    networks:
+      - financial-network
+    restart: unless-stopped
+
+  gamification-service:
+    build:
+      context: ../../apps/gamification-service
+      dockerfile: Dockerfile
+    container_name: fr_gamification_service
+    ports:
+      - "8081:8081"
+    environment:
+      DB_HOST: postgres-main
+      DB_PORT: 5432
+      DB_USER: postgres
+      DB_PASSWORD: postgres
+      DB_NAME: financial_resume
+      JWT_SECRET: ${JWT_SECRET:-financial_resume_secret_key_2024}
+    depends_on:
+      postgres-main:
+        condition: service_healthy
+    networks:
+      - financial-network
+    restart: unless-stopped
+
+  frontend:
+    build:
+      context: ../../apps/frontend
+      dockerfile: Dockerfile
+    container_name: fr_frontend
+    ports:
+      - "3000:80"
+    environment:
+      REACT_APP_API_URL: http://api-gateway:8080/api/v1
+    depends_on:
+      - api-gateway
+    networks:
+      - financial-network
+    restart: unless-stopped
+
+volumes:
+  postgres_main_data:
+  postgres_users_data:
+  redis_data:
+
+networks:
+  financial-network:
+    driver: bridge

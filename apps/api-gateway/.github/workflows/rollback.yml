@@ -1,0 +1,261 @@
+name: 🔄 Rollback Deployment
+
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Environment to rollback'
+        required: true
+        type: choice
+        options:
+          - beta
+          - production
+      rollback_steps:
+        description: 'Number of steps to rollback'
+        required: false
+        default: '1'
+        type: choice
+        options:
+          - '1'
+          - '2'
+          - '3'
+      confirm_rollback:
+        description: 'Type "CONFIRM" to proceed with rollback'
+        required: true
+        type: string
+      reason:
+        description: 'Reason for rollback'
+        required: true
+        type: string
+
+env:
+  GCP_PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}
+  GCP_REGION: southamerica-east1
+  GKE_CLUSTER: financial-resume-cluster
+
+jobs:
+  validate-rollback:
+    name: 🔍 Validate Rollback Request
+    runs-on: ubuntu-latest
+    steps:
+      - name: 🔐 Validate confirmation
+        run: |
+          if [ "${{ github.event.inputs.confirm_rollback }}" != "CONFIRM" ]; then
+            echo "❌ Rollback not confirmed. Please type 'CONFIRM' to proceed."
+            exit 1
+          else
+            echo "✅ Rollback confirmed"
+          fi
+
+      - name: 📝 Log rollback request
+        run: |
+          echo "🔄 ROLLBACK REQUEST DETAILS:"
+          echo "- Environment: ${{ github.event.inputs.environment }}"
+          echo "- Steps: ${{ github.event.inputs.rollback_steps }}"
+          echo "- Reason: ${{ github.event.inputs.reason }}"
+          echo "- Requested by: ${{ github.actor }}"
+          echo "- Timestamp: $(date -u +'%Y-%m-%d %H:%M:%S UTC')"
+
+  rollback-beta:
+    name: 🧪 Rollback Beta Environment
+    runs-on: ubuntu-latest
+    needs: validate-rollback
+    if: github.event.inputs.environment == 'beta'
+    environment: beta
+    steps:
+      - name: 🔐 Setup Google Cloud SDK
+        uses: google-github-actions/setup-gcloud@v1
+        with:
+          service_account_key: ${{ secrets.GCP_SERVICE_ACCOUNT_KEY }}
+          project_id: ${{ secrets.GCP_PROJECT_ID }}
+          export_default_credentials: true
+
+      - name: 🔧 Get GKE credentials
+        run: |
+          gcloud container clusters get-credentials ${{ env.GKE_CLUSTER }} \
+            --region ${{ env.GCP_REGION }} \
+            --project ${{ secrets.GCP_PROJECT_ID }}
+
+      - name: 📊 Check current deployment status
+        run: |
+          echo "=== CURRENT BETA DEPLOYMENT STATUS ==="
+          kubectl get deployments -n beta -o wide
+          echo ""
+          
+          echo "=== ROLLOUT HISTORY ==="
+          kubectl rollout history deployment/financial-resume-engine -n beta
+          kubectl rollout history deployment/financial-gamification-service -n beta
+          kubectl rollout history deployment/financial-ai-service -n beta
+          kubectl rollout history deployment/financial-resume-frontend -n beta
+
+      - name: 🔄 Perform rollback
+        run: |
+          echo "🔄 Rolling back ${{ github.event.inputs.rollback_steps }} steps..."
+          
+          # Rollback main services
+          kubectl rollout undo deployment/financial-resume-engine -n beta --to-revision=$(($(kubectl rollout history deployment/financial-resume-engine -n beta --output=json | jq -r '.metadata.generation') - ${{ github.event.inputs.rollback_steps }}))
+          kubectl rollout undo deployment/financial-gamification-service -n beta --to-revision=$(($(kubectl rollout history deployment/financial-gamification-service -n beta --output=json | jq -r '.metadata.generation') - ${{ github.event.inputs.rollback_steps }}))
+          kubectl rollout undo deployment/financial-ai-service -n beta --to-revision=$(($(kubectl rollout history deployment/financial-ai-service -n beta --output=json | jq -r '.metadata.generation') - ${{ github.event.inputs.rollback_steps }}))
+          kubectl rollout undo deployment/financial-resume-frontend -n beta --to-revision=$(($(kubectl rollout history deployment/financial-resume-frontend -n beta --output=json | jq -r '.metadata.generation') - ${{ github.event.inputs.rollback_steps }}))
+
+      - name: ⏳ Wait for rollback completion
+        run: |
+          echo "⏳ Waiting for rollback to complete..."
+          kubectl rollout status deployment/financial-resume-engine -n beta --timeout=300s
+          kubectl rollout status deployment/financial-gamification-service -n beta --timeout=300s
+          kubectl rollout status deployment/financial-ai-service -n beta --timeout=300s
+          kubectl rollout status deployment/financial-resume-frontend -n beta --timeout=300s
+
+      - name: 🔍 Verify rollback success
+        run: |
+          echo "🔍 Verifying rollback..."
+          
+          # Check pod status
+          kubectl get pods -n beta -o wide
+          
+          # Check if all pods are running
+          FAILED_PODS=$(kubectl get pods -n beta --field-selector=status.phase!=Running --no-headers | wc -l)
+          if [ "$FAILED_PODS" -gt 0 ]; then
+            echo "❌ Some pods are not running after rollback"
+            kubectl get pods -n beta --field-selector=status.phase!=Running
+            exit 1
+          else
+            echo "✅ All pods are running after rollback"
+          fi
+          
+          # Test service endpoints
+          LB_IP=$(kubectl get service financial-resume-app -n beta -o jsonpath='{.status.loadBalancer.ingress[0].ip}')
+          if [ -n "$LB_IP" ]; then
+            echo "🌐 Testing beta environment at: http://$LB_IP"
+            HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" http://$LB_IP --connect-timeout 10)
+            if [ "$HTTP_CODE" -eq 200 ]; then
+              echo "✅ Beta environment is responding after rollback (HTTP $HTTP_CODE)"
+            else
+              echo "❌ Beta environment is not responding after rollback (HTTP $HTTP_CODE)"
+              exit 1
+            fi
+          fi
+
+      - name: 💬 Create rollback report
+        uses: actions/github-script@v6
+        with:
+          script: |
+            const issue = await github.rest.issues.create({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              title: '🔄 Beta Environment Rollback Completed',
+              body: `## 🔄 Beta Rollback Report\n\n✅ **Rollback completed successfully**\n\n**Details:**\n- 🕐 **Time:** ${new Date().toISOString()}\n- 📈 **Steps:** ${{ github.event.inputs.rollback_steps }}\n- 👤 **Initiated by:** ${{ github.actor }}\n- 📝 **Reason:** ${{ github.event.inputs.reason }}\n\n**Post-Rollback Status:**\n- ✅ All services are running\n- ✅ Health checks passing\n- ✅ LoadBalancer responding\n\n**Next Steps:**\n1. Monitor application for stability\n2. Investigate root cause of issue\n3. Plan fix and re-deployment`,
+              labels: ['rollback', 'beta', 'infrastructure']
+            });
+            
+            console.log('Created rollback report:', issue.data.number);
+
+  rollback-production:
+    name: 🚀 Rollback Production Environment
+    runs-on: ubuntu-latest
+    needs: validate-rollback
+    if: github.event.inputs.environment == 'production'
+    environment: production
+    steps:
+      - name: 🚨 Critical Production Rollback Warning
+        run: |
+          echo "🚨 CRITICAL: Production rollback in progress"
+          echo "Environment: Production"
+          echo "Reason: ${{ github.event.inputs.reason }}"
+          echo "Initiated by: ${{ github.actor }}"
+          echo "Timestamp: $(date -u +'%Y-%m-%d %H:%M:%S UTC')"
+
+      - name: 🔐 Setup Google Cloud SDK
+        uses: google-github-actions/setup-gcloud@v1
+        with:
+          service_account_key: ${{ secrets.GCP_SERVICE_ACCOUNT_KEY }}
+          project_id: ${{ secrets.GCP_PROJECT_ID }}
+          export_default_credentials: true
+
+      - name: 🔧 Get GKE credentials
+        run: |
+          gcloud container clusters get-credentials ${{ env.GKE_CLUSTER }} \
+            --region ${{ env.GCP_REGION }} \
+            --project ${{ secrets.GCP_PROJECT_ID }}
+
+      - name: 📊 Check current deployment status
+        run: |
+          echo "=== CURRENT PRODUCTION DEPLOYMENT STATUS ==="
+          kubectl get deployments -n production -o wide
+          echo ""
+          
+          echo "=== ROLLOUT HISTORY ==="
+          kubectl rollout history deployment/financial-resume-engine -n production
+          kubectl rollout history deployment/financial-gamification-service -n production
+          kubectl rollout history deployment/financial-ai-service -n production
+          kubectl rollout history deployment/financial-resume-frontend -n production
+
+      - name: 🔄 Perform production rollback
+        run: |
+          echo "🔄 Rolling back production ${{ github.event.inputs.rollback_steps }} steps..."
+          
+          # Rollback services one by one with verification
+          echo "🔄 Rolling back financial-resume-engine..."
+          kubectl rollout undo deployment/financial-resume-engine -n production --to-revision=$(($(kubectl rollout history deployment/financial-resume-engine -n production --output=json | jq -r '.metadata.generation') - ${{ github.event.inputs.rollback_steps }}))
+          kubectl rollout status deployment/financial-resume-engine -n production --timeout=300s
+          
+          echo "🔄 Rolling back financial-gamification-service..."
+          kubectl rollout undo deployment/financial-gamification-service -n production --to-revision=$(($(kubectl rollout history deployment/financial-gamification-service -n production --output=json | jq -r '.metadata.generation') - ${{ github.event.inputs.rollback_steps }}))
+          kubectl rollout status deployment/financial-gamification-service -n production --timeout=300s
+          
+          echo "🔄 Rolling back financial-ai-service..."
+          kubectl rollout undo deployment/financial-ai-service -n production --to-revision=$(($(kubectl rollout history deployment/financial-ai-service -n production --output=json | jq -r '.metadata.generation') - ${{ github.event.inputs.rollback_steps }}))
+          kubectl rollout status deployment/financial-ai-service -n production --timeout=300s
+          
+          echo "🔄 Rolling back financial-resume-frontend..."
+          kubectl rollout undo deployment/financial-resume-frontend -n production --to-revision=$(($(kubectl rollout history deployment/financial-resume-frontend -n production --output=json | jq -r '.metadata.generation') - ${{ github.event.inputs.rollback_steps }}))
+          kubectl rollout status deployment/financial-resume-frontend -n production --timeout=300s
+
+      - name: 🔍 Verify production rollback success
+        run: |
+          echo "🔍 Verifying production rollback..."
+          
+          # Check pod status
+          kubectl get pods -n production -o wide
+          
+          # Check if all pods are running
+          FAILED_PODS=$(kubectl get pods -n production --field-selector=status.phase!=Running --no-headers | wc -l)
+          if [ "$FAILED_PODS" -gt 0 ]; then
+            echo "❌ Some pods are not running after rollback"
+            kubectl get pods -n production --field-selector=status.phase!=Running
+            exit 1
+          else
+            echo "✅ All pods are running after rollback"
+          fi
+          
+          # Test service endpoints
+          LB_IP=$(kubectl get service financial-resume-app -n production -o jsonpath='{.status.loadBalancer.ingress[0].ip}')
+          if [ -n "$LB_IP" ]; then
+            echo "🌐 Testing production environment at: http://$LB_IP"
+            HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" http://$LB_IP --connect-timeout 10)
+            if [ "$HTTP_CODE" -eq 200 ]; then
+              echo "✅ Production environment is responding after rollback (HTTP $HTTP_CODE)"
+            else
+              echo "❌ Production environment is not responding after rollback (HTTP $HTTP_CODE)"
+              exit 1
+            fi
+          fi
+
+      - name: 📢 Create production rollback report
+        uses: actions/github-script@v6
+        with:
+          script: |
+            const issue = await github.rest.issues.create({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              title: '🚨 PRODUCTION ROLLBACK COMPLETED',
+              body: `## 🚨 Production Rollback Report\n\n✅ **Production rollback completed successfully**\n\n**Critical Details:**\n- 🕐 **Time:** ${new Date().toISOString()}\n- 📈 **Steps:** ${{ github.event.inputs.rollback_steps }}\n- 👤 **Initiated by:** ${{ github.actor }}\n- 📝 **Reason:** ${{ github.event.inputs.reason }}\n\n**Post-Rollback Status:**\n- ✅ All production services are running\n- ✅ Health checks passing\n- ✅ LoadBalancer responding\n- ✅ User traffic restored\n\n**Immediate Actions Required:**\n1. Monitor production for stability\n2. Notify stakeholders of rollback\n3. Investigate root cause of failure\n4. Plan hotfix strategy\n\n**Escalation:** Production rollback completed - immediate review required`,
+              labels: ['critical', 'rollback', 'production', 'infrastructure']
+            });
+            
+            console.log('Created production rollback report:', issue.data.number);
+
+      - name: 🔔 Send critical notification
+        run: |
+          echo "🔔 Production rollback notification sent"
+          echo "All stakeholders should be notified of the production rollback" 

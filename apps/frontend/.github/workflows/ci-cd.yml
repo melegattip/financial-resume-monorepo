@@ -1,0 +1,468 @@
+name: 🎨 CI/CD Pipeline - Financial Resume Frontend
+
+on:
+  push:
+    branches: [ main ]
+    paths-ignore:
+      - 'docs/**'
+      - '*.md'
+  pull_request:
+    branches: [ main ]
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Environment to deploy'
+        required: true
+        default: 'beta'
+        type: choice
+        options:
+          - beta
+          - production
+      force_deploy:
+        description: 'Force deploy even if tests fail'
+        required: false
+        default: false
+        type: boolean
+
+env:
+  GCP_PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}
+  GCP_REGION: southamerica-east1
+  GKE_CLUSTER: financial-resume-cluster
+  SERVICE_NAME: financial-resume-frontend
+  
+jobs:
+  # ================================
+  # 🧪 TESTING & QUALITY GATES
+  # ================================
+  test:
+    name: 🧪 Run Tests
+    runs-on: ubuntu-latest
+    steps:
+      - name: 📥 Checkout code
+        uses: actions/checkout@v4
+
+      - name: 🟢 Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+          cache: 'npm'
+
+      - name: 📦 Install dependencies
+        run: |
+          npm ci
+          npm audit fix --audit-level moderate
+
+      - name: 🔍 Run linter
+        run: |
+          npm run lint:check
+
+      - name: 🧪 Run tests
+        run: |
+          npm test -- --coverage --watchAll=false --testResultsProcessor=jest-junit
+
+      - name: 📊 Upload coverage reports
+        uses: codecov/codecov-action@v3
+        with:
+          file: ./coverage/lcov.info
+          flags: financial-resume-frontend
+          name: frontend-coverage
+
+      - name: 📤 Upload test results
+        uses: actions/upload-artifact@v3
+        if: always()
+        with:
+          name: test-results
+          path: |
+            coverage/
+            junit.xml
+
+  # ================================
+  # 🏗️ BUILD & PUSH IMAGES
+  # ================================
+  build:
+    name: 🏗️ Build & Push Images
+    runs-on: ubuntu-latest
+    needs: test
+    if: github.ref == 'refs/heads/main' || github.event_name == 'workflow_dispatch'
+    steps:
+      - name: 📥 Checkout code
+        uses: actions/checkout@v4
+
+      - name: 🟢 Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+          cache: 'npm'
+
+      - name: 📦 Install dependencies
+        run: npm ci
+
+      - name: 🏗️ Build application
+        run: |
+          npm run build
+        env:
+          REACT_APP_API_URL: ${{ secrets.REACT_APP_API_URL }}
+          REACT_APP_ENVIRONMENT: ${{ github.event.inputs.environment || 'beta' }}
+
+      - name: 🔐 Setup Google Cloud SDK
+        uses: google-github-actions/setup-gcloud@v1
+        with:
+          service_account_key: ${{ secrets.GCP_SERVICE_ACCOUNT_KEY }}
+          project_id: ${{ secrets.GCP_PROJECT_ID }}
+          export_default_credentials: true
+
+      - name: 🐳 Configure Docker for GCR
+        run: |
+          gcloud auth configure-docker gcr.io
+
+      - name: 🏷️ Generate image tags
+        id: tags
+        run: |
+          SHORT_SHA=$(echo ${{ github.sha }} | cut -c1-7)
+          TIMESTAMP=$(date +%Y%m%d-%H%M%S)
+          
+          echo "SHORT_SHA=${SHORT_SHA}" >> $GITHUB_OUTPUT
+          echo "TIMESTAMP=${TIMESTAMP}" >> $GITHUB_OUTPUT
+          echo "BETA_TAG=beta-${SHORT_SHA}" >> $GITHUB_OUTPUT
+          echo "LATEST_TAG=latest" >> $GITHUB_OUTPUT
+
+      - name: 🏗️ Build Docker image
+        run: |
+          docker build \
+            --tag gcr.io/${{ secrets.GCP_PROJECT_ID }}/financial-resume-frontend:${{ steps.tags.outputs.BETA_TAG }} \
+            --tag gcr.io/${{ secrets.GCP_PROJECT_ID }}/financial-resume-frontend:${{ steps.tags.outputs.LATEST_TAG }} \
+            --label "git-commit=${{ github.sha }}" \
+            --label "build-date=$(date -u +'%Y-%m-%dT%H:%M:%SZ')" \
+            --label "version=${{ steps.tags.outputs.BETA_TAG }}" \
+            .
+
+      - name: 🚢 Push Docker image
+        run: |
+          docker push gcr.io/${{ secrets.GCP_PROJECT_ID }}/financial-resume-frontend:${{ steps.tags.outputs.BETA_TAG }}
+          docker push gcr.io/${{ secrets.GCP_PROJECT_ID }}/financial-resume-frontend:${{ steps.tags.outputs.LATEST_TAG }}
+
+      - name: 🗃️ Save image tags for deployment
+        run: |
+          echo "IMAGE_TAG=${{ steps.tags.outputs.BETA_TAG }}" >> $GITHUB_ENV
+          echo "gcr.io/${{ secrets.GCP_PROJECT_ID }}/financial-resume-frontend:${{ steps.tags.outputs.BETA_TAG }}" >> images.txt
+
+      - name: 📤 Upload image tags artifact
+        uses: actions/upload-artifact@v3
+        with:
+          name: image-tags-financial-resume-frontend
+          path: images.txt
+
+  # ================================
+  # 🧪 DEPLOY TO BETA (AUTOMATIC)
+  # ================================
+  deploy-beta:
+    name: 🧪 Deploy to Beta
+    runs-on: ubuntu-latest
+    needs: build
+    if: github.ref == 'refs/heads/main' || (github.event_name == 'workflow_dispatch' && github.event.inputs.environment == 'beta')
+    environment: beta
+    steps:
+      - name: 📥 Checkout code
+        uses: actions/checkout@v4
+
+      - name: 🔐 Setup Google Cloud SDK
+        uses: google-github-actions/setup-gcloud@v1
+        with:
+          service_account_key: ${{ secrets.GCP_SERVICE_ACCOUNT_KEY }}
+          project_id: ${{ secrets.GCP_PROJECT_ID }}
+          export_default_credentials: true
+
+      - name: 🔧 Get GKE credentials
+        run: |
+          gcloud container clusters get-credentials ${{ env.GKE_CLUSTER }} \
+            --region ${{ env.GCP_REGION }} \
+            --project ${{ secrets.GCP_PROJECT_ID }}
+
+      - name: 🏷️ Extract image tags
+        id: tags
+        run: |
+          SHORT_SHA=$(echo ${{ github.sha }} | cut -c1-7)
+          BETA_TAG="beta-${SHORT_SHA}"
+          echo "BETA_TAG=${BETA_TAG}" >> $GITHUB_OUTPUT
+
+      - name: 🔄 Create beta namespace
+        run: |
+          kubectl create namespace beta --dry-run=client -o yaml | kubectl apply -f -
+
+      - name: 🔐 Update secrets in Kubernetes
+        run: |
+          kubectl create secret generic frontend-secrets \
+            --from-literal=REACT_APP_API_URL="${{ secrets.REACT_APP_API_URL }}" \
+            --from-literal=REACT_APP_ENVIRONMENT=beta \
+            --from-literal=GCP_PROJECT_ID="${{ secrets.GCP_PROJECT_ID }}" \
+            --namespace=beta \
+            --dry-run=client -o yaml | kubectl apply -f -
+
+      - name: 🚀 Deploy to Beta
+        run: |
+          # Create deployment YAML
+          cat <<EOF | kubectl apply -f -
+          apiVersion: apps/v1
+          kind: Deployment
+          metadata:
+            name: financial-resume-frontend
+            namespace: beta
+            labels:
+              app: financial-resume-frontend
+              version: ${{ steps.tags.outputs.BETA_TAG }}
+          spec:
+            replicas: 1
+            selector:
+              matchLabels:
+                app: financial-resume-frontend
+            template:
+              metadata:
+                labels:
+                  app: financial-resume-frontend
+                  version: ${{ steps.tags.outputs.BETA_TAG }}
+              spec:
+                containers:
+                - name: frontend
+                  image: gcr.io/${{ secrets.GCP_PROJECT_ID }}/financial-resume-frontend:${{ steps.tags.outputs.BETA_TAG }}
+                  ports:
+                  - containerPort: 80
+                  env:
+                  - name: REACT_APP_ENVIRONMENT
+                    value: "beta"
+                  envFrom:
+                  - secretRef:
+                      name: frontend-secrets
+                  resources:
+                    requests:
+                      cpu: 100m
+                      memory: 128Mi
+                    limits:
+                      cpu: 500m
+                      memory: 512Mi
+                  livenessProbe:
+                    httpGet:
+                      path: /
+                      port: 80
+                    initialDelaySeconds: 30
+                    periodSeconds: 30
+                  readinessProbe:
+                    httpGet:
+                      path: /
+                      port: 80
+                    initialDelaySeconds: 5
+                    periodSeconds: 5
+          ---
+          apiVersion: v1
+          kind: Service
+          metadata:
+            name: financial-resume-frontend
+            namespace: beta
+            labels:
+              app: financial-resume-frontend
+          spec:
+            selector:
+              app: financial-resume-frontend
+            ports:
+            - port: 80
+              targetPort: 80
+              name: http
+            type: LoadBalancer
+          EOF
+
+      - name: ⏳ Wait for deployment
+        run: |
+          kubectl rollout status deployment/financial-resume-frontend -n beta --timeout=300s
+
+      - name: 🔍 Verify deployment
+        run: |
+          kubectl get pods -n beta -l app=financial-resume-frontend
+          kubectl get services -n beta -l app=financial-resume-frontend
+          
+          # Get LoadBalancer IP
+          echo "Waiting for LoadBalancer IP..."
+          sleep 60
+          LB_IP=$(kubectl get service financial-resume-frontend -n beta -o jsonpath='{.status.loadBalancer.ingress[0].ip}')
+          echo "🌐 Beta frontend available at: http://${LB_IP}"
+          echo "BETA_URL=http://${LB_IP}" >> $GITHUB_ENV
+
+      - name: 💬 Post deployment comment
+        if: github.event_name == 'pull_request'
+        uses: actions/github-script@v6
+        with:
+          script: |
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: `## 🎨 Frontend - Beta Deployment Complete\n\n✅ Successfully deployed to Beta environment\n🌐 **URL:** ${process.env.BETA_URL}\n🏷️ **Version:** ${{ steps.tags.outputs.BETA_TAG }}\n\n*Deployment triggered by commit: ${{ github.sha }}*`
+            })
+
+  # ================================
+  # 🚀 DEPLOY TO PRODUCTION (MANUAL)
+  # ================================
+  deploy-production:
+    name: 🚀 Deploy to Production
+    runs-on: ubuntu-latest
+    needs: build
+    if: github.event_name == 'workflow_dispatch' && github.event.inputs.environment == 'production'
+    environment: production
+    steps:
+      - name: 📥 Checkout code
+        uses: actions/checkout@v4
+
+      - name: 🔐 Setup Google Cloud SDK
+        uses: google-github-actions/setup-gcloud@v1
+        with:
+          service_account_key: ${{ secrets.GCP_SERVICE_ACCOUNT_KEY }}
+          project_id: ${{ secrets.GCP_PROJECT_ID }}
+          export_default_credentials: true
+
+      - name: 🔧 Get GKE credentials
+        run: |
+          gcloud container clusters get-credentials ${{ env.GKE_CLUSTER }} \
+            --region ${{ env.GCP_REGION }} \
+            --project ${{ secrets.GCP_PROJECT_ID }}
+
+      - name: 🏷️ Extract image tags
+        id: tags
+        run: |
+          SHORT_SHA=$(echo ${{ github.sha }} | cut -c1-7)
+          PROD_TAG="prod-${SHORT_SHA}"
+          echo "PROD_TAG=${PROD_TAG}" >> $GITHUB_OUTPUT
+
+      - name: 🏷️ Re-tag images for production
+        run: |
+          docker pull gcr.io/${{ secrets.GCP_PROJECT_ID }}/financial-resume-frontend:latest
+          docker tag gcr.io/${{ secrets.GCP_PROJECT_ID }}/financial-resume-frontend:latest gcr.io/${{ secrets.GCP_PROJECT_ID }}/financial-resume-frontend:${{ steps.tags.outputs.PROD_TAG }}
+          docker push gcr.io/${{ secrets.GCP_PROJECT_ID }}/financial-resume-frontend:${{ steps.tags.outputs.PROD_TAG }}
+
+      - name: 🔄 Create production namespace
+        run: |
+          kubectl create namespace production --dry-run=client -o yaml | kubectl apply -f -
+
+      - name: 🔐 Update secrets in Kubernetes
+        run: |
+          kubectl create secret generic frontend-secrets \
+            --from-literal=REACT_APP_API_URL="${{ secrets.REACT_APP_API_URL_PROD }}" \
+            --from-literal=REACT_APP_ENVIRONMENT=production \
+            --from-literal=GCP_PROJECT_ID="${{ secrets.GCP_PROJECT_ID }}" \
+            --namespace=production \
+            --dry-run=client -o yaml | kubectl apply -f -
+
+      - name: 🚀 Deploy to Production
+        run: |
+          # Create deployment YAML
+          cat <<EOF | kubectl apply -f -
+          apiVersion: apps/v1
+          kind: Deployment
+          metadata:
+            name: financial-resume-frontend
+            namespace: production
+            labels:
+              app: financial-resume-frontend
+              version: ${{ steps.tags.outputs.PROD_TAG }}
+          spec:
+            replicas: 2
+            selector:
+              matchLabels:
+                app: financial-resume-frontend
+            template:
+              metadata:
+                labels:
+                  app: financial-resume-frontend
+                  version: ${{ steps.tags.outputs.PROD_TAG }}
+              spec:
+                containers:
+                - name: frontend
+                  image: gcr.io/${{ secrets.GCP_PROJECT_ID }}/financial-resume-frontend:${{ steps.tags.outputs.PROD_TAG }}
+                  ports:
+                  - containerPort: 80
+                  env:
+                  - name: REACT_APP_ENVIRONMENT
+                    value: "production"
+                  envFrom:
+                  - secretRef:
+                      name: frontend-secrets
+                  resources:
+                    requests:
+                      cpu: 200m
+                      memory: 256Mi
+                    limits:
+                      cpu: 1000m
+                      memory: 1Gi
+                  livenessProbe:
+                    httpGet:
+                      path: /
+                      port: 80
+                    initialDelaySeconds: 30
+                    periodSeconds: 30
+                  readinessProbe:
+                    httpGet:
+                      path: /
+                      port: 80
+                    initialDelaySeconds: 5
+                    periodSeconds: 5
+          ---
+          apiVersion: v1
+          kind: Service
+          metadata:
+            name: financial-resume-frontend
+            namespace: production
+            labels:
+              app: financial-resume-frontend
+          spec:
+            selector:
+              app: financial-resume-frontend
+            ports:
+            - port: 80
+              targetPort: 80
+              name: http
+            type: LoadBalancer
+          EOF
+
+      - name: ⏳ Wait for deployment
+        run: |
+          kubectl rollout status deployment/financial-resume-frontend -n production --timeout=600s
+
+      - name: 🔍 Verify deployment
+        run: |
+          kubectl get pods -n production -l app=financial-resume-frontend
+          kubectl get services -n production -l app=financial-resume-frontend
+          
+          # Get LoadBalancer IP
+          echo "Waiting for LoadBalancer IP..."
+          sleep 60
+          LB_IP=$(kubectl get service financial-resume-frontend -n production -o jsonpath='{.status.loadBalancer.ingress[0].ip}')
+          echo "🌐 Production frontend available at: http://${LB_IP}"
+          echo "PROD_URL=http://${LB_IP}" >> $GITHUB_ENV
+
+      - name: 📢 Create GitHub Release
+        uses: actions/create-release@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tag_name: ${{ steps.tags.outputs.PROD_TAG }}
+          release_name: Frontend Release ${{ steps.tags.outputs.PROD_TAG }}
+          body: |
+            ## 🎨 Frontend Production Release ${{ steps.tags.outputs.PROD_TAG }}
+            
+            **Deployment Details:**
+            - 🌐 **Production URL:** ${{ env.PROD_URL }}
+            - 🏷️ **Version:** ${{ steps.tags.outputs.PROD_TAG }}
+            - 📅 **Deployed:** $(date -u +'%Y-%m-%d %H:%M:%S UTC')
+            - 🔗 **Commit:** ${{ github.sha }}
+            
+            **Features:**
+            - ✅ React 18 Application
+            - ✅ Responsive Design
+            - ✅ Optimized Bundle
+            - ✅ PWA Ready
+            - ✅ Load Balancer
+            
+            **Infrastructure:**
+            - 🌐 Load Balancer (External IP)
+            - ☸️ Google Kubernetes Engine
+            - 🏗️ Multi-stage Docker build
+            - 🔧 Nginx Server
+          draft: false
+          prerelease: false 
