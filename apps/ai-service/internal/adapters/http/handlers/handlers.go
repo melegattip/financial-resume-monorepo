@@ -57,6 +57,32 @@ func SetupRoutes(
 	router.GET("/health", handlers.HealthCheck)
 }
 
+// SetupRoutesWithGroup configura rutas AI en un RouterGroup existente (para unified backend)
+func SetupRoutesWithGroup(
+	apiGroup *gin.RouterGroup,
+	analysisUseCase ports.AIAnalysisPort,
+	purchaseUseCase ports.PurchaseDecisionPort,
+	creditUseCase ports.CreditAnalysisPort,
+) {
+	handlers := NewHandlers(analysisUseCase, purchaseUseCase, creditUseCase)
+
+	// Grupo de rutas para AI dentro del grupo existente
+	ai := apiGroup.Group("/ai")
+	{
+		// Análisis financiero
+		ai.POST("/health-analysis", handlers.AnalyzeFinancialHealth)
+		ai.POST("/insights", handlers.GenerateInsights)
+
+		// Decisiones de compra
+		ai.POST("/can-i-buy", handlers.CanIBuy)
+		ai.POST("/alternatives", handlers.SuggestAlternatives)
+
+		// Análisis crediticio
+		ai.POST("/credit-plan", handlers.GenerateCreditPlan)
+		ai.POST("/credit-score", handlers.CalculateCreditScore)
+	}
+}
+
 // AnalyzeFinancialHealth maneja el análisis de salud financiera
 func (h *Handlers) AnalyzeFinancialHealth(c *gin.Context) {
 	var request ports.FinancialAnalysisData

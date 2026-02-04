@@ -1,0 +1,83 @@
+# render.yaml - Blueprint for Render.com deployment
+# Deploy unified backend as a single Docker service
+
+services:
+  # === UNIFIED BACKEND ===
+  # Single container running all Go services + nginx proxy
+  - type: web
+    name: financial-resume-backend
+    runtime: docker
+    dockerfilePath: ./Dockerfile
+    dockerContext: .
+    envVars:
+      # Database - Main (Engine + Gamification)
+      - key: DB_HOST
+        sync: false  # Configure in Render dashboard
+      - key: DB_PORT
+        value: "5432"
+      - key: DB_USER
+        sync: false
+      - key: DB_PASSWORD
+        sync: false
+      - key: DB_NAME
+        value: financial_resume
+      - key: DB_SSLMODE
+        value: require
+      
+      # Database - Users (separate for users-service)
+      - key: USERS_DB_HOST
+        sync: false
+      - key: USERS_DB_PORT
+        value: "5432"
+      - key: USERS_DB_USER
+        sync: false
+      - key: USERS_DB_PASSWORD
+        sync: false
+      - key: USERS_DB_NAME
+        value: users_db
+      
+      # Redis
+      - key: REDIS_URL
+        sync: false
+      
+      # JWT
+      - key: JWT_SECRET
+        generateValue: true
+      
+      # OpenAI (for AI service)
+      - key: OPENAI_API_KEY
+        sync: false
+      - key: USE_AI_MOCK
+        value: "false"
+      
+      # Environment
+      - key: ENVIRONMENT
+        value: production
+    
+    healthCheckPath: /health
+    
+    # Scaling
+    plan: starter  # $7/month - single instance is enough
+    
+    # Auto-deploy on push
+    autoDeploy: true
+
+  # === FRONTEND ===
+  - type: web
+    name: financial-resume-frontend
+    runtime: docker
+    dockerfilePath: ./apps/frontend/Dockerfile
+    dockerContext: ./apps/frontend
+    envVars:
+      - key: REACT_APP_API_URL
+        value: https://financial-resume-backend.onrender.com/api/v1
+    healthCheckPath: /
+    plan: starter
+    autoDeploy: true
+
+# Databases (optional - can use existing)
+# databases:
+#   - name: financial-resume-db
+#     databaseName: financial_resume
+#     user: postgres
+#     plan: starter

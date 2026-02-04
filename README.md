@@ -1,81 +1,77 @@
 # Financial Resume - Monorepo
 
-Ecosistema completo de gestión financiera personal con arquitectura de microservicios.
+Backend unificado + Frontend para gestión financiera personal.
 
-## 🏗️ Estructura
+## 🏗️ Arquitectura
 
 ```
-├── apps/                        # Aplicaciones desplegables
-│   ├── api-gateway/             # Core API + Gateway (Go)
-│   ├── ai-service/              # Análisis con IA (Go)
-│   ├── gamification-service/    # Sistema de gamificación (Go)
-│   ├── users-service/           # Autenticación y usuarios (Go)
-│   └── frontend/                # Interfaz web (React)
-│
-├── packages/                    # Código compartido
-│   └── go-shared/               # Bibliotecas Go comunes
-│
-├── infrastructure/              # Configuración de infraestructura
-│   └── docker/                  # Docker Compose files
-│
-├── scripts/                     # Scripts de desarrollo
-└── docs/                        # Documentación
+                    ┌─────────────────────────────────┐
+                    │     Unified Backend (Docker)     │
+                    │           Port 8080              │
+                    │  ┌─────────────────────────────┐ │
+                    │  │         Nginx Proxy          │ │
+                    │  └──────────┬──────────────────┘ │
+                    │             │                    │
+     ┌──────────────┼─────────────┼────────────────────┼──────────────┐
+     │              │             │                    │              │
+     ▼              ▼             ▼                    ▼              │
+┌─────────┐   ┌──────────┐  ┌───────────┐    ┌─────────────────┐      │
+│ Users   │   │ Engine   │  │ AI        │    │ Gamification    │      │
+│:8083    │   │:8081     │  │:8082      │    │:8084            │      │
+└─────────┘   └──────────┘  └───────────┘    └─────────────────┘      │
+                    └─────────────────────────────────────────────────┘
 ```
 
-## 🚀 Inicio Rápido
+## 📂 Estructura
 
-### Prerrequisitos
-- Go 1.23+
-- Node.js 18+
-- Docker & Docker Compose
+```
+├── apps/
+│   ├── api-gateway/        # Engine principal (Go)
+│   ├── ai-service/         # Análisis con IA (Go)
+│   ├── gamification-service/# XP y logros (Go)
+│   ├── users-service/      # Auth JWT/2FA (Go)
+│   └── frontend/           # React
+├── infrastructure/docker/
+│   ├── nginx-unified.conf  # Reverse proxy config
+│   └── supervisord.conf    # Process manager
+├── Dockerfile              # Multi-stage build
+└── render.yaml             # Render.com blueprint
+```
 
-### Desarrollo Local
+## 🚀 Deploy a Render
+
+1. Push el repositorio a GitHub
+2. En Render: **New** → **Blueprint** → Conectar repo
+3. Render detectará `render.yaml` automáticamente
+4. Configurar variables de entorno (DBs, JWT_SECRET, etc.)
+
+**Resultado**: 2 servicios en Render
+- `financial-resume-backend` (~$7/mes)
+- `financial-resume-frontend` (~$7/mes)
+
+## 🔧 Desarrollo Local
 
 ```bash
-# Clonar repositorio
-git clone https://github.com/tu-usuario/financial-resume-monorepo.git
-cd financial-resume-monorepo
-
-# Levantar bases de datos
+# Levantar DBs
 docker-compose -f infrastructure/docker/docker-compose.yml up -d postgres-main postgres-users redis
 
-# Ejecutar todos los servicios
-./scripts/dev-up.sh
-```
-
-### Comandos Útiles
-
-```bash
-# Build de todos los servicios Go
-go build ./apps/...
-
-# Tests de todos los servicios
-go test ./apps/... ./packages/...
-
-# Solo un servicio específico
+# Opción 1: Correr servicios individuales
 cd apps/api-gateway && go run cmd/api/main.go
+cd apps/users-service && go run cmd/api/main.go
+# etc...
+
+# Opción 2: Build Docker completo
+docker build -t financial-resume-backend .
+docker run -p 8080:8080 financial-resume-backend
 ```
 
-## 📦 Servicios
+## 📡 API Routing
 
-| Servicio | Puerto | Descripción |
-|----------|--------|-------------|
-| api-gateway | 8080 | API principal y orquestación |
-| ai-service | 8082 | Análisis financiero con IA |
-| gamification-service | 8081 | Sistema de XP y logros |
-| users-service | 8083 | Autenticación JWT/2FA |
-| frontend | 3000 | Interfaz React |
-
-## 🔧 Configuración
-
-Copiar `.env.example` a `.env` y configurar las variables requeridas.
-
-## 📚 Documentación
-
-- [Arquitectura](docs/architecture/)
-- [API Reference](docs/api/)
-- [Guía de Desarrollo](docs/development/)
-
-## 📄 Licencia
-
-MIT
+| Path | Servicio |
+|------|----------|
+| `/api/v1/users/*` | users-service |
+| `/api/v1/auth/*` | users-service |
+| `/api/v1/ai/*` | ai-service |
+| `/api/v1/gamification/*` | gamification-service |
+| `/api/v1/*` (resto) | api-gateway (engine) |
+| `/swagger/*` | api-gateway |
