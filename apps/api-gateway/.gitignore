@@ -19,7 +19,7 @@ Thumbs.db
 main
 /main
 financial-resume-engine
-api
+/api
 
 # Logs
 *.log
