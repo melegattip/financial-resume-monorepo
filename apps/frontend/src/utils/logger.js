@@ -13,14 +13,27 @@ const LOG_LEVELS = {
   DEBUG: 3
 };
 
+// Preserve original console BEFORE any modifications
+const originalConsole = {
+  log: console.log.bind(console),
+  info: console.info.bind(console),
+  warn: console.warn.bind(console),
+  error: console.error.bind(console),
+  group: console.group?.bind(console),
+  groupEnd: console.groupEnd?.bind(console),
+  table: console.table?.bind(console),
+  time: console.time?.bind(console),
+  timeEnd: console.timeEnd?.bind(console),
+};
+
 class Logger {
   constructor() {
     this.isProduction = config.IS_PRODUCTION;
     this.environment = config.ENVIRONMENT;
-    
+
     // In production, only allow ERROR and WARN levels
     this.maxLevel = this.isProduction ? LOG_LEVELS.WARN : LOG_LEVELS.DEBUG;
-    
+
     // Create bound methods to preserve context
     this.log = this.log.bind(this);
     this.error = this.error.bind(this);
@@ -42,7 +55,7 @@ class Logger {
   _formatMessage(level, message, ...args) {
     const timestamp = new Date().toISOString();
     const levelName = Object.keys(LOG_LEVELS)[level];
-    
+
     if (this.isProduction) {
       // In production, minimal formatting
       return [message, ...args];
@@ -53,11 +66,11 @@ class Logger {
   }
 
   /**
-   * Error logging - always shown
+   * Error logging - always shown (uses originalConsole to avoid loop)
    */
   error(message, ...args) {
     if (this._shouldLog(LOG_LEVELS.ERROR)) {
-      console.error(...this._formatMessage(LOG_LEVELS.ERROR, message, ...args));
+      originalConsole.error(...this._formatMessage(LOG_LEVELS.ERROR, message, ...args));
     }
   }
 
@@ -66,7 +79,7 @@ class Logger {
    */
   warn(message, ...args) {
     if (this._shouldLog(LOG_LEVELS.WARN)) {
-      console.warn(...this._formatMessage(LOG_LEVELS.WARN, message, ...args));
+      originalConsole.warn(...this._formatMessage(LOG_LEVELS.WARN, message, ...args));
     }
   }
 
@@ -75,7 +88,7 @@ class Logger {
    */
   info(message, ...args) {
     if (this._shouldLog(LOG_LEVELS.INFO)) {
-      console.info(...this._formatMessage(LOG_LEVELS.INFO, message, ...args));
+      originalConsole.info(...this._formatMessage(LOG_LEVELS.INFO, message, ...args));
     }
   }
 
@@ -84,7 +97,7 @@ class Logger {
    */
   debug(message, ...args) {
     if (this._shouldLog(LOG_LEVELS.DEBUG)) {
-      console.log(...this._formatMessage(LOG_LEVELS.DEBUG, message, ...args));
+      originalConsole.log(...this._formatMessage(LOG_LEVELS.DEBUG, message, ...args));
     }
   }
 
@@ -99,14 +112,14 @@ class Logger {
    * Group logging for better organization
    */
   group(label) {
-    if (!this.isProduction && console.group) {
-      console.group(label);
+    if (!this.isProduction && originalConsole.group) {
+      originalConsole.group(label);
     }
   }
 
   groupEnd() {
-    if (!this.isProduction && console.groupEnd) {
-      console.groupEnd();
+    if (!this.isProduction && originalConsole.groupEnd) {
+      originalConsole.groupEnd();
     }
   }
 
@@ -114,8 +127,8 @@ class Logger {
    * Table logging for development
    */
   table(data) {
-    if (!this.isProduction && console.table) {
-      console.table(data);
+    if (!this.isProduction && originalConsole.table) {
+      originalConsole.table(data);
     }
   }
 
@@ -123,14 +136,14 @@ class Logger {
    * Time logging for performance monitoring
    */
   time(label) {
-    if (!this.isProduction && console.time) {
-      console.time(label);
+    if (!this.isProduction && originalConsole.time) {
+      originalConsole.time(label);
     }
   }
 
   timeEnd(label) {
-    if (!this.isProduction && console.timeEnd) {
-      console.timeEnd(label);
+    if (!this.isProduction && originalConsole.timeEnd) {
+      originalConsole.timeEnd(label);
     }
   }
 }
@@ -142,7 +155,7 @@ const logger = new Logger();
 if (logger.isProduction) {
   // Preserve original console methods for internal use
   const originalConsole = { ...console };
-  
+
   // Override console methods to use our logger
   window.console = {
     ...originalConsole,
