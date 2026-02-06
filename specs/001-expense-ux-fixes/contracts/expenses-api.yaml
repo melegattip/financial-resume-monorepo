@@ -1,0 +1,276 @@
+openapi: 3.0.3
+info:
+  title: Expense Management API - UX Improvements
+  description: API endpoints for expense management with transaction dates. Partial payments already exist.
+  version: 1.0.0
+
+servers:
+  - url: http://localhost:8000/api/v1
+    description: Local development
+  - url: https://api.financial-resume.com/api/v1
+    description: Production
+
+paths:
+  /expenses:
+    get:
+      summary: List expenses for a user
+      description: Returns expenses filtered by transaction date (month/year). Must include paid_amount and pending_amount.
+      parameters:
+        - name: month
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 12
+          description: Filter by transaction month (1-12)
+        - name: year
+          in: query
+          required: false
+          schema:
+            type: integer
+          description: Filter by transaction year
+      responses:
+        '200':
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Expense'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+    post:
+      summary: Create a new expense
+      description: Creates an expense with custom transaction date
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - amount
+                - category
+                - transaction_date
+              properties:
+                amount:
+                  type: number
+                  format: double
+                  minimum: 0.01
+                  example: 150.00
+                description:
+                  type: string
+                  example: "Grocery shopping"
+                category:
+                  type: string
+                  example: "Food"
+                transaction_date:
+                  type: string
+                  format: date-time
+                  description: "When the expense actually occurred (can be past or future)"
+                  example: "2026-01-15T10:00:00Z"
+                due_date:
+                  type: string
+                  format: date-time
+                  nullable: true
+                  description: "Optional payment due date"
+                  example: "2026-02-01T00:00:00Z"
+      responses:
+        '201':
+          description: Expense created successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Expense'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /expenses/{id}:
+    get:
+      summary: Get expense by ID
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Expense'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+    patch:
+      summary: Update expense (inline editing)
+      description: Partially update an expense. Used for inline editing of individual fields.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              minProperties: 1
+              properties:
+                amount:
+                  type: number
+                  format: double
+                  minimum: 0.01
+                description:
+                  type: string
+                category:
+                  type: string
+                transaction_date:
+                  type: string
+                  format: date-time
+                due_date:
+                  type: string
+                  format: date-time
+                  nullable: true
+      responses:
+        '200':
+          description: Expense updated successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Expense'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+    delete:
+      summary: Delete an expense
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '204':
+          description: Expense deleted successfully
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+components:
+  schemas:
+    Expense:
+      type: object
+      required:
+        - id
+        - user_id
+        - amount
+        - category
+        - transaction_date
+        - created_at
+        - updated_at
+        - paid_amount
+        - pending_amount
+      properties:
+        id:
+          type: integer
+          example: 123
+        user_id:
+          type: integer
+          example: 456
+        amount:
+          type: number
+          format: double
+          example: 150.00
+        description:
+          type: string
+          nullable: true
+          example: "Grocery shopping"
+        category:
+          type: string
+          example: "Food"
+        transaction_date:
+          type: string
+          format: date-time
+          description: "When the expense actually occurred"
+          example: "2026-01-15T10:00:00Z"
+        due_date:
+          type: string
+          format: date-time
+          nullable: true
+          description: "Optional payment due date"
+          example: "2026-02-01T00:00:00Z"
+        paid_amount:
+          type: number
+          format: double
+          description: "Sum of all partial payments (calculated field, MUST be included in response)"
+          example: 50.00
+        pending_amount:
+          type: number
+          format: double
+          description: "Remaining unpaid amount (calculated field, MUST be included in response)"
+          example: 100.00
+        created_at:
+          type: string
+          format: date-time
+          example: "2026-01-10T08:00:00Z"
+        updated_at:
+          type: string
+          format: date-time
+          example: "2026-01-15T12:00:00Z"
+
+    Error:
+      type: object
+      required:
+        - error
+      properties:
+        error:
+          type: string
+          example: "validation_error"
+        message:
+          type: string
+          example: "Invalid request"
+        details:
+          type: object
+          additionalProperties: true
+
+  responses:
+    BadRequest:
+      description: Invalid request
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    
+    Unauthorized:
+      description: Missing or invalid authentication
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    
+    NotFound:
+      description: Resource not found
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+security:
+  - bearerAuth: []

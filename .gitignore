@@ -44,3 +44,6 @@ temp/
 
 # Go
 go.work.sum
+
+#SDD
+.sdd

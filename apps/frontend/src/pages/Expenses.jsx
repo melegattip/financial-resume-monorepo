@@ -28,7 +28,7 @@ const Expenses = () => {
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [deletingExpense, setDeletingExpense] = useState(null);
   const [deleteLoading, setDeleteLoading] = useState(false);
-  
+
   // Estados para nuevos filtros de ordenamiento
   const [sortBy, setSortBy] = useState('created_at');
   const [sortOrder, setSortOrder] = useState('desc');
@@ -54,8 +54,8 @@ const Expenses = () => {
   } = usePeriod();
 
   // Usar el hook optimizado para operaciones API
-  const { 
-    expenses: expensesAPI, 
+  const {
+    expenses: expensesAPI,
     categories: categoriesAPI,
     incomes: incomesAPI,
     dataService
@@ -68,7 +68,7 @@ const Expenses = () => {
   useEffect(() => {
     const searchParams = new URLSearchParams(location.search);
     const statusParam = searchParams.get('status');
-    
+
     if (statusParam) {
       // Mapear parámetros de URL a valores del filtro
       const filterMapping = {
@@ -76,7 +76,7 @@ const Expenses = () => {
         'paid': 'paid',
         'all': 'all'
       };
-      
+
       const newFilter = filterMapping[statusParam] || 'all';
       console.log(`🔍 [Expenses] Aplicando filtro desde URL: ${statusParam} → ${newFilter}`);
       setFilterPaid(newFilter);
@@ -100,11 +100,11 @@ const Expenses = () => {
       { bg: 'bg-cyan-100 dark:bg-cyan-900/30', border: 'border-cyan-400', text: 'text-cyan-700 dark:text-cyan-300' },
       { bg: 'bg-orange-100 dark:bg-orange-900/30', border: 'border-orange-400', text: 'text-orange-700 dark:text-orange-300' },
     ];
-    
+
     if (!categoryId) {
       return { bg: 'bg-gray-100 dark:bg-gray-700', border: 'border-gray-400 dark:border-gray-500', text: 'text-gray-700 dark:text-gray-300' };
     }
-    
+
     // Usar el hash del categoryId para asignar colores consistentes
     let hash = 0;
     for (let i = 0; i < categoryId.length; i++) {
@@ -123,38 +123,38 @@ const Expenses = () => {
     try {
       setLoading(true);
       console.log('🔄 Cargando datos de gastos con API optimizada...');
-      
+
       const [expensesResponse, categoriesResponse, incomesResponse] = await Promise.all([
         expensesAPI.list(),
         categoriesAPI.list(),
         incomesAPI.list(),
       ]);
-      
+
       // Normalizar datos de respuesta
       const expensesData = expensesResponse.data?.expenses || expensesResponse.expenses || expensesResponse || [];
       const categoriesData = categoriesResponse.data?.data || categoriesResponse.data || categoriesResponse || [];
       const incomesData = incomesResponse.data?.incomes || incomesResponse.incomes || incomesResponse || [];
-      
+
       setExpenses(Array.isArray(expensesData) ? expensesData : []);
       setCategories(Array.isArray(categoriesData) ? categoriesData : []);
-      
+
       // Calcular total de ingresos para porcentajes
-      const totalIncomeAmount = Array.isArray(incomesData) ? 
+      const totalIncomeAmount = Array.isArray(incomesData) ?
         incomesData.reduce((sum, income) => sum + (income.amount || 0), 0) : 0;
       setTotalIncome(totalIncomeAmount);
-      
+
       // Actualizar datos disponibles en el contexto de períodos
       updateAvailableData(expensesData, incomesData);
 
-      
+
     } catch (error) {
       console.warn('⚠️ Error al cargar gastos:', error.message);
-      
+
       // Establecer datos vacíos
       setExpenses([]);
       setCategories([]);
       setTotalIncome(0);
-      
+
       // No mostrar toast aquí porque useOptimizedAPI ya lo maneja
     } finally {
       setLoading(false);
@@ -199,7 +199,7 @@ const Expenses = () => {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    
+
     // Validar antes de enviar
     if (!validateForm()) {
       toast.error('Por favor corrige los errores en el formulario');
@@ -233,7 +233,7 @@ const Expenses = () => {
       // Forzar limpiar cache de lista y recargar para reflejar cambios lo antes posible
       try {
         dataService?.clearCache?.('expenses_list');
-      } catch {}
+      } catch { }
       await loadData();
 
       // Esperar resultado para registrar gamificación y hacer una recarga final
@@ -268,7 +268,7 @@ const Expenses = () => {
         // Forzar recarga de datos para reflejar el gasto creado
         try {
           dataService?.clearCache?.('expenses_list');
-        } catch {}
+        } catch { }
         await loadData();
       }
     }
@@ -293,16 +293,16 @@ const Expenses = () => {
 
   const confirmDelete = async () => {
     if (!deletingExpense) return;
-    
+
     try {
       setDeleteLoading(true);
       await expensesAPI.delete(deletingExpense.id);
       // useOptimizedAPI ya muestra el toast de éxito
-      
+
       // 🎮 Registrar acción de gamificación
       console.log(`🎯 [Expenses] Registrando eliminación de expense: ${deletingExpense.id}`);
       recordDeleteExpense(deletingExpense.id, `Gasto eliminado: ${deletingExpense.description}`);
-      
+
       // Recargar datos para mostrar cambios
       await loadData();
     } catch (error) {
@@ -328,7 +328,7 @@ const Expenses = () => {
         const updateData = { paid: false };
         await expensesAPI.update(expense.id, updateData);
         // useOptimizedAPI ya muestra el toast de éxito
-        
+
         // Recargar datos para mostrar cambios
         await loadData();
       } catch (error) {
@@ -349,10 +349,10 @@ const Expenses = () => {
       if (paymentType === 'total') {
         // Pago total - marcar como pagado (prioridad absoluta)
         // Resetea cualquier pago parcial previo y marca como 100% pagado
-        const updateData = { 
-          paid: true, 
+        const updateData = {
+          paid: true,
           amount_paid: payingExpense.amount,
-          pending_amount: 0 
+          pending_amount: 0
         };
         await expensesAPI.update(payingExpense.id, updateData);
         toast.success('Gasto marcado como pagado completamente');
@@ -360,22 +360,22 @@ const Expenses = () => {
         // Pago parcial - validar monto
         const paymentAmt = parseFloat(paymentAmount);
         const pendingAmount = payingExpense.pending_amount || (payingExpense.amount - (payingExpense.amount_paid || 0));
-        
+
         if (paymentAmt <= 0) {
           toast.error('El monto debe ser mayor a 0');
           return;
         }
-        
+
         // Verificar si intenta pagar más del monto pendiente
         if (paymentAmt > pendingAmount) {
           // Mostrar modal de sobrepago
           setShowOverpaymentModal(true);
           return;
         }
-        
+
         const updateData = { payment_amount: paymentAmt };
         await expensesAPI.update(payingExpense.id, updateData);
-        
+
         // Verificar si el pago cubre el total
         const remaining = pendingAmount - paymentAmt;
         if (remaining <= 0) {
@@ -384,11 +384,11 @@ const Expenses = () => {
           toast.success(`Pago parcial registrado. Quedan ${formatCurrency(remaining)} pendientes`);
         }
       }
-      
+
       setShowPaymentModal(false);
       setPayingExpense(null);
       setPaymentAmount('');
-      
+
       // Recargar datos para mostrar cambios
       await loadData();
     } catch (error) {
@@ -400,34 +400,34 @@ const Expenses = () => {
   const handleOverpaymentChoice = async (choice) => {
     try {
       const paymentAmt = parseFloat(paymentAmount);
-      
+
       if (choice === 'increase_expense') {
         // Opción 1: Aumentar el gasto total al monto del pago y aplicar pago total
-        const updateData = { 
+        const updateData = {
           amount: paymentAmt,  // Aumentar el monto total del gasto
           paid: true,          // Marcar como pagado
           amount_paid: paymentAmt,
-          pending_amount: 0 
+          pending_amount: 0
         };
         await expensesAPI.update(payingExpense.id, updateData);
         toast.success(`Gasto actualizado a ${formatCurrency(paymentAmt)} y marcado como pagado completamente`);
       } else if (choice === 'apply_total_payment') {
         // Opción 2: Aplicar pago total con el monto original
-        const updateData = { 
+        const updateData = {
           paid: true,
           amount_paid: payingExpense.amount,
-          pending_amount: 0 
+          pending_amount: 0
         };
         await expensesAPI.update(payingExpense.id, updateData);
         toast.success('Gasto marcado como pagado completamente con el monto original');
       }
-      
+
       // Cerrar modales y limpiar
       setShowOverpaymentModal(false);
       setShowPaymentModal(false);
       setPayingExpense(null);
       setPaymentAmount('');
-      
+
       // Recargar datos para mostrar cambios
       await loadData();
     } catch (error) {
@@ -436,23 +436,23 @@ const Expenses = () => {
     }
   };
 
-  const filteredExpenses = Array.isArray(expenses) 
+  const filteredExpenses = Array.isArray(expenses)
     ? expenses.filter(expense => {
-        const matchesSearch = expense.description.toLowerCase().includes(searchTerm.toLowerCase());
-        const matchesFilter = filterPaid === 'all' || 
-          (filterPaid === 'paid' && expense.paid) ||
-          (filterPaid === 'unpaid' && !expense.paid);
-        
-        // Filtros de fecha
-        const expenseDate = new Date(expense.created_at);
-        const matchesYear = !selectedYear || expenseDate.getFullYear().toString() === selectedYear;
-        const matchesMonth = !selectedMonth || expense.created_at.slice(0, 7) === selectedMonth;
-        
-        return matchesSearch && matchesFilter && matchesYear && matchesMonth;
-      })
+      const matchesSearch = expense.description.toLowerCase().includes(searchTerm.toLowerCase());
+      const matchesFilter = filterPaid === 'all' ||
+        (filterPaid === 'paid' && expense.paid) ||
+        (filterPaid === 'unpaid' && !expense.paid);
+
+      // Filtros de fecha
+      const expenseDate = new Date(expense.created_at);
+      const matchesYear = !selectedYear || expenseDate.getFullYear().toString() === selectedYear;
+      const matchesMonth = !selectedMonth || expense.created_at.slice(0, 7) === selectedMonth;
+
+      return matchesSearch && matchesFilter && matchesYear && matchesMonth;
+    })
       .sort((a, b) => {
         let aValue, bValue;
-        
+
         switch (sortBy) {
           case 'amount':
             aValue = a.amount;
@@ -474,7 +474,7 @@ const Expenses = () => {
             bValue = new Date(b.created_at).getTime();
             break;
         }
-        
+
         if (sortOrder === 'asc') {
           return aValue > bValue ? 1 : aValue < bValue ? -1 : 0;
         } else {
@@ -639,18 +639,17 @@ const Expenses = () => {
               const category = categories.find(c => c.id === expense.category_id);
               const color = getCategoryColor(expense.category_id);
               const incomePercentage = totalIncome > 0 ? (expense.amount / totalIncome) * 100 : 0;
-              
+
               return (
                 <div key={expense.id} className="flex items-center gap-2 py-1.5 px-3 rounded-lg bg-fr-gray-50 dark:bg-gray-700 hover:bg-fr-gray-100 dark:hover:bg-gray-600 transition-colors">
                   {/* Estado de pago compacto */}
                   <div className="flex-shrink-0 w-6 h-6">
                     <button
                       onClick={() => togglePaid(expense)}
-                      className={`w-full h-full rounded-md transition-colors flex items-center justify-center ${
-                        expense.paid 
-                          ? 'bg-green-100 dark:bg-green-900/30 text-green-600 dark:text-green-400 hover:bg-green-200 dark:hover:bg-green-900/50' 
+                      className={`w-full h-full rounded-md transition-colors flex items-center justify-center ${expense.paid
+                          ? 'bg-green-100 dark:bg-green-900/30 text-green-600 dark:text-green-400 hover:bg-green-200 dark:hover:bg-green-900/50'
                           : 'bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-400 hover:bg-red-200 dark:hover:bg-red-900/50'
-                      }`}
+                        }`}
                     >
                       {expense.paid ? (
                         <FaCheckCircle className="w-3 h-3" />
@@ -664,6 +663,12 @@ const Expenses = () => {
                   <div className="flex-1 min-w-0">
                     <h3 className="font-medium text-fr-gray-900 dark:text-gray-100 text-sm truncate">
                       {expense.description}
+                      {/* Partial Payment Badge - Inline, discreto con saldo restante */}
+                      {expense.amount_paid > 0 && !expense.paid && (
+                        <span className="ml-2 text-xs text-gray-500 dark:text-gray-400 font-normal">
+                          (Pagado: {formatAmount(expense.amount_paid)} | Resta: {formatAmount(expense.amount - expense.amount_paid)})
+                        </span>
+                      )}
                     </h3>
                   </div>
 
@@ -680,9 +685,9 @@ const Expenses = () => {
                   <div className="flex-shrink-0 hidden md:block text-xs text-gray-500 dark:text-gray-400 text-left min-w-[100px]">
                     {expense.due_date && (
                       <span>
-                        Vence: {new Date(expense.due_date).toLocaleDateString('es-AR', { 
-                          day: 'numeric', 
-                          month: 'numeric', 
+                        Vence: {new Date(expense.due_date).toLocaleDateString('es-AR', {
+                          day: 'numeric',
+                          month: 'numeric',
                           year: 'numeric'
                         })}
                       </span>
@@ -695,7 +700,7 @@ const Expenses = () => {
                       -{formatAmount(expense.amount)}
                     </div>
                   </div>
-                  
+
                   {/* Botones de acción compactos */}
                   <div className="flex space-x-0.5 flex-shrink-0">
                     {!expense.paid && (
@@ -711,7 +716,7 @@ const Expenses = () => {
                         <FaCheckCircle className="w-3 h-3 text-green-600 dark:text-green-400" />
                       </button>
                     )}
-                    
+
                     <button
                       onClick={(e) => {
                         e.stopPropagation();
@@ -722,7 +727,7 @@ const Expenses = () => {
                     >
                       <FaEdit className="w-2.5 h-2.5 text-gray-600 dark:text-gray-400" />
                     </button>
-                    
+
                     <button
                       onClick={(e) => {
                         e.stopPropagation();
@@ -843,8 +848,8 @@ const Expenses = () => {
                 >
                   Cancelar
                 </button>
-                <button 
-                  type="submit" 
+                <button
+                  type="submit"
                   className={`btn-primary flex-1 ${!isFormValid ? 'opacity-50 cursor-not-allowed' : ''}`}
                   disabled={!isFormValid}
                 >

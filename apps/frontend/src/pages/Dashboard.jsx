@@ -4,7 +4,7 @@ import { createPortal } from 'react-dom';
 import { FaArrowUp, FaArrowDown, FaDollarSign, FaChartPie, FaCalendar, FaCheckCircle, FaTimesCircle, FaChartBar, FaBullseye, FaExclamationCircle, FaRedo, FaBrain } from 'react-icons/fa';
 import ValidatedInput from '../components/ValidatedInput';
 import { validateAmount, validateDescription } from '../utils/validation';
-import { 
+import {
   ResponsiveContainer,
   PieChart as RechartsPieChart,
   Pie,
@@ -110,8 +110,8 @@ const Resumen = () => {
   const { userProfile, isFeatureUnlocked, FEATURE_GATES } = useGamification();
 
   // Usar el hook optimizado para operaciones API
-  const { 
-    expenses: expensesAPI, 
+  const {
+    expenses: expensesAPI,
     categories: categoriesAPI,
     incomes: incomesAPI
   } = useOptimizedAPI();
@@ -127,32 +127,32 @@ const Resumen = () => {
   const loadDashboardData = async (shouldUpdateAvailableData = true) => {
     try {
       setLoading(true);
-      
+
       // Obtener parámetros de filtro del contexto global
       const filterParams = getFilterParams();
-      
+
 
       // Usar el servicio optimizado de datos
       const dashboardData = await dataService.loadDashboardData(
-        filterParams, 
+        filterParams,
         isAuthenticated && user // Solo usar endpoints optimizados si está autenticado
       );
 
       setData(dashboardData);
-      
+
       // Actualizar datos disponibles en el contexto global solo la primera vez
       if (shouldUpdateAvailableData) {
         updateAvailableData(
-          dashboardData.allExpenses || dashboardData.expenses, 
+          dashboardData.allExpenses || dashboardData.expenses,
           dashboardData.allIncomes || dashboardData.incomes
         );
       }
 
       // Dashboard data loaded successfully
-      
+
     } catch (error) {
       console.error('Error loading dashboard:', error);
-      
+
       // Último recurso: datos vacíos
       setData({
         totalIncome: 0,
@@ -165,7 +165,7 @@ const Resumen = () => {
         expensesSummary: {},
         categoriesAnalytics: [],
       });
-      
+
       toast.error('Error cargando datos del resumen');
     } finally {
       setLoading(false);
@@ -175,7 +175,7 @@ const Resumen = () => {
   // Cargar resúmenes de las nuevas funcionalidades
   const loadNewFeaturesSummary = async () => {
     try {
-      
+
       const [budgetsRes, savingsRes, recurringRes, healthRes] = await Promise.all([
         budgetsAPI.getDashboard().catch((err) => {
           console.warn('Error loading budgets dashboard:', err);
@@ -210,7 +210,7 @@ const Resumen = () => {
         // Extraer health score - usar estructura consistente con AIInsights
         const healthScore = healthRes.health_score || healthRes.data?.health_score || 0;
         let healthLevel = healthRes.health_level || healthRes.data?.health_level;
-        
+
         // Si no hay level pero hay score, calcularlo usando la misma lógica que AIInsights
         if (!healthLevel && healthScore > 0) {
           if (healthScore >= 800) healthLevel = 'Excelente';
@@ -218,12 +218,12 @@ const Resumen = () => {
           else if (healthScore >= 400) healthLevel = 'Regular';
           else healthLevel = 'Mejorable';
         }
-        
+
         setHealthScore({
           score: healthScore,
           level: healthLevel || 'Cargando...'
         });
-        
+
       }
     } catch (error) {
       console.error('Error loading feature summaries:', error);
@@ -245,38 +245,38 @@ const Resumen = () => {
   // Función para filtrar datos client-side (fallback cuando nuevos endpoints no disponibles)
   const filterDataByMonthAndYear = (dataArray, monthFilter, yearFilter) => {
     if (!hasActiveFilters) return dataArray;
-    
+
     return dataArray.filter(item => {
       // Validar que tenga fecha válida
       if (!item.created_at) return false;
-      
+
       const itemDate = new Date(item.created_at);
-      
+
       // Validar que la fecha sea válida
       if (isNaN(itemDate.getTime())) return false;
-      
+
       // Filtrar por año si está seleccionado
       if (yearFilter && itemDate.getFullYear().toString() !== yearFilter) {
         return false;
       }
-      
+
       // Filtrar por mes si está seleccionado
       if (monthFilter) {
         const itemMonth = itemDate.toISOString().slice(0, 7);
         return itemMonth === monthFilter;
       }
-      
+
       return true;
     });
   };
-  
+
   const formatMonthLabel = (monthString) => {
     // Evitar problemas de zona horaria usando constructor numérico
     const [year, month] = monthString.split('-');
     const date = new Date(parseInt(year), parseInt(month) - 1, 1); // month es 0-indexed
-    const formatted = date.toLocaleDateString('es-AR', { 
-      year: 'numeric', 
-      month: 'long' 
+    const formatted = date.toLocaleDateString('es-AR', {
+      year: 'numeric',
+      month: 'long'
     });
     // Capitalizar la primera letra del mes
     const capitalized = formatted.charAt(0).toUpperCase() + formatted.slice(1);
@@ -295,11 +295,11 @@ const Resumen = () => {
       { bg: 'bg-cyan-100 dark:bg-cyan-900/30', border: 'border-cyan-400', text: 'text-cyan-700 dark:text-cyan-300' },
       { bg: 'bg-orange-100 dark:bg-orange-900/30', border: 'border-orange-400', text: 'text-orange-700 dark:text-orange-300' },
     ];
-    
+
     if (!categoryId) {
       return { bg: 'bg-gray-100 dark:bg-gray-700', border: 'border-gray-400 dark:border-gray-500', text: 'text-gray-700 dark:text-gray-300' };
     }
-    
+
     // Usar el hash del categoryId para asignar colores consistentes
     let hash = 0;
     for (let i = 0; i < categoryId.length; i++) {
@@ -314,15 +314,15 @@ const Resumen = () => {
     // Si tenemos datos del backend analytics, usarlos
     if (data.categoriesAnalytics && data.categoriesAnalytics.length) {
       const colors = ['#009ee3', '#00a650', '#ff6900', '#e53e3e', '#6b7280', '#8b5cf6', '#f59e0b'];
-      
-      
+
+
       const result = data.categoriesAnalytics.map((category, index) => ({
         name: category.Name || category.CategoryName || category.category_name || 'Sin nombre',
         value: category.Percentage || category.PercentageOfExpenses || category.percentage_of_expenses || 0,
         amount: category.TotalAmount || category.total_amount || 0,
         color: colors[index % colors.length]
       })).filter(item => item.value > 0);
-      
+
       return result;
     }
 
@@ -339,7 +339,7 @@ const Resumen = () => {
       const categoryId = expense.category_id || 'sin-categoria';
       const category = data.categories.find(c => c.id === categoryId);
       const categoryName = category ? category.name : 'Sin categoría';
-      
+
       if (!categoryTotals[categoryId]) {
         categoryTotals[categoryId] = {
           name: categoryName,
@@ -351,7 +351,7 @@ const Resumen = () => {
 
     // Convertir a formato del gráfico
     const colors = ['#009ee3', '#00a650', '#ff6900', '#e53e3e', '#6b7280', '#8b5cf6', '#f59e0b'];
-    
+
     return Object.entries(categoryTotals)
       .map(([categoryId, data], index) => ({
         name: data.name,
@@ -366,7 +366,7 @@ const Resumen = () => {
   // Datos simplificados del gráfico usando métricas del backend
   const calculateChartData = () => {
     let periodLabel = 'Total';
-    
+
     if (selectedMonth && selectedYear) {
       periodLabel = formatMonthLabel(selectedMonth);
     } else if (selectedMonth) {
@@ -374,7 +374,7 @@ const Resumen = () => {
     } else if (selectedYear) {
       periodLabel = selectedYear;
     }
-    
+
     return [{
       name: periodLabel,
       ingresos: data.totalIncome,
@@ -407,18 +407,18 @@ const Resumen = () => {
   // Función para ordenar transacciones
   const sortTransactions = (transactions, sortType) => {
     const sorted = [...transactions];
-    
+
     switch (sortType) {
       case 'fecha':
         return sorted.sort((a, b) => {
           const dateA = new Date(a.created_at);
           const dateB = new Date(b.created_at);
-          
+
           // Manejar fechas inválidas - ponerlas al final
           if (isNaN(dateA.getTime()) && isNaN(dateB.getTime())) return 0;
           if (isNaN(dateA.getTime())) return 1;
           if (isNaN(dateB.getTime())) return -1;
-          
+
           return dateB - dateA;
         });
       case 'monto':
@@ -469,32 +469,32 @@ const Resumen = () => {
 
   // Funciones para manejar pagos desde el dashboard
   const togglePaid = async (expense) => {
-    
+
     // Guardar la posición actual de scroll y el elemento activo
     const currentScrollPosition = window.scrollY;
     const activeElement = document.activeElement;
-    
+
     if (expense.paid) {
       // Si ya está pagado, permitir marcarlo como no pagado
       try {
         const updateData = { paid: false };
         await expensesAPI.update(expense.id, updateData);
         toast.success('Gasto marcado como pendiente');
-        
+
         // Recargar datos para mostrar cambios
         await loadDashboardData(false);
-        
+
         // Restaurar la posición de scroll después de que el contenido se actualice
         setTimeout(() => {
           // Verificar que la posición no sea mayor que el contenido actual
           const maxScroll = document.documentElement.scrollHeight - window.innerHeight;
           const targetPosition = Math.min(currentScrollPosition, maxScroll);
-          
+
           window.scrollTo({
             top: targetPosition,
             behavior: 'smooth'
           });
-          
+
           // Restaurar el foco si había un elemento activo
           if (activeElement && activeElement.focus) {
             activeElement.focus();
@@ -513,11 +513,11 @@ const Resumen = () => {
   };
 
   const handlePayment = async (paymentType) => {
-    
+
     // Guardar la posición actual de scroll y el elemento activo
     const currentScrollPosition = window.scrollY;
     const activeElement = document.activeElement;
-    
+
     try {
       if (paymentType === 'total') {
         // Pago total - marcar como pagado
@@ -531,10 +531,10 @@ const Resumen = () => {
           toast.error('Monto de pago inválido');
           return;
         }
-        
+
         const updateData = { payment_amount: paymentAmt };
         await expensesAPI.update(payingExpense.id, updateData);
-        
+
         // Verificar si el pago cubre el total
         const remaining = payingExpense.amount - (payingExpense.amount_paid || 0) - paymentAmt;
         if (remaining <= 0) {
@@ -543,31 +543,31 @@ const Resumen = () => {
           toast.success(`Pago parcial registrado. Quedan ${formatCurrency(remaining)} pendientes`);
         }
       }
-      
+
       setShowPaymentModal(false);
       setPayingExpense(null);
       setPaymentAmount('');
-      
+
       // Recargar datos para mostrar cambios
       await loadDashboardData(false);
-      
+
       // Restaurar la posición de scroll después de que el contenido se actualice
       setTimeout(() => {
         // Verificar que la posición no sea mayor que el contenido actual
         const maxScroll = document.documentElement.scrollHeight - window.innerHeight;
         const targetPosition = Math.min(currentScrollPosition, maxScroll);
-        
+
         window.scrollTo({
           top: targetPosition,
           behavior: 'smooth'
         });
-        
+
         // Restaurar el foco si había un elemento activo
         if (activeElement && activeElement.focus) {
           activeElement.focus();
         }
       }, 150);
-      
+
     } catch (error) {
       // useOptimizedAPI ya maneja el error base, pero estos son casos especiales
       console.error('Error in handlePayment:', error);
@@ -643,7 +643,7 @@ const Resumen = () => {
   // Funciones de manejo de formularios
   const handleExpenseSubmit = async (e) => {
     e.preventDefault();
-    
+
     if (!validateExpenseForm()) {
       toast.error('Por favor corrige los errores en el formulario');
       return;
@@ -656,7 +656,7 @@ const Resumen = () => {
       };
 
       await expensesAPI.update(editingExpense.id, dataToSend);
-      
+
       setShowExpenseEditModal(false);
       setEditingExpense(null);
       setExpenseFormData({
@@ -664,10 +664,11 @@ const Resumen = () => {
         amount: '',
         category_id: '',
         due_date: '',
+        transaction_date: new Date().toISOString().split('T')[0],
         paid: false,
       });
       setExpenseFormErrors({});
-      
+
       await loadDashboardData(false);
       toast.success('Gasto actualizado exitosamente');
     } catch (error) {
@@ -678,7 +679,7 @@ const Resumen = () => {
 
   const handleIncomeSubmit = async (e) => {
     e.preventDefault();
-    
+
     if (!validateIncomeForm()) {
       toast.error('Por favor corrige los errores en el formulario');
       return;
@@ -692,7 +693,7 @@ const Resumen = () => {
 
       // Usar la API de ingresos ya declarada
       await incomesAPI.update(editingIncome.id, dataToSend);
-      
+
       setShowIncomeEditModal(false);
       setEditingIncome(null);
       setIncomeFormData({
@@ -701,7 +702,7 @@ const Resumen = () => {
         category_id: '',
       });
       setIncomeFormErrors({});
-      
+
       await loadDashboardData(false);
       toast.success('Ingreso actualizado exitosamente');
     } catch (error) {
@@ -718,6 +719,7 @@ const Resumen = () => {
       amount: '',
       category_id: '',
       due_date: '',
+      transaction_date: new Date().toISOString().split('T')[0],
       paid: false,
     });
     setExpenseFormErrors({});
@@ -1046,7 +1048,7 @@ const Resumen = () => {
                   <option value="all">Todas</option>
                 </select>
               </div>
-              
+
               {/* Indicadores de cantidad */}
               <div className="col-span-2 sm:col-span-1 flex items-center space-x-4 text-sm">
                 <div className="flex items-center">
@@ -1074,10 +1076,10 @@ const Resumen = () => {
                     {formatAmount(data.totalExpenses)}
                   </span>
                 </div>
-                
+
 
               </div>
-              
+
               <div className="space-y-3 lg:max-h-none lg:overflow-visible max-h-[26rem] overflow-y-auto">
                 {data.expenses.length === 0 ? (
                   <div className="text-center py-8 text-gray-500 dark:text-gray-400">
@@ -1092,8 +1094,8 @@ const Resumen = () => {
                       const category = data.categories.find(c => c.id === expense.category_id);
                       const color = getCategoryColor(expense.category_id);
                       return (
-                        <div 
-                          key={expense.id || index} 
+                        <div
+                          key={expense.id || index}
                           className={`group flex items-center gap-2 py-1.5 px-3 rounded-lg bg-white dark:bg-gray-700 border border-gray-100 dark:border-gray-600 hover:shadow-sm transition-all cursor-pointer`}
                           onClick={() => handleEditExpense(expense)}
                         >
@@ -1104,11 +1106,10 @@ const Resumen = () => {
                                 e.stopPropagation();
                                 togglePaid(expense);
                               }}
-                              className={`w-full h-full rounded-md transition-colors flex items-center justify-center ${
-                                expense.paid 
-                                  ? 'bg-green-100 dark:bg-green-900/30 text-green-600 dark:text-green-400 hover:bg-green-200 dark:hover:bg-green-900/50' 
-                                  : 'bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-400 hover:bg-red-200 dark:hover:bg-red-900/50'
-                              }`}
+                              className={`w-full h-full rounded-md transition-colors flex items-center justify-center ${expense.paid
+                                ? 'bg-green-100 dark:bg-green-900/30 text-green-600 dark:text-green-400 hover:bg-green-200 dark:hover:bg-green-900/50'
+                                : 'bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-400 hover:bg-red-200 dark:hover:bg-red-900/50'
+                                }`}
                               title={expense.paid ? "Marcar como pendiente" : "Hacer pago"}
                             >
                               {expense.paid ? (
@@ -1123,6 +1124,12 @@ const Resumen = () => {
                           <div className="flex-1 min-w-0">
                             <h3 className="font-medium text-gray-900 dark:text-gray-100 text-sm truncate">
                               {expense.description}
+                              {/* Partial Payment Badge - Inline, discreto con saldo restante */}
+                              {expense.amount_paid > 0 && !expense.paid && (
+                                <span className="ml-2 text-xs text-gray-500 dark:text-gray-400 font-normal">
+                                  (Pagado: {formatAmount(expense.amount_paid)} | Resta: {formatAmount(expense.amount - expense.amount_paid)})
+                                </span>
+                              )}
                             </h3>
                           </div>
 
@@ -1135,13 +1142,26 @@ const Resumen = () => {
                             )}
                           </div>
 
+                          {/* Fecha de transacción */}
+                          <div className="flex-shrink-0 hidden lg:block text-xs text-gray-600 dark:text-gray-300 text-left min-w-[100px]">
+                            {expense.transaction_date && (
+                              <span className="font-medium">
+                                {new Date(expense.transaction_date).toLocaleDateString('es-AR', {
+                                  day: 'numeric',
+                                  month: 'short',
+                                  year: 'numeric'
+                                })}
+                              </span>
+                            )}
+                          </div>
+
                           {/* Fecha de vencimiento */}
                           <div className="flex-shrink-0 hidden md:block text-xs text-gray-500 dark:text-gray-400 text-left min-w-[100px]">
                             {expense.due_date && (
                               <span>
-                                Vence: {new Date(expense.due_date).toLocaleDateString('es-AR', { 
-                                  day: 'numeric', 
-                                  month: 'numeric', 
+                                Vence: {new Date(expense.due_date).toLocaleDateString('es-AR', {
+                                  day: 'numeric',
+                                  month: 'numeric',
                                   year: 'numeric'
                                 })}
                               </span>
@@ -1183,7 +1203,7 @@ const Resumen = () => {
                 </div>
 
               </div>
-              
+
               <div className="space-y-3 lg:max-h-none lg:overflow-visible max-h-[26rem] overflow-y-auto">
                 {data.incomes.length === 0 ? (
                   <div className="text-center py-8 text-gray-500 dark:text-gray-400">
@@ -1198,8 +1218,8 @@ const Resumen = () => {
                       const color = getCategoryColor(income.category_id);
                       const category = data.categories.find(c => c.id === income.category_id);
                       return (
-                        <div 
-                          key={income.id || index} 
+                        <div
+                          key={income.id || index}
                           className={`group flex items-center gap-2 py-1.5 px-3 rounded-lg bg-white dark:bg-gray-700 border border-gray-100 dark:border-gray-600 hover:shadow-sm transition-all cursor-pointer`}
                           onClick={() => handleEditIncome(income)}
                         >
@@ -1285,7 +1305,7 @@ const Resumen = () => {
                   </div>
                 </div>
               </div>
-              
+
               {/* Balance del período */}
               <div className="flex items-center justify-between pt-3 border-t border-gray-200 dark:border-gray-600">
                 <span className="text-gray-600 dark:text-gray-400">Balance del período:</span>
@@ -1304,15 +1324,15 @@ const Resumen = () => {
         <div className="card overflow-hidden">
           <div className="flex items-center justify-between mb-6">
             <div>
-                          <h3 className="text-lg font-semibold text-fr-gray-900 dark:text-gray-100">
-              {hasActiveFilters ? `Métricas de ${getPeriodTitle()}` : 'Métricas del Período'}
-            </h3>
-            <p className="text-sm text-fr-gray-500 dark:text-gray-400 mt-1">
-              Estadísticas clave de tus finanzas
-            </p>
+              <h3 className="text-lg font-semibold text-fr-gray-900 dark:text-gray-100">
+                {hasActiveFilters ? `Métricas de ${getPeriodTitle()}` : 'Métricas del Período'}
+              </h3>
+              <p className="text-sm text-fr-gray-500 dark:text-gray-400 mt-1">
+                Estadísticas clave de tus finanzas
+              </p>
             </div>
           </div>
-          
+
           <div className="grid grid-cols-2 gap-4">
             {/* Total de transacciones */}
             <div className="bg-fr-gray-50 dark:bg-gray-700 rounded-fr p-4">
@@ -1366,13 +1386,13 @@ const Resumen = () => {
                         }
                         categoryExpenses[expense.category_id] += expense.amount;
                       });
-                      
-                      const topCategoryId = Object.keys(categoryExpenses).reduce((a, b) => 
+
+                      const topCategoryId = Object.keys(categoryExpenses).reduce((a, b) =>
                         categoryExpenses[a] > categoryExpenses[b] ? a : b, null
                       );
-                      
+
                       if (!topCategoryId) return 'Sin datos';
-                      
+
                       const topCategory = data.categories.find(c => c.id === topCategoryId);
                       return topCategory ? topCategory.name : 'Sin categoría';
                     })()}
@@ -1408,45 +1428,45 @@ const Resumen = () => {
               {/* Gráfico */}
               <div className="lg:col-span-2 flex items-center justify-center">
                 <ResponsiveContainer width="100%" height={300}>
-                <RechartsPieChart>
-                  <Pie
-                    data={pieData}
-                    cx="50%"
+                  <RechartsPieChart>
+                    <Pie
+                      data={pieData}
+                      cx="50%"
                       cy="50%"
                       innerRadius={40}
                       outerRadius={100}
                       paddingAngle={3}
-                    dataKey="value"
+                      dataKey="value"
                       label={false}
-                    startAngle={90}
-                    endAngle={450}
-                  >
-                                          {pieData.map((entry, index) => (
-                        <Cell 
-                          key={`cell-${index}`} 
-                          fill={entry.color} 
+                      startAngle={90}
+                      endAngle={450}
+                    >
+                      {pieData.map((entry, index) => (
+                        <Cell
+                          key={`cell-${index}`}
+                          fill={entry.color}
                           stroke="#ffffff"
                           strokeWidth={2}
                         />
                       ))}
-                  </Pie>
-                  <Tooltip 
-                    formatter={(value, name, props) => [
-                      `${value.toFixed(1)}% (${formatCurrency(props.payload.amount)})`, 
+                    </Pie>
+                    <Tooltip
+                      formatter={(value, name, props) => [
+                        `${value.toFixed(1)}% (${formatCurrency(props.payload.amount)})`,
                         props.payload.name
-                    ]}
-                    contentStyle={{
-                      backgroundColor: 'var(--tooltip-bg)',
-                      border: '1px solid var(--tooltip-border)',
-                      borderRadius: '8px',
-                      boxShadow: '0 4px 12px 0 rgba(0, 0, 0, 0.15)',
-                      color: 'var(--tooltip-text)'
-                    }}
-                  />
-                </RechartsPieChart>
-              </ResponsiveContainer>
+                      ]}
+                      contentStyle={{
+                        backgroundColor: 'var(--tooltip-bg)',
+                        border: '1px solid var(--tooltip-border)',
+                        borderRadius: '8px',
+                        boxShadow: '0 4px 12px 0 rgba(0, 0, 0, 0.15)',
+                        color: 'var(--tooltip-text)'
+                      }}
+                    />
+                  </RechartsPieChart>
+                </ResponsiveContainer>
               </div>
-              
+
               {/* Leyenda */}
               <div className="space-y-2">
                 <h4 className="text-sm font-semibold text-fr-gray-700 dark:text-gray-300 mb-3">
@@ -1456,7 +1476,7 @@ const Resumen = () => {
                   {pieData.map((item, index) => (
                     <div key={index} className="flex items-start py-1 hover:bg-fr-gray-50 dark:hover:bg-gray-700/50 transition-colors rounded px-1">
                       <div className="flex items-center space-x-2 flex-1">
-                        <div 
+                        <div
                           className="w-3 h-3 rounded-full flex-shrink-0 mt-0.5"
                           style={{ backgroundColor: item.color }}
                         ></div>
@@ -1495,8 +1515,8 @@ const Resumen = () => {
       <div className="card">
         <div className="flex items-center justify-between mb-6">
           <h3 className="text-lg font-semibold text-fr-gray-900 dark:text-gray-100">Transacciones Recientes</h3>
-          <button 
-            onClick={() => navigate('/expenses')} 
+          <button
+            onClick={() => navigate('/expenses')}
             className="btn-ghost"
           >
             Ver todas
@@ -1508,7 +1528,7 @@ const Resumen = () => {
             const sortedTransactions = allTransactions
               .sort((a, b) => new Date(b.created_at) - new Date(a.created_at))
               .slice(0, 5);
-            
+
             return sortedTransactions.map((transaction, index) => {
               const isExpense = transaction.hasOwnProperty('paid');
               const color = getCategoryColor(transaction.category_id);
@@ -1727,7 +1747,7 @@ const Resumen = () => {
                     </option>
                   ))}
                 </select>
-            </div>
+              </div>
 
               <div>
                 <label className="block text-sm font-medium text-fr-gray-700 dark:text-gray-300 mb-2">
@@ -1739,7 +1759,7 @@ const Resumen = () => {
                   onChange={(e) => setExpenseFormData({ ...expenseFormData, due_date: e.target.value })}
                   className="input"
                 />
-            </div>
+              </div>
 
               <div className="flex items-center">
                 <input
@@ -1754,15 +1774,15 @@ const Resumen = () => {
               </div>
 
               <div className="flex space-x-4 pt-4">
-              <button
+                <button
                   type="button"
                   onClick={handleCloseExpenseModal}
                   className="btn-outline flex-1"
-              >
+                >
                   Cancelar
-              </button>
-              <button
-                  type="submit" 
+                </button>
+                <button
+                  type="submit"
                   className={`btn-primary flex-1 ${!isExpenseFormValid ? 'opacity-50 cursor-not-allowed' : ''}`}
                   disabled={!isExpenseFormValid}
                 >
@@ -1838,17 +1858,17 @@ const Resumen = () => {
                   type="button"
                   onClick={handleCloseIncomeModal}
                   className="btn-outline flex-1"
-              >
-                Cancelar
-              </button>
-                <button 
-                  type="submit" 
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="submit"
                   className={`btn-secondary flex-1 ${!isIncomeFormValid ? 'opacity-50 cursor-not-allowed' : ''}`}
                   disabled={!isIncomeFormValid}
                 >
                   Actualizar
-              </button>
-            </div>
+                </button>
+              </div>
             </form>
           </div>
         </div>,
