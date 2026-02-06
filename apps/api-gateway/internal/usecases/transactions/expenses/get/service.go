@@ -53,10 +53,11 @@ func (s *Service) GetExpense(ctx context.Context, userID, id string) (*expensesD
 			}
 			return ""
 		}(),
-		Paid:       expense.Paid,
-		DueDate:    expense.DueDate.Format("2006-01-02"),
-		CreatedAt:  expense.CreatedAt.Format("2006-01-02T15:04:05Z07:00"),
-		UpdatedAt:  expense.UpdatedAt.Format("2006-01-02T15:04:05Z07:00"),
-		Percentage: expense.Percentage,
+		Paid:            expense.Paid,
+		DueDate:         expense.DueDate.Format("2006-01-02"),
+		TransactionDate: expense.TransactionDate.Format("2006-01-02"),
+		CreatedAt:       expense.CreatedAt.Format("2006-01-02T15:04:05Z07:00"),
+		UpdatedAt:       expense.UpdatedAt.Format("2006-01-02T15:04:05Z07:00"),
+		Percentage:      expense.Percentage,
 	}, nil
 }
