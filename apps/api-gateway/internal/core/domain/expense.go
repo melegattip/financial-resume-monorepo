@@ -5,17 +5,18 @@ import "time"
 
 // Expense represents a financial expense transaction
 type Expense struct {
-	ID          string    `json:"id"`
-	UserID      string    `json:"user_id"`
-	Amount      float64   `json:"amount"`      // Monto total original
-	AmountPaid  float64   `json:"amount_paid"` // Monto ya pagado
-	Description string    `json:"description"`
-	CategoryID  *string   `json:"category_id" gorm:"default:null"`
-	Paid        bool      `json:"paid"`
-	DueDate     time.Time `json:"due_date,omitempty"`
-	CreatedAt   time.Time `json:"created_at"`
-	UpdatedAt   time.Time `json:"updated_at"`
-	Percentage  float64   `json:"percentage"`
+	ID              string    `json:"id"`
+	UserID          string    `json:"user_id"`
+	Amount          float64   `json:"amount"`       // Monto total original
+	AmountPaid      float64   `json:"amount_paid"`  // Monto ya pagado
+	Description     string    `json:"description"`
+	CategoryID      *string   `json:"category_id" gorm:"default:null"`
+	Paid            bool      `json:"paid"`
+	DueDate         time.Time `json:"due_date,omitempty"`
+	TransactionDate time.Time `json:"transaction_date"` // NEW: When expense actually occurred
+	CreatedAt       time.Time `json:"created_at"`
+	UpdatedAt       time.Time `json:"updated_at"`
+	Percentage      float64   `json:"percentage"`
 }
 
 // GetID returns the expense ID
@@ -179,6 +180,12 @@ func (b *ExpenseBuilder) SetPaid(paid bool) *ExpenseBuilder {
 // SetDueDate sets the due date and returns the builder
 func (b *ExpenseBuilder) SetDueDate(dueDate time.Time) *ExpenseBuilder {
 	b.expense.DueDate = dueDate
+	return b
+}
+
+// SetTransactionDate sets the transaction date and returns the builder
+func (b *ExpenseBuilder) SetTransactionDate(transactionDate time.Time) *ExpenseBuilder {
+	b.expense.TransactionDate = transactionDate
 	return b
 }
 
