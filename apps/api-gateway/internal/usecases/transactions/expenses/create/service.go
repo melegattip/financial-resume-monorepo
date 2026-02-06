@@ -60,6 +60,18 @@ func (s *Service) CreateExpense(ctx context.Context, request *expensesDomain.Cre
 		}
 	}
 
+	// Parse transaction_date (defaults to today if not provided)
+	var transactionDate time.Time
+	if request.TransactionDate != "" {
+		transactionDate, err = time.Parse("2006-01-02", request.TransactionDate)
+		if err != nil {
+			return nil, errors.NewBadRequest("Formato de fecha de transacción inválido. Use YYYY-MM-DD")
+		}
+	} else {
+		// Default to current date if not provided
+		transactionDate = time.Now()
+	}
+
 	expense := domain.NewExpenseBuilder().
 		SetID(domain.NewExpenseID()).
 		SetUserID(request.UserID).
@@ -68,6 +80,7 @@ func (s *Service) CreateExpense(ctx context.Context, request *expensesDomain.Cre
 		SetCategoryID(request.CategoryID).
 		SetPaid(request.Paid).
 		SetDueDate(dueDate).
+		SetTransactionDate(transactionDate).
 		Build()
 
 	// Calcular el porcentaje antes de crear el gasto
@@ -101,10 +114,11 @@ func (s *Service) CreateExpense(ctx context.Context, request *expensesDomain.Cre
 			}
 			return ""
 		}(),
-		Paid:       expense.Paid,
-		DueDate:    expense.DueDate.Format("2006-01-02"),
-		CreatedAt:  expense.CreatedAt.Format("2006-01-02T15:04:05Z07:00"),
-		UpdatedAt:  expense.UpdatedAt.Format("2006-01-02T15:04:05Z07:00"),
-		Percentage: expense.Percentage,
+		Paid:            expense.Paid,
+		DueDate:         expense.DueDate.Format("2006-01-02"),
+		TransactionDate: expense.TransactionDate.Format("2006-01-02"),
+		CreatedAt:       expense.CreatedAt.Format("2006-01-02T15:04:05Z07:00"),
+		UpdatedAt:       expense.UpdatedAt.Format("2006-01-02T15:04:05Z07:00"),
+		Percentage:      expense.Percentage,
 	}, nil
 }

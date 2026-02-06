@@ -73,6 +73,14 @@ func (s *Service) UpdateExpense(ctx context.Context, userID, id string, request 
 		}
 		expense.DueDate = dueDate
 	}
+	// Parse and update transaction_date if provided
+	if request.TransactionDate != "" {
+		transactionDate, err := time.Parse("2006-01-02", request.TransactionDate)
+		if err != nil {
+			return nil, errors.NewBadRequest("Formato de fecha de transacción inválido")
+		}
+		expense.TransactionDate = transactionDate
+	}
 	// Actualizar paid siempre (es un bool, no se puede saber si se envió o no fácilmente)
 	// Pero solo si no se está procesando un pago (AddPayment ya maneja el estado paid)
 	if request.PaymentAmount == 0 {
@@ -115,10 +123,11 @@ func (s *Service) UpdateExpense(ctx context.Context, userID, id string, request 
 			}
 			return ""
 		}(),
-		Paid:       expense.Paid,
-		DueDate:    expense.DueDate.Format("2006-01-02"),
-		CreatedAt:  expense.CreatedAt.Format("2006-01-02T15:04:05Z07:00"),
-		UpdatedAt:  expense.UpdatedAt.Format("2006-01-02T15:04:05Z07:00"),
-		Percentage: expense.Percentage,
+		Paid:            expense.Paid,
+		DueDate:         expense.DueDate.Format("2006-01-02"),
+		TransactionDate: expense.TransactionDate.Format("2006-01-02"),
+		CreatedAt:       expense.CreatedAt.Format("2006-01-02T15:04:05Z07:00"),
+		UpdatedAt:       expense.UpdatedAt.Format("2006-01-02T15:04:05Z07:00"),
+		Percentage:      expense.Percentage,
 	}, nil
 }
