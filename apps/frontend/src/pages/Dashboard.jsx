@@ -1120,64 +1120,51 @@ const Resumen = () => {
                             </button>
                           </div>
 
-                          {/* Descripción */}
+                          {/* Descripción - flexible */}
                           <div className="flex-1 min-w-0">
                             <h3 className="font-medium text-gray-900 dark:text-gray-100 text-sm truncate">
                               {expense.description}
-                              {/* Partial Payment Badge - Inline, discreto con saldo restante */}
-                              {expense.amount_paid > 0 && !expense.paid && (
-                                <span className="ml-2 text-xs text-gray-500 dark:text-gray-400 font-normal">
-                                  (Pagado: {formatAmount(expense.amount_paid)} | Resta: {formatAmount(expense.amount - expense.amount_paid)})
-                                </span>
-                              )}
                             </h3>
                           </div>
 
                           {/* Categoría */}
-                          <div className="flex-shrink-0 hidden sm:block text-left min-w-[80px]">
+                          <div className="flex-shrink-0 hidden sm:flex items-center text-left">
                             {category && (
-                              <span className={`px-1.5 py-0.5 rounded-full text-xs font-medium ${color.bg} ${color.text} border ${color.border}`}>
+                              <span className={`px-1.5 py-0.5 rounded-full text-xs font-medium ${color.bg} ${color.text} border ${color.border} whitespace-nowrap`}>
                                 {category.name}
                               </span>
                             )}
                           </div>
 
-                          {/* Fecha de transacción */}
-                          <div className="flex-shrink-0 hidden lg:block text-xs text-gray-600 dark:text-gray-300 text-left min-w-[100px]">
-                            {expense.transaction_date && (
-                              <span className="font-medium">
-                                {new Date(expense.transaction_date).toLocaleDateString('es-AR', {
-                                  day: 'numeric',
-                                  month: 'short',
-                                  year: 'numeric'
-                                })}
-                              </span>
-                            )}
-                          </div>
-
                           {/* Fecha de vencimiento */}
-                          <div className="flex-shrink-0 hidden md:block text-xs text-gray-500 dark:text-gray-400 text-left min-w-[100px]">
+                          <div className="flex-shrink-0 hidden md:block text-xs text-gray-500 dark:text-gray-400 text-center whitespace-nowrap">
                             {expense.due_date && (
                               <span>
-                                Vence: {new Date(expense.due_date).toLocaleDateString('es-AR', {
+                                Vto: {new Date(expense.due_date).toLocaleDateString('es-AR', {
                                   day: 'numeric',
-                                  month: 'numeric',
-                                  year: 'numeric'
+                                  month: 'numeric'
                                 })}
                               </span>
                             )}
                           </div>
 
-                          {/* Porcentaje y monto */}
-                          <div className="flex items-center gap-2 flex-shrink-0 text-right min-w-[100px]">
-                            {expense.percentage && (
-                              <span className="text-xs text-gray-500 dark:text-gray-400">
-                                {formatPercentage(expense.percentage)}
+                          {/* % de Ingreso */}
+                          <div className="flex-shrink-0 hidden lg:block text-xs text-gray-500 dark:text-gray-400 text-center whitespace-nowrap">
+                            {expense.percentage ? formatPercentage(expense.percentage) : '0.0%'}
+                          </div>
+
+                          {/* Monto - Total tachado + Saldo pendiente */}
+                          <div className="flex-shrink-0 text-right min-w-[100px]">
+                            <div className="flex items-center justify-end gap-2 whitespace-nowrap">
+                              {expense.amount_paid > 0 && !expense.paid && (
+                                <span className="text-xs text-gray-400 dark:text-gray-500 line-through">
+                                  -{formatAmount(expense.amount)}
+                                </span>
+                              )}
+                              <span className="font-semibold text-gray-900 dark:text-gray-100 text-sm">
+                                -{formatAmount(expense.amount_paid > 0 && !expense.paid ? expense.amount - expense.amount_paid : expense.amount)}
                               </span>
-                            )}
-                            <span className="font-semibold text-gray-900 dark:text-gray-100 text-sm">
-                              -{formatAmount(expense.amount)}
-                            </span>
+                            </div>
                           </div>
                         </div>
                       );

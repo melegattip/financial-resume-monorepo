@@ -2,9 +2,10 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import { useLocation } from 'react-router-dom';
 import { FaPlus, FaSearch, FaArrowDown, FaCalendar, FaEdit, FaTrash, FaCheckCircle, FaTimesCircle, FaDollarSign } from 'react-icons/fa';
-import { formatCurrency, formatPercentage } from '../services/api';
+import { formatCurrency, formatPercentage, expensesAPI as expensesAPIraw } from '../services/api';
 import { usePeriod } from '../contexts/PeriodContext';
 import { useGamification } from '../contexts/GamificationContext';
+import { useAuth } from '../contexts/AuthContext';
 import { useOptimizedAPI } from '../hooks/useOptimizedAPI';
 import useDataRefresh from '../hooks/useDataRefresh';
 import toast from 'react-hot-toast';
@@ -28,6 +29,11 @@ const Expenses = () => {
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [deletingExpense, setDeletingExpense] = useState(null);
   const [deleteLoading, setDeleteLoading] = useState(false);
+
+  // Estados para edición inline tipo Excel
+  const [editingCell, setEditingCell] = useState(null); // { expenseId, field }
+  const [editValues, setEditValues] = useState({});
+  const [savingCell, setSavingCell] = useState(null);
 
   // Estados para nuevos filtros de ordenamiento
   const [sortBy, setSortBy] = useState('created_at');
@@ -63,6 +69,10 @@ const Expenses = () => {
 
   // Hook de gamificación para registrar acciones
   const { recordCreateExpense, recordUpdateExpense, recordDeleteExpense } = useGamification();
+
+  // Hook de autenticación
+  const { user } = useAuth();
+
 
   // Leer parámetros de URL y aplicar filtros automáticamente
   useEffect(() => {
@@ -326,14 +336,27 @@ const Expenses = () => {
       // Si ya está pagado, permitir marcarlo como no pagado
       try {
         const updateData = { paid: false };
-        await expensesAPI.update(expense.id, updateData);
-        // useOptimizedAPI ya muestra el toast de éxito
 
-        // Recargar datos para mostrar cambios
-        await loadData();
+        // ✨ Actualización optimista
+        setExpenses(prevExpenses =>
+          prevExpenses.map(exp =>
+            exp.id === expense.id
+              ? { ...exp, paid: false }
+              : exp
+          )
+        );
+
+        // Llamar API en background sin invalidar caché
+        await expensesAPIraw.update(user.id, expense.id, updateData);
+
+        toast.success('Pago anulado', { duration: 1000 });
+
       } catch (error) {
-        // useOptimizedAPI ya maneja el error
         console.error('Error en togglePaid:', error);
+        toast.error('Error al anular pago');
+
+        // Revertir en caso de error
+        await loadData();
       }
     } else {
       // Si no está pagado, abrir modal de pago
@@ -354,8 +377,26 @@ const Expenses = () => {
           amount_paid: payingExpense.amount,
           pending_amount: 0
         };
-        await expensesAPI.update(payingExpense.id, updateData);
-        toast.success('Gasto marcado como pagado completamente');
+
+        // ✨ Actualización optimista
+        setExpenses(prevExpenses =>
+          prevExpenses.map(exp =>
+            exp.id === payingExpense.id
+              ? { ...exp, ...updateData }
+              : exp
+          )
+        );
+
+        // Cerrar modal antes de API call
+        setShowPaymentModal(false);
+        const expenseId = payingExpense.id;
+        setPayingExpense(null);
+        setPaymentAmount('');
+
+        // Llamar API en background
+        await expensesAPIraw.update(user.id, expenseId, updateData);
+
+        toast.success('Gasto marcado como pagado completamente', { duration: 1000 });
       } else if (paymentType === 'partial') {
         // Pago parcial - validar monto
         const paymentAmt = parseFloat(paymentAmount);
@@ -374,26 +415,50 @@ const Expenses = () => {
         }
 
         const updateData = { payment_amount: paymentAmt };
-        await expensesAPI.update(payingExpense.id, updateData);
 
-        // Verificar si el pago cubre el total
-        const remaining = pendingAmount - paymentAmt;
-        if (remaining <= 0) {
-          toast.success('Gasto pagado completamente');
+        // Calcular nuevo estado optimista
+        const newAmountPaid = (payingExpense.amount_paid || 0) + paymentAmt;
+        const newPendingAmount = payingExpense.amount - newAmountPaid;
+        const isPaidNow = newPendingAmount <= 0;
+
+        // ✨ Actualización optimista
+        setExpenses(prevExpenses =>
+          prevExpenses.map(exp =>
+            exp.id === payingExpense.id
+              ? {
+                ...exp,
+                amount_paid: newAmountPaid,
+                pending_amount: isPaidNow ? 0 : newPendingAmount,
+                paid: isPaidNow
+              }
+              : exp
+          )
+        );
+
+        // Cerrar modal antes de API call
+        setShowPaymentModal(false);
+        const expenseId = payingExpense.id;
+        setPayingExpense(null);
+        setPaymentAmount('');
+
+        // Llamar API en background
+        await expensesAPIraw.update(user.id, expenseId, updateData);
+
+        // Feedback apropiado
+        if (isPaidNow) {
+          toast.success('Gasto pagado completamente', { duration: 1000 });
         } else {
-          toast.success(`Pago parcial registrado. Quedan ${formatCurrency(remaining)} pendientes`);
+          toast.success(`Pago parcial registrado. Quedan ${formatCurrency(newPendingAmount)} pendientes`, { duration: 2000 });
         }
       }
 
-      setShowPaymentModal(false);
-      setPayingExpense(null);
-      setPaymentAmount('');
 
-      // Recargar datos para mostrar cambios
-      await loadData();
     } catch (error) {
-      // useOptimizedAPI ya maneja el error base, pero estos son casos especiales
       console.error('Error en handlePayment:', error);
+      toast.error('Error al registrar el pago');
+
+      // Revertir en caso de error
+      await loadData();
     }
   };
 
@@ -435,6 +500,158 @@ const Expenses = () => {
       toast.error('Error al procesar el pago');
     }
   };
+
+  // ===== Funciones para Edición Inline Tipo Excel =====
+
+  const startEditing = (expenseId, field, currentValue) => {
+    setEditingCell({ expenseId, field });
+    setEditValues({
+      ...editValues,
+      [`${expenseId}-${field}`]: currentValue
+    });
+  };
+
+  const cancelInlineEdit = () => {
+    setEditingCell(null);
+    setEditValues({});
+    setSavingCell(null);
+  };
+
+  const saveInlineEdit = async (expenseId, field) => {
+    console.log('🚀 [saveInlineEdit] INICIANDO', { expenseId, field });
+
+    const key = `${expenseId}-${field}`;
+    const newValue = editValues[key];
+    const expense = expenses.find(e => e.id === expenseId);
+
+    console.log('🔍 [saveInlineEdit] Valores:', {
+      key,
+      newValue,
+      hasExpense: !!expense,
+      currentValue: expense?.[field]
+    });
+
+    if (!expense) return;
+
+    // Validar que el valor haya cambiado (comparación apropiada según el tipo)
+    let valueChanged = false;
+    if (field === 'amount') {
+      const currentAmount = parseFloat(expense.amount);
+      const newAmount = parseFloat(newValue);
+      valueChanged = newAmount !== currentAmount;
+    } else {
+      valueChanged = newValue !== expense[field];
+    }
+
+    if (!valueChanged) {
+      cancelInlineEdit();
+      return;
+    }
+
+    // Validaciones por campo
+    if (field === 'description' && (!newValue || newValue.trim() === '')) {
+      toast.error('La descripción no puede estar vacía');
+      return;
+    }
+
+    if (field === 'amount') {
+      const amountNum = parseFloat(newValue);
+      if (isNaN(amountNum) || amountNum <= 0) {
+        toast.error('El monto debe ser un número positivo');
+        return;
+      }
+    }
+
+    try {
+      setSavingCell({ expenseId, field });
+
+      const updateData = {};
+
+      if (field === 'amount') {
+        const newAmount = parseFloat(newValue);
+        updateData.amount = newAmount;
+
+        // Si hay pago parcial, recalcular pending_amount
+        if (expense.amount_paid > 0 && !expense.paid) {
+          const newPendingAmount = newAmount - expense.amount_paid;
+          updateData.pending_amount = newPendingAmount;
+
+          // Si el nuevo monto hace que pending sea 0 o negativo, marcar como pagado
+          if (newPendingAmount <= 0) {
+            updateData.paid = true;
+            updateData.pending_amount = 0;
+          }
+        }
+      } else if (field === 'category_id') {
+        updateData.category_id = newValue;
+      } else if (field === 'due_date') {
+        updateData.due_date = newValue;
+      } else {
+        updateData[field] = newValue;
+      }
+
+      // ✨ ACTUALIZACIÓN OPTIMISTA: actualizar UI inmediatamente
+      setExpenses(prevExpenses =>
+        prevExpenses.map(exp =>
+          exp.id === expenseId
+            ? { ...exp, ...updateData }
+            : exp
+        )
+      );
+
+      // Limpiar estado de edición antes de llamar API
+      cancelInlineEdit();
+
+      // ⚡ LLAMAR API DIRECTO SIN INVALIDACIÓN DE CACHÉ
+      // Esto evita el refresh y mantiene la actualización optimista pura
+      console.log('🔧 [saveInlineEdit] Llamando API con:', {
+        userId: user.id,
+        expenseId,
+        updateData,
+        field
+      });
+
+      const response = await expensesAPIraw.update(user.id, expenseId, updateData);
+
+      console.log('✅ [saveInlineEdit] API response:', response.data);
+
+      // 🎮 Registrar edición
+      recordUpdateExpense(expenseId, `Campo ${field} editado inline`);
+
+      // ✅ NO recargar datos, la UI ya está actualizada
+
+      // Mostrar feedback breve
+      toast.success('Guardado', { duration: 1000 });
+
+    } catch (error) {
+      console.error('❌ [saveInlineEdit] Error completo:', {
+        error,
+        message: error.message,
+        response: error.response?.data,
+        status: error.response?.status,
+        field,
+        expenseId
+      });
+      toast.error('Error al guardar el cambio');
+
+      // En caso de error, revertir cambios recargando datos
+      await loadData();
+
+      setSavingCell(null);
+    }
+  };
+
+  const handleInlineKeyDown = async (e, expenseId, field) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      await saveInlineEdit(expenseId, field);
+    } else if (e.key === 'Escape') {
+      e.preventDefault();
+      cancelInlineEdit();
+    }
+  };
+
+  // ========== Fin funciones edición inline ==========
 
   const filteredExpenses = Array.isArray(expenses)
     ? expenses.filter(expense => {
@@ -647,8 +864,8 @@ const Expenses = () => {
                     <button
                       onClick={() => togglePaid(expense)}
                       className={`w-full h-full rounded-md transition-colors flex items-center justify-center ${expense.paid
-                          ? 'bg-green-100 dark:bg-green-900/30 text-green-600 dark:text-green-400 hover:bg-green-200 dark:hover:bg-green-900/50'
-                          : 'bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-400 hover:bg-red-200 dark:hover:bg-red-900/50'
+                        ? 'bg-green-100 dark:bg-green-900/30 text-green-600 dark:text-green-400 hover:bg-green-200 dark:hover:bg-green-900/50'
+                        : 'bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-400 hover:bg-red-200 dark:hover:bg-red-900/50'
                         }`}
                     >
                       {expense.paid ? (
@@ -659,46 +876,123 @@ const Expenses = () => {
                     </button>
                   </div>
 
-                  {/* Descripción */}
+                  {/* Descripción - Editable inline */}
                   <div className="flex-1 min-w-0">
-                    <h3 className="font-medium text-fr-gray-900 dark:text-gray-100 text-sm truncate">
-                      {expense.description}
-                      {/* Partial Payment Badge - Inline, discreto con saldo restante */}
-                      {expense.amount_paid > 0 && !expense.paid && (
-                        <span className="ml-2 text-xs text-gray-500 dark:text-gray-400 font-normal">
-                          (Pagado: {formatAmount(expense.amount_paid)} | Resta: {formatAmount(expense.amount - expense.amount_paid)})
+                    {editingCell?.expenseId === expense.id && editingCell?.field === 'description' ? (
+                      <input
+                        type="text"
+                        value={editValues[`${expense.id}-description`] ?? expense.description}
+                        onChange={(e) => setEditValues({ ...editValues, [`${expense.id}-description`]: e.target.value })}
+                        onBlur={() => saveInlineEdit(expense.id, 'description')}
+                        onKeyDown={(e) => handleInlineKeyDown(e, expense.id, 'description')}
+                        className="w-full px-2 py-1 text-sm font-medium bg-white dark:bg-gray-800 border-2 border-blue-400 dark:border-blue-500 rounded focus:outline-none"
+                        autoFocus
+                        disabled={savingCell?.expenseId === expense.id && savingCell?.field === 'description'}
+                      />
+                    ) : (
+                      <h3
+                        className="font-medium text-fr-gray-900 dark:text-gray-100 text-sm truncate cursor-pointer hover:text-blue-600 dark:hover:text-blue-400 transition-colors"
+                        onClick={() => startEditing(expense.id, 'description', expense.description)}
+                        title="Click para editar"
+                      >
+                        {expense.description}
+                      </h3>
+                    )}
+                  </div>
+
+                  {/* Categoría - Editable inline */}
+                  <div className="flex-shrink-0 hidden sm:flex items-center text-left">
+                    {editingCell?.expenseId === expense.id && editingCell?.field === 'category_id' ? (
+                      <select
+                        value={editValues[`${expense.id}-category_id`] || expense.category_id}
+                        onChange={(e) => setEditValues({ ...editValues, [`${expense.id}-category_id`]: e.target.value })}
+                        onBlur={() => saveInlineEdit(expense.id, 'category_id')}
+                        onKeyDown={(e) => handleInlineKeyDown(e, expense.id, 'category_id')}
+                        className="px-2 py-1 text-xs font-medium bg-white dark:bg-gray-800 border-2 border-blue-400 dark:border-blue-500 rounded focus:outline-none"
+                        autoFocus
+                        disabled={savingCell?.expenseId === expense.id && savingCell?.field === 'category_id'}
+                      >
+                        {categories.map(cat => (
+                          <option key={cat.id} value={cat.id}>{cat.name}</option>
+                        ))}
+                      </select>
+                    ) : (
+                      category && (
+                        <span
+                          className={`px-1.5 py-0.5 rounded-full text-xs font-medium ${color.bg} ${color.text} border ${color.border} whitespace-nowrap cursor-pointer hover:opacity-80 transition-opacity`}
+                          onClick={() => startEditing(expense.id, 'category_id', expense.category_id)}
+                          title="Click para editar"
+                        >
+                          {category.name}
                         </span>
-                      )}
-                    </h3>
-                  </div>
-
-                  {/* Categoría */}
-                  <div className="flex-shrink-0 hidden sm:block text-left min-w-[80px]">
-                    {category && (
-                      <span className={`px-1.5 py-0.5 rounded-full text-xs font-medium ${color.bg} ${color.text} border ${color.border}`}>
-                        {category.name}
-                      </span>
+                      )
                     )}
                   </div>
 
-                  {/* Fecha de vencimiento */}
-                  <div className="flex-shrink-0 hidden md:block text-xs text-gray-500 dark:text-gray-400 text-left min-w-[100px]">
-                    {expense.due_date && (
-                      <span>
-                        Vence: {new Date(expense.due_date).toLocaleDateString('es-AR', {
-                          day: 'numeric',
-                          month: 'numeric',
-                          year: 'numeric'
-                        })}
-                      </span>
+                  {/* Fecha de vencimiento - Editable inline */}
+                  <div className="flex-shrink-0 hidden md:block text-xs text-gray-500 dark:text-gray-400 text-center whitespace-nowrap">
+                    {editingCell?.expenseId === expense.id && editingCell?.field === 'due_date' ? (
+                      <input
+                        type="date"
+                        value={editValues[`${expense.id}-due_date`] || expense.due_date || ''}
+                        onChange={(e) => setEditValues({ ...editValues, [`${expense.id}-due_date`]: e.target.value })}
+                        onBlur={() => saveInlineEdit(expense.id, 'due_date')}
+                        onKeyDown={(e) => handleInlineKeyDown(e, expense.id, 'due_date')}
+                        className="px-2 py-1 text-xs bg-white dark:bg-gray-800 border-2 border-blue-400 dark:border-blue-500 rounded focus:outline-none"
+                        autoFocus
+                        disabled={savingCell?.expenseId === expense.id && savingCell?.field === 'due_date'}
+                      />
+                    ) : (
+                      expense.due_date && (
+                        <span
+                          className="cursor-pointer hover:text-blue-600 dark:hover:text-blue-400 transition-colors"
+                          onClick={() => startEditing(expense.id, 'due_date', expense.due_date)}
+                          title="Click para editar"
+                        >
+                          Vto: {new Date(expense.due_date).toLocaleDateString('es-AR', {
+                            day: 'numeric',
+                            month: 'numeric'
+                          })}
+                        </span>
+                      )
                     )}
                   </div>
 
-                  {/* Monto */}
-                  <div className="flex-shrink-0 text-right min-w-[90px]">
-                    <div className="font-semibold text-fr-gray-900 dark:text-gray-100 text-sm">
-                      -{formatAmount(expense.amount)}
-                    </div>
+                  {/* % de Ingreso */}
+                  <div className="flex-shrink-0 hidden lg:block text-xs text-gray-500 dark:text-gray-400 text-center whitespace-nowrap">
+                    {incomePercentage.toFixed(1)}%
+                  </div>
+
+                  {/* Monto - Editable inline (Total tachado + Saldo pendiente) */}
+                  <div className="flex-shrink-0 text-right min-w-[100px]">
+                    {editingCell?.expenseId === expense.id && editingCell?.field === 'amount' ? (
+                      <input
+                        type="number"
+                        step="0.01"
+                        value={editValues[`${expense.id}-amount`] || expense.amount}
+                        onChange={(e) => setEditValues({ ...editValues, [`${expense.id}-amount`]: e.target.value })}
+                        onBlur={() => saveInlineEdit(expense.id, 'amount')}
+                        onKeyDown={(e) => handleInlineKeyDown(e, expense.id, 'amount')}
+                        className="w-full px-2 py-1 text-sm font-semibold bg-white dark:bg-gray-800 border-2 border-blue-400 dark:border-blue-500 rounded focus:outline-none text-right"
+                        autoFocus
+                        disabled={savingCell?.expenseId === expense.id && savingCell?.field === 'amount'}
+                      />
+                    ) : (
+                      <div
+                        className="flex items-center justify-end gap-2 whitespace-nowrap cursor-pointer hover:text-blue-600 dark:hover:text-blue-400 transition-colors"
+                        onClick={() => startEditing(expense.id, 'amount', expense.amount)}
+                        title="Click para editar monto"
+                      >
+                        {expense.amount_paid > 0 && !expense.paid && (
+                          <span className="text-xs text-gray-400 dark:text-gray-500 line-through">
+                            -{formatAmount(expense.amount)}
+                          </span>
+                        )}
+                        <span className="font-semibold text-fr-gray-900 dark:text-gray-100 text-sm">
+                          -{formatAmount(expense.amount_paid > 0 && !expense.paid ? expense.amount - expense.amount_paid : expense.amount)}
+                        </span>
+                      </div>
+                    )}
                   </div>
 
                   {/* Botones de acción compactos */}
