@@ -1,0 +1,17 @@
+.git
+.github
+docs
+specs
+apps/api-gateway
+apps/users-service
+apps/ai-service
+apps/gamification-service
+apps/frontend
+packages
+infrastructure
+node_modules
+.env
+.env.*
+*.md
+.specify
+scripts

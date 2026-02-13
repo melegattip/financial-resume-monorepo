@@ -3,7 +3,16 @@
     "allow": [
       "Bash(wc:*)",
       "Bash(pwsh:*)",
-      "Bash(powershell.exe:*)"
+      "Bash(powershell.exe:*)",
+      "Bash(xargs:*)",
+      "Bash(go mod init:*)",
+      "Bash(go test:*)",
+      "Bash(go build:*)",
+      "Bash(go vet:*)",
+      "Bash(go tool cover:*)",
+      "Bash(go mod tidy:*)",
+      "Bash(ls:*)",
+      "Bash(git checkout:*)"
     ]
   }
 }

@@ -1,0 +1,136 @@
+package auth
+
+import (
+	"github.com/gin-gonic/gin"
+	"github.com/rs/zerolog"
+	"gorm.io/gorm"
+
+	"github.com/melegattip/financial-resume-monorepo/apps/monolith/internal/infrastructure/config"
+	"github.com/melegattip/financial-resume-monorepo/apps/monolith/internal/infrastructure/middleware"
+	"github.com/melegattip/financial-resume-monorepo/apps/monolith/internal/modules/auth/domain"
+	"github.com/melegattip/financial-resume-monorepo/apps/monolith/internal/modules/auth/handlers"
+	"github.com/melegattip/financial-resume-monorepo/apps/monolith/internal/modules/auth/repository"
+	"github.com/melegattip/financial-resume-monorepo/apps/monolith/internal/modules/auth/services"
+	"github.com/melegattip/financial-resume-monorepo/apps/monolith/internal/shared/ports"
+)
+
+// Module implements the ports.Module interface for authentication.
+type Module struct {
+	db              *gorm.DB
+	logger          zerolog.Logger
+	cfg             *config.AppConfig
+	eventBus        ports.EventBus
+	authHandler     *handlers.AuthHandler
+	securityHandler *handlers.SecurityHandler
+	profileHandler  *handlers.ProfileHandler
+	settingsHandler *handlers.SettingsHandler
+	authMiddleware  *middleware.AuthMiddleware
+}
+
+// New creates and initializes the auth module with all dependencies.
+func New(db *gorm.DB, logger zerolog.Logger, cfg *config.AppConfig, eventBus ports.EventBus) *Module {
+	repo := repository.New(db)
+
+	jwtSvc := services.NewJWTService(cfg.JWT.Secret, cfg.JWT.AccessExpiry, cfg.JWT.RefreshExpiry, cfg.JWT.Issuer)
+	pwSvc := services.NewPasswordService(cfg.Security.PasswordMinLength)
+	twoFASvc := services.NewTwoFAService(cfg.JWT.Issuer)
+
+	authSvc := services.NewAuthService(
+		repo, repo, repo, repo,
+		jwtSvc, pwSvc, twoFASvc,
+		eventBus, logger,
+		cfg.Security.MaxLoginAttempts,
+		cfg.Security.LockoutDuration,
+	)
+
+	authMW := middleware.NewAuthMiddleware(jwtSvc)
+
+	return &Module{
+		db:              db,
+		logger:          logger,
+		cfg:             cfg,
+		eventBus:        eventBus,
+		authHandler:     handlers.NewAuthHandler(authSvc, logger),
+		securityHandler: handlers.NewSecurityHandler(authSvc, logger),
+		profileHandler:  handlers.NewProfileHandler(authSvc, logger),
+		settingsHandler: handlers.NewSettingsHandler(authSvc, logger),
+		authMiddleware:  authMW,
+	}
+}
+
+// Name returns the module identifier.
+func (m *Module) Name() string { return "auth" }
+
+// AuthMiddleware returns the shared auth middleware for other modules to use.
+func (m *Module) AuthMiddleware() *middleware.AuthMiddleware {
+	return m.authMiddleware
+}
+
+// RegisterRoutes adds auth endpoints to the router group.
+// The router group should be the /api/v1 group.
+func (m *Module) RegisterRoutes(router *gin.RouterGroup) {
+	if err := m.db.AutoMigrate(
+		&domain.User{},
+		&domain.Preferences{},
+		&domain.NotificationSettings{},
+		&domain.TwoFA{},
+	); err != nil {
+		m.logger.Fatal().Err(err).Msg("failed to auto-migrate auth tables")
+	}
+
+	// --- Public auth routes: /api/v1/auth/* ---
+	auth := router.Group("/auth")
+	{
+		auth.POST("/register", m.authHandler.Register)
+		auth.POST("/login", m.authHandler.Login)
+		auth.POST("/check-2fa", m.authHandler.Check2FA)
+		auth.POST("/refresh", m.securityHandler.Refresh)
+		auth.GET("/verify-email/:token", m.authHandler.VerifyEmail)
+		auth.POST("/request-password-reset", m.securityHandler.RequestPasswordReset)
+		auth.POST("/reset-password", m.securityHandler.ResetPassword)
+	}
+
+	// --- Protected user routes: /api/v1/users/* ---
+	users := router.Group("/users")
+	users.Use(m.authMiddleware.RequireAuth())
+	{
+		// Session
+		users.POST("/logout", m.securityHandler.Logout)
+
+		// Profile
+		users.GET("/profile", m.profileHandler.GetProfile)
+		users.PUT("/profile", m.profileHandler.UpdateProfile)
+		users.POST("/profile/avatar", m.profileHandler.UploadAvatar)
+
+		// Password
+		users.PUT("/change-password", m.securityHandler.ChangePassword)
+
+		// 2FA
+		twoFA := users.Group("/2fa")
+		{
+			twoFA.POST("/setup", m.securityHandler.Setup2FA)
+			twoFA.POST("/enable", m.securityHandler.Enable2FA)
+			twoFA.POST("/disable", m.securityHandler.Disable2FA)
+			twoFA.POST("/verify", m.securityHandler.Verify2FA)
+		}
+
+		// Preferences
+		users.GET("/preferences", m.settingsHandler.GetPreferences)
+		users.PUT("/preferences", m.settingsHandler.UpdatePreferences)
+
+		// Notifications
+		users.GET("/notifications", m.settingsHandler.GetNotifications)
+		users.PUT("/notifications", m.settingsHandler.UpdateNotifications)
+
+		// Data management
+		users.GET("/export", m.settingsHandler.ExportData)
+		users.DELETE("/account", m.settingsHandler.DeleteAccount)
+	}
+
+	m.logger.Info().Str("component", "auth").Msg("auth routes registered")
+}
+
+// RegisterSubscribers registers event bus subscriptions for the auth module.
+func (m *Module) RegisterSubscribers(bus ports.EventBus) {
+	// No subscribers needed for auth module currently.
+}

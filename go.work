@@ -1,9 +1,10 @@
-go 1.24.4
+go 1.25.5
 
 use (
 	./apps/ai-service
 	./apps/api-gateway
 	./apps/gamification-service
+	./apps/monolith
 	./apps/users-service
 	./packages/go-shared
 )
