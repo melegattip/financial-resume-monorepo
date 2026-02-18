@@ -32,7 +32,8 @@ func New(db *gorm.DB, logger zerolog.Logger, cfg *config.AppConfig, eventBus sha
 		&repository.AchievementModel{},
 		&repository.UserActionModel{},
 	); err != nil {
-		logger.Fatal().Err(err).Msg("failed to auto-migrate gamification tables")
+		// Non-fatal: AutoMigrate may fail to reconcile constraint names on existing tables.
+		logger.Warn().Err(err).Msg("auto-migrate warning (schema may already be up to date)")
 	}
 
 	repo := repository.NewGamificationRepository(db)

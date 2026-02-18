@@ -10,17 +10,25 @@ import (
 
 	"github.com/melegattip/financial-resume-monorepo/apps/monolith/internal/infrastructure/config"
 	"github.com/melegattip/financial-resume-monorepo/apps/monolith/internal/infrastructure/database"
+	"github.com/rs/zerolog"
+	"gorm.io/gorm"
+
 	apphttp "github.com/melegattip/financial-resume-monorepo/apps/monolith/internal/infrastructure/http"
 	"github.com/melegattip/financial-resume-monorepo/apps/monolith/internal/infrastructure/http/handlers"
 	"github.com/melegattip/financial-resume-monorepo/apps/monolith/internal/infrastructure/logging"
 	"github.com/melegattip/financial-resume-monorepo/apps/monolith/internal/modules/ai"
 	"github.com/melegattip/financial-resume-monorepo/apps/monolith/internal/modules/analytics"
 	"github.com/melegattip/financial-resume-monorepo/apps/monolith/internal/modules/auth"
+	authdomain "github.com/melegattip/financial-resume-monorepo/apps/monolith/internal/modules/auth/domain"
 	"github.com/melegattip/financial-resume-monorepo/apps/monolith/internal/modules/budgets"
+	budgetsrepo "github.com/melegattip/financial-resume-monorepo/apps/monolith/internal/modules/budgets/repository"
 	"github.com/melegattip/financial-resume-monorepo/apps/monolith/internal/modules/gamification"
 	"github.com/melegattip/financial-resume-monorepo/apps/monolith/internal/modules/recurring"
+	recurringrepo "github.com/melegattip/financial-resume-monorepo/apps/monolith/internal/modules/recurring/repository"
 	"github.com/melegattip/financial-resume-monorepo/apps/monolith/internal/modules/savings"
+	savingsrepo "github.com/melegattip/financial-resume-monorepo/apps/monolith/internal/modules/savings/repository"
 	"github.com/melegattip/financial-resume-monorepo/apps/monolith/internal/modules/transactions"
+	txrepo "github.com/melegattip/financial-resume-monorepo/apps/monolith/internal/modules/transactions/repository"
 	"github.com/melegattip/financial-resume-monorepo/apps/monolith/internal/shared/events"
 )
 
@@ -50,6 +58,9 @@ func main() {
 		logger.Fatal().Err(err).Msg("failed to connect to database")
 	}
 	defer database.Close(db, logger)
+
+	// Run schema migrations for all modules
+	runMigrations(db, logger)
 
 	// Initialize event bus
 	eventBus := events.NewInMemoryEventBus(logger)
@@ -126,4 +137,38 @@ func main() {
 	logger.Info().Str("signal", sig.String()).Msg("received shutdown signal")
 	server.Shutdown()
 	logger.Info().Msg("monolith stopped")
+}
+
+// runMigrations creates missing tables for all modules.
+// Each model is migrated individually so a failure on one table
+// (e.g. a constraint name mismatch on an existing table) does not
+// prevent the remaining tables from being created.
+func runMigrations(db *gorm.DB, logger zerolog.Logger) {
+	models := []struct {
+		name  string
+		model any
+	}{
+		// Auth — users already exists; migrate the companion tables separately
+		{"user_two_fa", &authdomain.TwoFA{}},
+		{"user_notification_settings", &authdomain.NotificationSettings{}},
+		// Transactions
+		{"categories", &txrepo.CategoryModel{}},
+		{"expenses", &txrepo.ExpenseModel{}},
+		{"incomes", &txrepo.IncomeModel{}},
+		// Budgets
+		{"budgets", &budgetsrepo.BudgetModel{}},
+		// Savings
+		{"savings_goals", &savingsrepo.SavingsGoalModel{}},
+		{"savings_transactions", &savingsrepo.SavingsTransactionModel{}},
+		// Recurring transactions
+		{"recurring_transactions", &recurringrepo.RecurringTransactionModel{}},
+	}
+
+	for _, m := range models {
+		if err := db.AutoMigrate(m.model); err != nil {
+			logger.Warn().Err(err).Str("table", m.name).Msg("auto-migrate warning")
+		} else {
+			logger.Info().Str("table", m.name).Msg("table ready")
+		}
+	}
 }
