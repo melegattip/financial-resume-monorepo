@@ -1,71 +1,58 @@
 # render.yaml - Blueprint for Render.com deployment
-# Deploy the Go modular monolith as a single Docker service
+# Backend: Go modular monolith (Docker)
+# Frontend: React SPA (Docker)
 
 services:
-  # === MONOLITH BACKEND ===
-  # Single Go binary serving all modules (auth, transactions, gamification, ai, etc.)
+  # === BACKEND: Go Modular Monolith ===
   - type: web
     name: financial-resume-backend
     runtime: docker
     dockerfilePath: ./apps/monolith/Dockerfile
     dockerContext: .
     envVars:
-      # Database - Single consolidated DB
-      - key: DB_HOST
-        sync: false
-      - key: DB_PORT
-        value: "5432"
-      - key: DB_USER
-        sync: false
-      - key: DB_PASSWORD
-        sync: false
-      - key: DB_NAME
-        value: financial_resume
-      - key: DB_SSLMODE
-        value: require
-
+      # Database - Supabase (usar DATABASE_URL tiene prioridad sobre las variables individuales)
+      - key: DATABASE_URL
+        sync: false  # Pegar la URI completa de Supabase: postgresql://postgres.xxx:[PASSWORD]@aws-0-xx.pooler.supabase.com:6543/postgres?sslmode=require
       # JWT
       - key: JWT_SECRET
         generateValue: true
-
-      # OpenAI (optional - runs in mock mode if empty)
+      # OpenAI (opcional - si no se configura corre en modo mock)
       - key: OPENAI_API_KEY
         sync: false
-
-      # Environment
-      - key: ENVIRONMENT
+      # App
+      - key: APP_ENV
         value: production
       - key: LOG_LEVEL
         value: info
       - key: PORT
         value: "8080"
       - key: CORS_ALLOW_ORIGINS
-        sync: false
+        value: https://financial-resume-frontend.onrender.com
 
     healthCheckPath: /health
-
-    # Scaling
-    plan: starter  # $7/month - single instance is enough
-
-    # Auto-deploy on push
+    plan: starter  # $7/month
     autoDeploy: true
 
-  # === FRONTEND ===
+  # === FRONTEND: React SPA ===
   - type: web
     name: financial-resume-frontend
     runtime: docker
     dockerfilePath: ./apps/frontend/Dockerfile
     dockerContext: ./apps/frontend
-    envVars:
+    buildArgs:
       - key: REACT_APP_API_URL
         value: https://financial-resume-backend.onrender.com/api/v1
+      - key: REACT_APP_ENV
+        value: production
+      - key: REACT_APP_ENVIRONMENT
+        value: production
     healthCheckPath: /
-    plan: starter
+    plan: starter  # $7/month
     autoDeploy: true
 
-# Databases (optional - can use existing)
+# Databases (opcional - si migrás de Supabase a Render Postgres)
 # databases:
 #   - name: financial-resume-db
 #     databaseName: financial_resume
 #     user: postgres
-#     plan: starter
+#     plan: starter  # $7/month

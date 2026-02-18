@@ -1,19 +1,16 @@
 services:
   - type: web
-    name: financial-frontend
-    env: docker
+    name: financial-resume-frontend
+    runtime: docker
     dockerfilePath: ./Dockerfile
     dockerContext: ./
-    envVars:
+    buildArgs:
       - key: REACT_APP_API_URL
-        value: https://financial-resume-engine.onrender.com/api/v1
-      - key: REACT_APP_USERS_SERVICE_URL
-        value: https://users-service-mp5p.onrender.com/api/v1
-      - key: REACT_APP_GAMIFICATION_URL
-        value: https://financial-gamification-service.onrender.com/api/v1
-      - key: REACT_APP_AI_SERVICE_URL
-        value: https://financial-ai-api.niloft.com/api/v1
+        value: https://financial-resume-backend.onrender.com/api/v1
       - key: REACT_APP_ENV
         value: production
       - key: REACT_APP_ENVIRONMENT
-        value: production 
+        value: production
+    healthCheckPath: /
+    plan: starter
+    autoDeploy: true
