@@ -14,6 +14,7 @@ import (
 	"github.com/melegattip/financial-resume-monorepo/apps/monolith/internal/infrastructure/http/handlers"
 	"github.com/melegattip/financial-resume-monorepo/apps/monolith/internal/infrastructure/logging"
 	"github.com/melegattip/financial-resume-monorepo/apps/monolith/internal/modules/auth"
+	"github.com/melegattip/financial-resume-monorepo/apps/monolith/internal/modules/gamification"
 	"github.com/melegattip/financial-resume-monorepo/apps/monolith/internal/modules/transactions"
 	"github.com/melegattip/financial-resume-monorepo/apps/monolith/internal/shared/events"
 )
@@ -66,6 +67,13 @@ func main() {
 	txModule.RegisterRoutes(apiV1)
 	txModule.RegisterSubscribers(eventBus)
 	logger.Info().Msg("transactions module registered")
+
+	// Gamification module
+	authMW := authModule.AuthMiddleware()
+	gamModule := gamification.New(db, logger, cfg, eventBus, authMW)
+	gamModule.RegisterRoutes(apiV1)
+	gamModule.RegisterSubscribers(eventBus)
+	logger.Info().Msg("gamification module registered")
 
 	server := apphttp.NewServer(cfg.ServerPort, router, logger)
 

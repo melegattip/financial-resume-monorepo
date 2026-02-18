@@ -12,7 +12,9 @@
       "Bash(go tool cover:*)",
       "Bash(go mod tidy:*)",
       "Bash(ls:*)",
-      "Bash(git checkout:*)"
+      "Bash(git checkout:*)",
+      "Bash(echo:*)",
+      "Bash(dir:*)"
     ]
   }
 }
