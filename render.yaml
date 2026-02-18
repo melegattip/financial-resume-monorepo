@@ -1,18 +1,18 @@
 # render.yaml - Blueprint for Render.com deployment
-# Deploy unified backend as a single Docker service
+# Deploy the Go modular monolith as a single Docker service
 
 services:
-  # === UNIFIED BACKEND ===
-  # Single container running all Go services + nginx proxy
+  # === MONOLITH BACKEND ===
+  # Single Go binary serving all modules (auth, transactions, gamification, ai, etc.)
   - type: web
     name: financial-resume-backend
     runtime: docker
-    dockerfilePath: ./Dockerfile
+    dockerfilePath: ./apps/monolith/Dockerfile
     dockerContext: .
     envVars:
-      # Database - Main (Engine + Gamification)
+      # Database - Single consolidated DB
       - key: DB_HOST
-        sync: false  # Configure in Render dashboard
+        sync: false
       - key: DB_PORT
         value: "5432"
       - key: DB_USER
@@ -23,42 +23,30 @@ services:
         value: financial_resume
       - key: DB_SSLMODE
         value: require
-      
-      # Database - Users (separate for users-service)
-      - key: USERS_DB_HOST
-        sync: false
-      - key: USERS_DB_PORT
-        value: "5432"
-      - key: USERS_DB_USER
-        sync: false
-      - key: USERS_DB_PASSWORD
-        sync: false
-      - key: USERS_DB_NAME
-        value: users_db
-      
-      # Redis
-      - key: REDIS_URL
-        sync: false
-      
+
       # JWT
       - key: JWT_SECRET
         generateValue: true
-      
-      # OpenAI (for AI service)
+
+      # OpenAI (optional - runs in mock mode if empty)
       - key: OPENAI_API_KEY
         sync: false
-      - key: USE_AI_MOCK
-        value: "false"
-      
+
       # Environment
       - key: ENVIRONMENT
         value: production
-    
+      - key: LOG_LEVEL
+        value: info
+      - key: PORT
+        value: "8080"
+      - key: CORS_ALLOW_ORIGINS
+        sync: false
+
     healthCheckPath: /health
-    
+
     # Scaling
     plan: starter  # $7/month - single instance is enough
-    
+
     # Auto-deploy on push
     autoDeploy: true
 

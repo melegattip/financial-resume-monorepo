@@ -13,8 +13,13 @@ import (
 	apphttp "github.com/melegattip/financial-resume-monorepo/apps/monolith/internal/infrastructure/http"
 	"github.com/melegattip/financial-resume-monorepo/apps/monolith/internal/infrastructure/http/handlers"
 	"github.com/melegattip/financial-resume-monorepo/apps/monolith/internal/infrastructure/logging"
+	"github.com/melegattip/financial-resume-monorepo/apps/monolith/internal/modules/ai"
+	"github.com/melegattip/financial-resume-monorepo/apps/monolith/internal/modules/analytics"
 	"github.com/melegattip/financial-resume-monorepo/apps/monolith/internal/modules/auth"
+	"github.com/melegattip/financial-resume-monorepo/apps/monolith/internal/modules/budgets"
 	"github.com/melegattip/financial-resume-monorepo/apps/monolith/internal/modules/gamification"
+	"github.com/melegattip/financial-resume-monorepo/apps/monolith/internal/modules/recurring"
+	"github.com/melegattip/financial-resume-monorepo/apps/monolith/internal/modules/savings"
 	"github.com/melegattip/financial-resume-monorepo/apps/monolith/internal/modules/transactions"
 	"github.com/melegattip/financial-resume-monorepo/apps/monolith/internal/shared/events"
 )
@@ -68,12 +73,41 @@ func main() {
 	txModule.RegisterSubscribers(eventBus)
 	logger.Info().Msg("transactions module registered")
 
+	// Savings module
+	savingsModule := savings.New(db, logger, eventBus)
+	savingsModule.RegisterRoutes(apiV1)
+	savingsModule.RegisterSubscribers(eventBus)
+	logger.Info().Msg("savings module registered")
+
 	// Gamification module
 	authMW := authModule.AuthMiddleware()
 	gamModule := gamification.New(db, logger, cfg, eventBus, authMW)
 	gamModule.RegisterRoutes(apiV1)
 	gamModule.RegisterSubscribers(eventBus)
 	logger.Info().Msg("gamification module registered")
+
+	// Recurring transactions module
+	recurringModule := recurring.New(db, logger, cfg, eventBus)
+	recurringModule.RegisterRoutes(apiV1)
+	recurringModule.RegisterSubscribers(eventBus)
+	logger.Info().Msg("recurring module registered")
+
+	// Budgets module
+	budgetsModule := budgets.New(db, logger, cfg, eventBus)
+	budgetsModule.RegisterRoutes(apiV1)
+	budgetsModule.RegisterSubscribers(eventBus)
+	logger.Info().Msg("budgets module registered")
+
+	// Analytics module
+	analyticsModule := analytics.New(db, logger, cfg, eventBus, authMW)
+	analyticsModule.RegisterRoutes(apiV1)
+	logger.Info().Msg("analytics module registered")
+
+	// AI module
+	aiModule := ai.New(db, logger, cfg, eventBus)
+	aiModule.RegisterRoutes(apiV1)
+	aiModule.RegisterSubscribers(eventBus)
+	logger.Info().Msg("ai module registered")
 
 	server := apphttp.NewServer(cfg.ServerPort, router, logger)
 
