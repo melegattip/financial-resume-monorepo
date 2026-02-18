@@ -1,18 +1,21 @@
-# render.yaml - Blueprint for Render.com deployment
-# Backend: Go modular monolith (Docker)
-# Frontend: React SPA (Docker)
+# render.yaml - Referencia de configuración de los servicios en Render.com
+# Servicios reales (creados manualmente en Render, no como Blueprint):
+#   Backend: https://financial-resume-monorepo.onrender.com
+#   Frontend: https://financial-resume-monorepo-front.onrender.com  (Static Site)
 
 services:
   # === BACKEND: Go Modular Monolith ===
+  # Nombre real en Render: financial-resume-monorepo
   - type: web
-    name: financial-resume-backend
+    name: financial-resume-monorepo
     runtime: docker
     dockerfilePath: ./apps/monolith/Dockerfile
     dockerContext: .
     envVars:
-      # Database - Supabase (usar DATABASE_URL tiene prioridad sobre las variables individuales)
+      # Database - Supabase Session Pooler (IPv4 + prepared statements)
+      # Formato: postgresql://postgres.xxx:[PASSWORD]@aws-0-xx.pooler.supabase.com:5432/postgres?sslmode=require
       - key: DATABASE_URL
-        sync: false  # Pegar la URI completa de Supabase: postgresql://postgres.xxx:[PASSWORD]@aws-0-xx.pooler.supabase.com:6543/postgres?sslmode=require
+        sync: false
       # JWT
       - key: JWT_SECRET
         generateValue: true
@@ -27,28 +30,20 @@ services:
       - key: PORT
         value: "8080"
       - key: CORS_ALLOW_ORIGINS
-        value: https://financial-resume-frontend.onrender.com
+        value: https://financial-resume-monorepo-front.onrender.com
 
     healthCheckPath: /health
     plan: starter  # $7/month
     autoDeploy: true
 
-  # === FRONTEND: React SPA ===
-  - type: web
-    name: financial-resume-frontend
-    runtime: docker
-    dockerfilePath: ./apps/frontend/Dockerfile
-    dockerContext: ./apps/frontend
-    buildArgs:
-      - key: REACT_APP_API_URL
-        value: https://financial-resume-backend.onrender.com/api/v1
-      - key: REACT_APP_ENV
-        value: production
-      - key: REACT_APP_ENVIRONMENT
-        value: production
-    healthCheckPath: /
-    plan: starter  # $7/month
-    autoDeploy: true
+  # === FRONTEND: React SPA (Static Site en Render) ===
+  # Nombre real en Render: financial-resume-monorepo-front
+  # Configurado como Static Site, no como Docker service
+  # Build Command: npm install --legacy-peer-deps && npm run build
+  # Publish Directory: build
+  # Root Directory: apps/frontend
+  # Environment Variables:
+  #   REACT_APP_API_URL = https://financial-resume-monorepo.onrender.com/api/v1
 
 # Databases (opcional - si migrás de Supabase a Render Postgres)
 # databases:
