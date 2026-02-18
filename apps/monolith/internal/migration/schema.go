@@ -6,6 +6,58 @@ import (
 	"gorm.io/gorm"
 )
 
+// createUsersAndPreferencesTables creates the users and user_preferences tables
+// using direct SQL to ensure correct table names. This is needed before copying data.
+func createUsersAndPreferencesTables(db *gorm.DB, dryRun bool) error {
+	if dryRun {
+		fmt.Println("[DRY RUN] Would create users and user_preferences tables")
+		return nil
+	}
+
+	// Create users table directly with SQL
+	createUsersSQL := `
+		CREATE TABLE IF NOT EXISTS users (
+			id VARCHAR(255) PRIMARY KEY,
+			email VARCHAR(255) UNIQUE NOT NULL,
+			password_hash VARCHAR(255) NOT NULL,
+			first_name VARCHAR(255),
+			last_name VARCHAR(255),
+			phone VARCHAR(50),
+			avatar VARCHAR(500),
+			is_active BOOLEAN DEFAULT true,
+			is_verified BOOLEAN DEFAULT false,
+			last_login TIMESTAMP NULL,
+			created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+			updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+			deleted_at TIMESTAMP NULL
+		)
+	`
+	if err := db.Exec(createUsersSQL).Error; err != nil {
+		return fmt.Errorf("create users table: %w", err)
+	}
+
+	// Create user_preferences table directly with SQL
+	createPrefsSQL := `
+		CREATE TABLE IF NOT EXISTS user_preferences (
+			user_id VARCHAR(255) PRIMARY KEY,
+			currency VARCHAR(10) DEFAULT 'USD',
+			language VARCHAR(10) DEFAULT 'en',
+			timezone VARCHAR(50) DEFAULT 'UTC',
+			gamification_enabled BOOLEAN DEFAULT true,
+			theme VARCHAR(20) DEFAULT 'light',
+			created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+			updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+			deleted_at TIMESTAMP NULL,
+			CONSTRAINT fk_user_preferences_user FOREIGN KEY (user_id) REFERENCES users(id)
+		)
+	`
+	if err := db.Exec(createPrefsSQL).Error; err != nil {
+		return fmt.Errorf("create user_preferences table: %w", err)
+	}
+
+	return nil
+}
+
 // ensureUsersTableVarchar verifies the users table PK is varchar(255).
 // If it was previously a uuid type (from GORM AutoMigrate with uuid.UUID),
 // it alters the column to varchar(255). If the table doesn't exist yet,

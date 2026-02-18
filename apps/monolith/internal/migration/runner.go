@@ -137,6 +137,12 @@ func (r *Runner) printReport(report *Report) {
 
 // runSchemaChanges applies all schema alterations (column widening, table creation).
 func (r *Runner) runSchemaChanges() error {
+	// US0: Create users and user_preferences tables first (needed for data copy)
+	r.Log.Info().Msg("creating users and user_preferences tables")
+	if err := createUsersAndPreferencesTables(r.TargetDB, r.DryRun); err != nil {
+		return fmt.Errorf("create users/user_preferences tables: %w", err)
+	}
+
 	// US1: Ensure users table PK and user_preferences FK are varchar(255)
 	r.Log.Info().Msg("ensuring users.id is varchar(255)")
 	if err := ensureUsersTableVarchar(r.TargetDB, r.DryRun); err != nil {
@@ -242,8 +248,21 @@ func (r *Runner) runDataMigration(report *Report) error {
 			return fmt.Errorf("dedup user_actions: %w", err)
 		}
 		report.Dedup = append(report.Dedup, uaDedup)
+
+		// Phase 4: Copy financial data (expenses, incomes, budgets, etc.)
+		r.Log.Info().Msg("copying financial data (expenses, incomes, categories, budgets, savings)")
+		finCopied, finSkipped, err := CopyFinancialData(r.GamificationDB, r.TargetDB, r.Log, r.DryRun)
+		if err != nil {
+			return fmt.Errorf("copy financial data: %w", err)
+		}
+		for k, v := range finCopied {
+			report.DataCopied[k] = v
+		}
+		for k, v := range finSkipped {
+			report.DataSkipped[k] = v
+		}
 	} else {
-		r.Log.Warn().Msg("gamification_db not connected, skipping gamification migration")
+		r.Log.Warn().Msg("gamification_db not connected, skipping gamification and financial migration")
 	}
 
 	return nil

@@ -279,10 +279,15 @@ func CopyGamificationTables(gamDB, targetDB *gorm.DB, log zerolog.Logger, dryRun
 	// challenge_progress_tracking
 	c, s, err = copyTableGeneric[SrcChallengeProgressTracking](gamDB, targetDB, log, dryRun, "challenge_progress_tracking",
 		`INSERT INTO challenge_progress_tracking (id, user_id, challenge_date, action_type, entity_type, count, unique_entities, created_at)
-		 VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+		 VALUES (?, ?, ?, ?, ?, ?, ?::jsonb, ?)
 		 ON CONFLICT (id) DO NOTHING`,
 		func(r SrcChallengeProgressTracking) []interface{} {
-			return []interface{}{r.ID, r.UserID, r.ChallengeDate, r.ActionType, r.EntityType, r.Count, r.UniqueEntities, r.CreatedAt}
+			// Ensure unique_entities is valid JSON (empty array if empty/null)
+			uniqueEntities := r.UniqueEntities
+			if uniqueEntities == "" || uniqueEntities == "null" {
+				uniqueEntities = "[]"
+			}
+			return []interface{}{r.ID, r.UserID, r.ChallengeDate, r.ActionType, r.EntityType, r.Count, uniqueEntities, r.CreatedAt}
 		})
 	if err != nil {
 		return copied, skipped, fmt.Errorf("copy challenge_progress_tracking: %w", err)

@@ -14,6 +14,7 @@ import (
 	"github.com/melegattip/financial-resume-monorepo/apps/monolith/internal/infrastructure/http/handlers"
 	"github.com/melegattip/financial-resume-monorepo/apps/monolith/internal/infrastructure/logging"
 	"github.com/melegattip/financial-resume-monorepo/apps/monolith/internal/modules/auth"
+	"github.com/melegattip/financial-resume-monorepo/apps/monolith/internal/modules/transactions"
 	"github.com/melegattip/financial-resume-monorepo/apps/monolith/internal/shared/events"
 )
 
@@ -59,6 +60,12 @@ func main() {
 	authModule.RegisterRoutes(apiV1)
 	authModule.RegisterSubscribers(eventBus)
 	logger.Info().Msg("auth module registered")
+
+	// Transactions module (requires JWT auth middleware)
+	txModule := transactions.New(db, logger, cfg, eventBus)
+	txModule.RegisterRoutes(apiV1)
+	txModule.RegisterSubscribers(eventBus)
+	logger.Info().Msg("transactions module registered")
 
 	server := apphttp.NewServer(cfg.ServerPort, router, logger)
 
