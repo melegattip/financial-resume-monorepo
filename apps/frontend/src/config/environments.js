@@ -32,13 +32,13 @@ const environments = {
 
   render: {
     name: 'Render.com',
-    API_BASE_URL: 'https://financial-resume-engine.onrender.com/api/v1',
-    GAMIFICATION_API_URL: 'https://financial-gamification-service.onrender.com/api/v1',
-    AI_API_URL: 'https://financial-ai-api.niloft.com/api/v1',
-    USERS_API_URL: 'https://users-service-mp5p.onrender.com/api/v1',
-    REDIS_URL: 'redis://red-d1qmg0juibrs73esqdfg:6379',
-    WEBSOCKET_URL: 'wss://financial-resume-engine.onrender.com/ws',
-    CORS_ORIGIN: 'https://financial-resume-engine-frontend.onrender.com',
+    API_BASE_URL: 'https://financial-resume-monorepo.onrender.com/api/v1',
+    GAMIFICATION_API_URL: 'https://financial-resume-monorepo.onrender.com/api/v1',
+    AI_API_URL: 'https://financial-resume-monorepo.onrender.com/api/v1',
+    USERS_API_URL: 'https://financial-resume-monorepo.onrender.com/api/v1',
+    REDIS_URL: '',
+    WEBSOCKET_URL: 'wss://financial-resume-monorepo.onrender.com/ws',
+    CORS_ORIGIN: 'https://financial-resume-monolith-front.onrender.com',
     // Configuración de producción
     DISABLE_CONSOLE_LOGS: true,
     LOG_LEVEL: 'WARN' // ERROR, WARN, INFO, DEBUG
@@ -46,13 +46,13 @@ const environments = {
 
   production: {
     name: 'Production (Niloft)',
-    API_BASE_URL: 'https://financial.niloft.com/api/v1',
-    GAMIFICATION_API_URL: 'https://financial-gamification-service.onrender.com/api/v1',
-    AI_API_URL: 'https://financial-ai-api.niloft.com/api/v1',
-    USERS_API_URL: 'https://users-service-mp5p.onrender.com/api/v1',
-    REDIS_URL: 'redis://red-d1qmg0juibrs73esqdfg:6379',
-    WEBSOCKET_URL: 'wss://financial.niloft.com/ws',
-    CORS_ORIGIN: 'https://financial.niloft.com',
+    API_BASE_URL: 'https://financial-resume-monorepo.onrender.com/api/v1',
+    GAMIFICATION_API_URL: 'https://financial-resume-monorepo.onrender.com/api/v1',
+    AI_API_URL: 'https://financial-resume-monorepo.onrender.com/api/v1',
+    USERS_API_URL: 'https://financial-resume-monorepo.onrender.com/api/v1',
+    REDIS_URL: '',
+    WEBSOCKET_URL: 'wss://financial-resume-monorepo.onrender.com/ws',
+    CORS_ORIGIN: 'https://financial-resume-monolith-front.onrender.com',
     // Configuración de producción
     DISABLE_CONSOLE_LOGS: true,
     LOG_LEVEL: 'WARN' // ERROR, WARN, INFO, DEBUG

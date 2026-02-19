@@ -73,50 +73,30 @@ class ConfigService {
         return config;
       }
       
-      // En producción, intentar cargar desde la API
-      if (currentEnv === 'render') {
-        console.log(`🔧 [configService] Ambiente render detectado, intentando cargar desde API`);
-        
-        try {
-          const response = await fetch('https://financial-resume-engine.onrender.com/api/v1/config', {
-            method: 'GET',
-            headers: {
-              'Content-Type': 'application/json',
-            },
-            signal: AbortSignal.timeout(3000),
-          });
-
-          if (response.ok) {
-            const data = await response.json();
-            if (data.success && data.data) {
-              console.log('✅ Configuración cargada desde producción:', data.data);
-              this.config = data.data;
-              return data.data;
-            }
-          }
-        } catch (error) {
-          console.warn(`⚠️ Error cargando configuración desde producción:`, error.message);
-        }
-        
-        // Fallback para producción
+      // En producción (render o production), usar el monolito
+      if (currentEnv === 'render' || currentEnv === 'production') {
+        const monolithUrl = 'https://financial-resume-monorepo.onrender.com/api/v1';
         const config = {
-          api_base_url: 'https://financial-resume-engine.onrender.com/api/v1',
-          gamification_url: 'https://financial-gamification-service.onrender.com/api/v1',
-          ai_service_url: 'https://financial-ai-api.niloft.com/api/v1',
-          users_service_url: 'https://users-service-mp5p.onrender.com/api/v1',
-          environment: 'render',
+          api_base_url: monolithUrl,
+          gamification_url: monolithUrl,
+          ai_service_url: monolithUrl,
+          users_service_url: monolithUrl,
+          environment: currentEnv,
           version: '1.0.0'
         };
-        
-        console.log('✅ Configuración de producción (fallback):', config);
+
+        console.log(`✅ Configuración de ${currentEnv} (monolito):`, config);
         this.config = config;
         return config;
       }
-      
+
       // Fallback general
       console.warn('⚠️ Ambiente desconocido, usando configuración de fallback');
       const config = {
         api_base_url: fallbackUrl || 'http://localhost:8080/api/v1',
+        gamification_url: fallbackUrl || 'http://localhost:8080/api/v1',
+        ai_service_url: fallbackUrl || 'http://localhost:8080/api/v1',
+        users_service_url: fallbackUrl || 'http://localhost:8080/api/v1',
         environment: 'development',
         version: '1.0.0'
       };
@@ -160,7 +140,7 @@ class ConfigService {
     // Fallback basado en detección de ambiente
     const hostname = window.location.hostname;
     if (hostname.includes('onrender.com') || hostname === 'financial.niloft.com') {
-      return 'https://financial-resume-engine.onrender.com/api/v1';  // Render
+      return 'https://financial-resume-monorepo.onrender.com/api/v1';  // Render monolith
     } else {
       return 'http://localhost:8080/api/v1';  // Development
     }

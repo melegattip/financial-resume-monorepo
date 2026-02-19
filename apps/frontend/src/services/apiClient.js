@@ -12,7 +12,7 @@ const getInitialBaseURL = () => {
   // Detección por hostname
   const hostname = window.location.hostname;
   if (hostname.includes('onrender.com') || hostname === 'financial.niloft.com') {
-    return 'https://financial-resume-engine.onrender.com/api/v1';  // Render
+    return 'https://financial-resume-monorepo.onrender.com/api/v1';  // Render monolith
   } else {
     return 'http://localhost:8080/api/v1';  // Development
   }

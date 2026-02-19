@@ -21,9 +21,9 @@ const getUsersServiceUrl = async () => {
     // Usar el proxy del backend principal en lugar de conectar directamente
     const hostname = window.location.hostname;
     if (hostname.includes('onrender.com') || hostname === 'financial.niloft.com') {
-      return 'https://financial-resume-engine.onrender.com/api/v1';  // Render - usar proxy
+      return 'https://financial-resume-monorepo.onrender.com/api/v1';  // Render monolith
     } else {
-      return 'http://localhost:8080/api/v1';  // Development - usar proxy
+      return 'http://localhost:8080/api/v1';  // Development
     }
   }
 };
@@ -33,13 +33,12 @@ const getInitialAuthBaseURL = () => {
   if (process.env.REACT_APP_USERS_SERVICE_URL) {
     return process.env.REACT_APP_USERS_SERVICE_URL;
   }
-  
-  // Usar el proxy del backend principal en lugar de conectar directamente
+
   const hostname = window.location.hostname;
   if (hostname.includes('onrender.com') || hostname === 'financial.niloft.com') {
-    return 'https://financial-resume-engine.onrender.com/api/v1';  // Render - usar proxy
+    return 'https://financial-resume-monorepo.onrender.com/api/v1';  // Render monolith
   } else {
-    return 'http://localhost:8080/api/v1';  // Development - usar proxy
+    return 'http://localhost:8080/api/v1';  // Development
   }
 };
 
