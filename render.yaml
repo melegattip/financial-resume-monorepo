@@ -1,7 +1,7 @@
 # render.yaml - Referencia de configuración de los servicios en Render.com
 # Servicios reales (creados manualmente en Render, no como Blueprint):
-#   Backend: https://financial-resume-monorepo.onrender.com
-#   Frontend: https://financial-resume-monorepo-front.onrender.com  (Static Site)
+#   Backend: https://financial-resume-monorepo-l71a.onrender.com
+#   Frontend: https://financial-niloft-front.onrender.com  (Static Site)
 
 services:
   # === BACKEND: Go Modular Monolith ===
@@ -30,7 +30,7 @@ services:
       - key: PORT
         value: "8080"
       - key: CORS_ALLOW_ORIGINS
-        value: https://financial-resume-monorepo-front.onrender.com
+        value: https://financial-niloft-front.onrender.com
 
     healthCheckPath: /health
     plan: starter  # $7/month
@@ -43,7 +43,7 @@ services:
   # Publish Directory: build
   # Root Directory: apps/frontend
   # Environment Variables:
-  #   REACT_APP_API_URL = https://financial-resume-monorepo.onrender.com/api/v1
+  #   REACT_APP_API_URL = https://financial-resume-monorepo-l71a.onrender.com/api/v1
 
 # Databases (opcional - si migrás de Supabase a Render Postgres)
 # databases:

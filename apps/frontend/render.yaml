@@ -6,7 +6,7 @@ services:
     dockerContext: ./
     buildArgs:
       - key: REACT_APP_API_URL
-        value: https://financial-resume-backend.onrender.com/api/v1
+        value: https://financial-resume-monorepo-l71a.onrender.com/api/v1
       - key: REACT_APP_ENV
         value: production
       - key: REACT_APP_ENVIRONMENT

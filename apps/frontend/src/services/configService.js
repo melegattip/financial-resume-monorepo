@@ -75,7 +75,7 @@ class ConfigService {
       
       // En producción (render o production), usar el monolito
       if (currentEnv === 'render' || currentEnv === 'production') {
-        const monolithUrl = 'https://financial-resume-monorepo.onrender.com/api/v1';
+        const monolithUrl = 'https://financial-resume-monorepo-l71a.onrender.com/api/v1';
         const config = {
           api_base_url: monolithUrl,
           gamification_url: monolithUrl,
@@ -140,7 +140,7 @@ class ConfigService {
     // Fallback basado en detección de ambiente
     const hostname = window.location.hostname;
     if (hostname.includes('onrender.com') || hostname === 'financial.niloft.com') {
-      return 'https://financial-resume-monorepo.onrender.com/api/v1';  // Render monolith
+      return 'https://financial-resume-monorepo-l71a.onrender.com/api/v1';  // Render monolith
     } else {
       return 'http://localhost:8080/api/v1';  // Development
     }
