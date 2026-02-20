@@ -84,20 +84,24 @@ class DataService {
     try {
       if (useOptimizedEndpoints) {
         console.log('🚀 Cargando dashboard con endpoints optimizados...');
-        
-        // Llamadas paralelas con cache
+
+        // Llamadas paralelas con cache.
+        // - /dashboard: métricas pre-calculadas del backend
+        // - /expenses y /incomes: items individuales (transactions module)
+        // - /analytics/categories: breakdown por categoría
+        // - /categories: lista para dropdowns
         const [dashboard, expenses, incomes, categories, categoriesDropdown] = await Promise.all([
           this.getCachedData(
             this.getCacheKey('dashboard', filterParams),
             () => dashboardAPI.overview(filterParams)
           ),
           this.getCachedData(
-            this.getCacheKey('analytics_expenses', { ...filterParams, sort: 'date', order: 'desc', limit: 50 }),
-            () => analyticsAPI.expenses({ ...filterParams, sort: 'date', order: 'desc', limit: 50 })
+            this.getCacheKey('expenses_legacy', {}),
+            () => expensesAPI.list()
           ),
           this.getCachedData(
-            this.getCacheKey('analytics_incomes', { ...filterParams, sort: 'date', order: 'desc', limit: 50 }),
-            () => analyticsAPI.incomes({ ...filterParams, sort: 'date', order: 'desc', limit: 50 })
+            this.getCacheKey('incomes_legacy', {}),
+            () => incomesAPI.list()
           ),
           this.getCachedData(
             this.getCacheKey('analytics_categories', filterParams),
@@ -109,7 +113,7 @@ class DataService {
           )
         ]);
 
-        return this.normalizeOptimizedData(dashboard.data, expenses.data, incomes.data, categories.data, categoriesDropdown.data);
+        return this.normalizeOptimizedData(dashboard.data, expenses.data, incomes.data, categories.data, categoriesDropdown.data, filterParams);
       } else {
         return await this.loadDashboardDataLegacy(filterParams);
       }
@@ -144,28 +148,37 @@ class DataService {
   }
 
   /**
-   * Normaliza datos de endpoints optimizados
+   * Normaliza datos de endpoints optimizados.
+   * - dashboard: DashboardSummary del backend (snake_case)
+   * - expenses: respuesta de GET /expenses → { expenses: [...], total, limit, offset }
+   * - incomes: respuesta de GET /incomes → { incomes: [...], total, limit, offset }
+   * - categories: respuesta de GET /analytics/categories → { data: [...], total }
+   * - categoriesDropdown: respuesta de GET /categories → array o { data: [...] }
    */
-  normalizeOptimizedData(dashboard, expenses, incomes, categories, categoriesDropdown) {
-    const normalizedExpenses = (expenses.Expenses || []).map(expense => ({
+  normalizeOptimizedData(dashboard, expenses, incomes, categories, categoriesDropdown, filterParams = {}) {
+    // expenses viene de GET /expenses → { expenses: [...] }
+    const expensesArray = expenses?.expenses || expenses?.Expenses || [];
+    const normalizedExpenses = expensesArray.map(expense => ({
       id: expense.ID || expense.id,
       user_id: expense.UserID || expense.user_id,
-      amount: expense.Amount || expense.amount,
-      amount_paid: expense.AmountPaid || expense.amount_paid,
-      pending_amount: expense.PendingAmount || expense.pending_amount,
+      amount: expense.Amount || expense.amount || 0,
+      amount_paid: expense.AmountPaid ?? expense.amount_paid ?? 0,
+      pending_amount: expense.PendingAmount ?? expense.pending_amount ?? 0,
       description: expense.Description || expense.description,
       category_id: expense.CategoryID || expense.category_id,
-      paid: expense.Paid !== undefined ? expense.Paid : expense.paid,
-      due_date: expense.DueDate || expense.due_date,
-      percentage: expense.PercentageOfIncome || expense.percentage,
+      paid: expense.Paid !== undefined ? expense.Paid : (expense.paid || false),
+      due_date: expense.DueDate || expense.due_date || expense.TransactionDate || expense.transaction_date,
+      percentage: expense.PercentageOfIncome || expense.percentage || 0,
       created_at: expense.CreatedAt || expense.created_at,
       updated_at: expense.UpdatedAt || expense.updated_at
     }));
 
-    const normalizedIncomes = (incomes.Incomes || []).map(income => ({
+    // incomes viene de GET /incomes → { incomes: [...] }
+    const incomesArray = incomes?.incomes || incomes?.Incomes || [];
+    const normalizedIncomes = incomesArray.map(income => ({
       id: income.ID || income.id,
       user_id: income.UserID || income.user_id,
-      amount: income.Amount || income.amount,
+      amount: income.Amount || income.amount || 0,
       description: income.Description || income.description,
       category_id: income.CategoryID || income.category_id,
       created_at: income.CreatedAt || income.created_at,
@@ -174,28 +187,38 @@ class DataService {
 
     const categoriesForDropdown = categoriesDropdown?.data || categoriesDropdown || [];
 
+    // Aplicar filtro de fecha client-side (igual que normalizeLegacyData)
+    const filteredExpenses = this.filterDataByMonthAndYear(normalizedExpenses, filterParams.month, filterParams.year);
+    const filteredIncomes = this.filterDataByMonthAndYear(normalizedIncomes, filterParams.month, filterParams.year);
+
+    // Totales calculados desde los datos filtrados (respetan el filtro de fecha)
+    const totalExpenses = filteredExpenses.reduce((sum, e) => sum + (e.amount || 0), 0);
+    const totalIncome = filteredIncomes.reduce((sum, i) => sum + (i.amount || 0), 0);
+    const balance = totalIncome - totalExpenses;
+
     return {
-      // Métricas del dashboard (pre-calculadas por backend)
-      totalIncome: dashboard.Metrics?.TotalIncome || 0,
-      totalExpenses: dashboard.Metrics?.TotalExpenses || 0,
-      balance: dashboard.Metrics?.Balance || 0,
-      
-      // Transacciones normalizadas
-      expenses: normalizedExpenses,
-      incomes: normalizedIncomes,
-      
+      // Métricas calculadas desde datos filtrados
+      totalIncome,
+      totalExpenses,
+      balance,
+
+      // Transacciones filtradas por fecha
+      expenses: filteredExpenses,
+      incomes: filteredIncomes,
+
       // Categorías para dropdown
       categories: Array.isArray(categoriesForDropdown) ? categoriesForDropdown : [],
-      
-      // Datos adicionales del backend
-      dashboardMetrics: dashboard.Metrics || {},
-      expensesSummary: expenses.Summary || {},
-      categoriesAnalytics: categories.Categories || [],
-      
-      // Datos sin filtrar
+
+      // Datos del /dashboard backend (para health score y otros widgets que lo consuman directamente)
+      dashboardMetrics: dashboard || {},
+      expensesSummary: expenses?.Summary || {},
+      // GET /analytics/categories retorna { data: [...] } no { Categories: [...] }
+      categoriesAnalytics: categories?.data || categories?.Categories || [],
+
+      // Datos sin filtrar (para cálculos globales)
       allExpenses: normalizedExpenses,
       allIncomes: normalizedIncomes,
-      
+
       // Metadata
       source: 'optimized',
       timestamp: Date.now()
