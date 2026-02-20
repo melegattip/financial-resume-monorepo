@@ -23,7 +23,8 @@ func NewAnalysisService(openai *OpenAIClient) *AnalysisService {
 // AnalyzeFinancialHealth performs a full financial health analysis using AI.
 func (s *AnalysisService) AnalyzeFinancialHealth(ctx context.Context, data domain.FinancialAnalysisData) (*domain.HealthAnalysis, error) {
 	systemPrompt := `Eres un asesor financiero experto especializado en el mercado latinoamericano.
-Tu trabajo es evaluar la situación financiera del usuario y proporcionar un análisis detallado y accionable.
+Tu trabajo es evaluar la situación financiera del usuario y proporcionar un análisis detallado y accionable. Debes estudiar sus movimientos
+financieros, identificar patrones, fortalezas y áreas de mejora, y generar una evaluación inteligente.
 
 REGLA FUNDAMENTAL: Los gastos en inversión, ahorro, seguros y educación son MOVIMIENTOS POSITIVOS
 que demuestran disciplina financiera y construcción de patrimonio. NUNCA los evalúes negativamente.
@@ -58,7 +59,8 @@ Responde ÚNICAMENTE con un JSON válido en el formato solicitado. Sin texto adi
 // GenerateInsights generates personalised financial insights using AI.
 func (s *AnalysisService) GenerateInsights(ctx context.Context, data domain.FinancialAnalysisData) ([]domain.AIInsight, error) {
 	systemPrompt := `Eres un asesor financiero experto especializado en el mercado latinoamericano.
-Generas insights financieros personalizados, claros y accionables basados en datos reales del usuario.
+Generas insights financieros personalizados, claros y accionables basados en datos reales del usuario. Debes estudiar sus movimientos
+financieros, identificar patrones, fortalezas y áreas de mejora, y generar recomendaciones inteligentes.
 
 REGLA FUNDAMENTAL: Los gastos en categorías de inversión, ahorro, fondos, seguros, educación y activos
 son MOVIMIENTOS POSITIVOS que indican disciplina financiera y construcción de patrimonio.
