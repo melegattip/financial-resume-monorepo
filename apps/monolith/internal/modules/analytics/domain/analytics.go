@@ -60,3 +60,11 @@ type RecentItem struct {
 	Category    string    `json:"category,omitempty"`
 	Date        time.Time `json:"date"`
 }
+
+// ReportTransaction is a minimal transaction record used in report generation.
+type ReportTransaction struct {
+	ID         string  `json:"id"`
+	CategoryID string  `json:"category_id"`
+	Type       string  `json:"type"` // "expense" or "income"
+	Amount     float64 `json:"amount"`
+}

@@ -129,6 +129,61 @@ func (h *GamificationHandler) GetFeatures(c *gin.Context) {
 	})
 }
 
+// CheckFeatureAccess handles GET /gamification/features/:featureKey/access
+// Returns whether a specific feature key is in trial mode.
+// Since all features are currently unlocked, this always returns trial_active: false.
+func (h *GamificationHandler) CheckFeatureAccess(c *gin.Context) {
+	_, exists := c.Get("user_id")
+	if !exists {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
+		return
+	}
+
+	// All features are currently unlocked — no trial state to report.
+	c.JSON(http.StatusOK, gin.H{
+		"trial_active":  false,
+		"trial_ends_at": nil,
+	})
+}
+
+// GetDailyChallenges handles GET /gamification/challenges/daily
+// Returns the list of daily challenges for the authenticated user.
+// Challenges are not yet persisted — returns an empty list.
+func (h *GamificationHandler) GetDailyChallenges(c *gin.Context) {
+	_, exists := c.Get("user_id")
+	if !exists {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
+		return
+	}
+
+	c.JSON(http.StatusOK, []interface{}{})
+}
+
+// GetWeeklyChallenges handles GET /gamification/challenges/weekly
+// Returns the list of weekly challenges for the authenticated user.
+// Challenges are not yet persisted — returns an empty list.
+func (h *GamificationHandler) GetWeeklyChallenges(c *gin.Context) {
+	_, exists := c.Get("user_id")
+	if !exists {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
+		return
+	}
+
+	c.JSON(http.StatusOK, []interface{}{})
+}
+
+// ProcessChallengeProgress handles POST /gamification/challenges/progress
+// Records progress on a challenge. Not yet fully implemented — returns success.
+func (h *GamificationHandler) ProcessChallengeProgress(c *gin.Context) {
+	_, exists := c.Get("user_id")
+	if !exists {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"success": true})
+}
+
 // RecordAction handles POST /gamification/actions
 // Records a user action and returns XP/level information.
 func (h *GamificationHandler) RecordAction(c *gin.Context) {

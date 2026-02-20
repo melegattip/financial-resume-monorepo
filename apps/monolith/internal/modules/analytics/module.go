@@ -58,5 +58,12 @@ func (m *Module) RegisterRoutes(r *gin.RouterGroup) {
 		insights.GET("/financial-health", m.analyticsHandler.GetFinancialHealth)
 	}
 
+	// Reports route.
+	reports := r.Group("/reports")
+	reports.Use(m.authMW.RequireAuth())
+	{
+		reports.GET("", m.analyticsHandler.GetReport)
+	}
+
 	m.logger.Info().Msg("analytics module routes registered")
 }

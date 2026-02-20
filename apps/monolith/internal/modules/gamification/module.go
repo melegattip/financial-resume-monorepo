@@ -59,6 +59,10 @@ func (m *Module) RegisterRoutes(r *gin.RouterGroup) {
 		gamification.GET("/stats", m.handler.GetStats)
 		gamification.GET("/achievements", m.handler.GetAchievements)
 		gamification.GET("/features", m.handler.GetFeatures)
+		gamification.GET("/features/:featureKey/access", m.handler.CheckFeatureAccess)
+		gamification.GET("/challenges/daily", m.handler.GetDailyChallenges)
+		gamification.GET("/challenges/weekly", m.handler.GetWeeklyChallenges)
+		gamification.POST("/challenges/progress", m.handler.ProcessChallengeProgress)
 		gamification.POST("/actions", m.handler.RecordAction)
 	}
 	m.logger.Info().Msg("gamification module routes registered")

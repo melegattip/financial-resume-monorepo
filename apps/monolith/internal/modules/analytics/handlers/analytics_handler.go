@@ -20,6 +20,7 @@ type AnalyticsRepository interface {
 	GetMonthlyExpenses(ctx context.Context, userID string, months int) ([]domain.MonthlySummary, error)
 	GetMonthlyIncomes(ctx context.Context, userID string, months int) ([]domain.MonthlySummary, error)
 	GetExpensesByCategory(ctx context.Context, userID string, from, to time.Time) ([]domain.CategorySummary, error)
+	GetTransactionsForReport(ctx context.Context, userID string, from, to time.Time) ([]domain.ReportTransaction, error)
 }
 
 // AnalyticsHandler handles all analytics and dashboard HTTP requests.
@@ -271,6 +272,90 @@ func (h *AnalyticsHandler) GetFinancialHealth(c *gin.Context) {
 		"current_month_expenses": summary.CurrentMonthExpenses,
 		"current_month_incomes":  summary.CurrentMonthIncomes,
 		"current_month_balance":  summary.CurrentMonthBalance,
+	})
+}
+
+// GetReport handles GET /reports
+// Query params: start_date, end_date (YYYY-MM-DD).
+// Returns total_income, total_expenses, transactions array, and category_summary.
+func (h *AnalyticsHandler) GetReport(c *gin.Context) {
+	userID, exists := c.Get("user_id")
+	if !exists {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
+		return
+	}
+
+	parseDate := func(s string, fallback time.Time) (time.Time, error) {
+		if s == "" {
+			return fallback, nil
+		}
+		t, err := time.Parse("2006-01-02", s)
+		if err != nil {
+			t, err = time.Parse(time.RFC3339, s)
+		}
+		return t, err
+	}
+
+	now := time.Now().UTC()
+	from, err := parseDate(c.Query("start_date"), time.Date(now.Year(), now.Month(), 1, 0, 0, 0, 0, time.UTC))
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid start_date"})
+		return
+	}
+	toRaw, err := parseDate(c.Query("end_date"), now)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid end_date"})
+		return
+	}
+	// Include the entire end day.
+	to := time.Date(toRaw.Year(), toRaw.Month(), toRaw.Day(), 23, 59, 59, 0, time.UTC)
+
+	ctx := c.Request.Context()
+	uid := userID.(string)
+
+	expenseSummary, err := h.repo.GetExpenseSummary(ctx, uid, from, to, "custom")
+	if err != nil {
+		h.logger.Error().Err(err).Msg("failed to get expense summary for report")
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to generate report"})
+		return
+	}
+
+	incomeSummary, err := h.repo.GetIncomeSummary(ctx, uid, from, to, "custom")
+	if err != nil {
+		h.logger.Error().Err(err).Msg("failed to get income summary for report")
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to generate report"})
+		return
+	}
+
+	transactions, err := h.repo.GetTransactionsForReport(ctx, uid, from, to)
+	if err != nil {
+		h.logger.Error().Err(err).Msg("failed to get transactions for report")
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to generate report"})
+		return
+	}
+
+	// Build category_summary using the field names the frontend expects.
+	type categorySummaryItem struct {
+		CategoryID   string  `json:"category_id"`
+		CategoryName string  `json:"category_name"`
+		TotalAmount  float64 `json:"total_amount"`
+		Percentage   float64 `json:"percentage"`
+	}
+	categorySummary := make([]categorySummaryItem, len(expenseSummary.ByCategory))
+	for i, cat := range expenseSummary.ByCategory {
+		categorySummary[i] = categorySummaryItem{
+			CategoryID:   cat.CategoryID,
+			CategoryName: cat.CategoryName,
+			TotalAmount:  cat.Amount,
+			Percentage:   cat.Percentage,
+		}
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"total_income":     incomeSummary.TotalAmount,
+		"total_expenses":   expenseSummary.TotalAmount,
+		"transactions":     transactions,
+		"category_summary": categorySummary,
 	})
 }
 

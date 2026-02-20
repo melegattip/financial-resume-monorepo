@@ -342,6 +342,48 @@ func (r *AnalyticsRepo) GetMonthlyIncomes(ctx context.Context, userID string, mo
 	return result, nil
 }
 
+// GetTransactionsForReport returns a lightweight list of expenses and incomes for [from, to],
+// containing only the fields needed for report generation (id, category_id, type, amount).
+func (r *AnalyticsRepo) GetTransactionsForReport(ctx context.Context, userID string, from, to time.Time) ([]domain.ReportTransaction, error) {
+	type row struct {
+		ID         string  `gorm:"column:id"`
+		CategoryID string  `gorm:"column:category_id"`
+		TxType     string  `gorm:"column:tx_type"`
+		Amount     float64 `gorm:"column:amount"`
+	}
+
+	var rows []row
+	err := r.db.WithContext(ctx).Raw(`
+		SELECT id, COALESCE(category_id, '') AS category_id, 'expense' AS tx_type, amount
+		FROM expenses
+		WHERE user_id = ?
+		  AND transaction_date >= ?
+		  AND transaction_date <= ?
+		  AND deleted_at IS NULL
+		UNION ALL
+		SELECT id, '' AS category_id, 'income' AS tx_type, amount
+		FROM incomes
+		WHERE user_id = ?
+		  AND received_date >= ?
+		  AND received_date <= ?
+		  AND deleted_at IS NULL
+	`, userID, from, to, userID, from, to).Scan(&rows).Error
+	if err != nil {
+		return nil, err
+	}
+
+	result := make([]domain.ReportTransaction, len(rows))
+	for i, row := range rows {
+		result[i] = domain.ReportTransaction{
+			ID:         row.ID,
+			CategoryID: row.CategoryID,
+			Type:       row.TxType,
+			Amount:     row.Amount,
+		}
+	}
+	return result, nil
+}
+
 // GetExpensesByCategory returns expense totals grouped by category for [from, to].
 // The results are sorted by amount descending and include percentage of total.
 func (r *AnalyticsRepo) GetExpensesByCategory(ctx context.Context, userID string, from, to time.Time) ([]domain.CategorySummary, error) {
