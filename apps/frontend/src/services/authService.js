@@ -246,13 +246,14 @@ class AuthService {
       const authData = response.data;
       
       // Verificar que la respuesta tenga la estructura esperada
-      if (!authData.access_token || !authData.user) {
+      // El backend devuelve { user, tokens: { access_token, refresh_token, expires_at } }
+      if ((!authData.access_token && !authData.tokens?.access_token) || !authData.user) {
         console.error('❌ [authService] Respuesta inválida del servidor:', authData);
         throw new Error('Respuesta inválida del servidor');
       }
-      
+
       this.saveAuthData(authData);
-      
+
       console.log('✅ [authService] Registro exitoso para usuario:', authData.user.first_name);
       toast.success('¡Registro exitoso! Bienvenido');
       return { success: true, data: authData };
@@ -283,13 +284,14 @@ class AuthService {
       }
       
       // Verificar que la respuesta tenga la estructura esperada
-      if (!authData.access_token || !authData.user) {
+      // El backend devuelve { user, tokens: { access_token, refresh_token, expires_at } }
+      if ((!authData.access_token && !authData.tokens?.access_token) || !authData.user) {
         console.error('❌ [authService] Respuesta inválida del servidor:', authData);
         throw new Error('Respuesta inválida del servidor');
       }
-      
+
       this.saveAuthData(authData);
-      
+
       console.log('✅ [authService] Login exitoso para usuario:', authData.user.first_name);
       toast.success(`¡Bienvenido de vuelta, ${authData.user.first_name}!`);
       return { success: true, data: authData };
@@ -466,29 +468,40 @@ class AuthService {
   saveAuthData(authData) {
     console.log('🔧 [authService] Guardando datos de autenticación:', authData);
     
-    const { access_token, refresh_token, expires_at, user } = authData;
-    
+    // Support both flat { access_token, user } and nested { tokens: { access_token }, user }
+    const tokens = authData.tokens || authData;
+    const access_token = tokens.access_token;
+    const refresh_token = tokens.refresh_token;
+    const expires_at = tokens.expires_at;
+    const user = authData.user;
+
     if (!access_token) {
       console.error('❌ [authService] No se encontró access_token en la respuesta');
       throw new Error('Token de acceso no encontrado en la respuesta');
     }
-    
+
     if (!user) {
       console.error('❌ [authService] No se encontró user en la respuesta');
       throw new Error('Datos de usuario no encontrados en la respuesta');
     }
-    
+
+    // Normalize expires_at to Unix timestamp (backend returns ISO8601 string from time.Time)
+    let expiresTimestamp = expires_at;
+    if (typeof expires_at === 'string' && isNaN(Number(expires_at))) {
+      expiresTimestamp = Math.floor(new Date(expires_at).getTime() / 1000);
+    }
+
     this.token = access_token;
     this.refreshToken_value = refresh_token;
     this.user = user;
-    this.expiresAt = expires_at;
-    
+    this.expiresAt = expiresTimestamp;
+
     localStorage.setItem(TOKEN_KEY, access_token);
     if (refresh_token) {
       localStorage.setItem(REFRESH_TOKEN_KEY, refresh_token);
     }
     localStorage.setItem(USER_KEY, JSON.stringify(user));
-    localStorage.setItem(EXPIRES_AT_KEY, expires_at.toString());
+    localStorage.setItem(EXPIRES_AT_KEY, expiresTimestamp?.toString() ?? '');
     
     console.log('✅ [authService] Datos de autenticación guardados correctamente');
   }
