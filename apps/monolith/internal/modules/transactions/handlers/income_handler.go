@@ -26,20 +26,23 @@ func NewIncomeHandler(repo ports.IncomeRepository, eventBus ports.EventBus, logg
 	}
 }
 
-// CreateIncomeRequest is the request body for creating an income
+// CreateIncomeRequest is the request body for creating an income.
+// source and received_date are optional; sensible defaults are applied when absent.
 type CreateIncomeRequest struct {
 	Amount       float64 `json:"amount" binding:"required,gt=0"`
-	Source       string  `json:"source" binding:"required"`
+	Source       string  `json:"source"`
 	Description  string  `json:"description" binding:"required"`
-	ReceivedDate string  `json:"received_date" binding:"required"`
+	ReceivedDate string  `json:"received_date"`
+	CategoryID   string  `json:"category_id"` // accepted but ignored (incomes have no category)
 }
 
-// UpdateIncomeRequest is the request body for updating an income
+// UpdateIncomeRequest is the request body for updating an income.
 type UpdateIncomeRequest struct {
 	Amount       float64 `json:"amount" binding:"required,gt=0"`
-	Source       string  `json:"source" binding:"required"`
+	Source       string  `json:"source"`
 	Description  string  `json:"description" binding:"required"`
-	ReceivedDate string  `json:"received_date" binding:"required"`
+	ReceivedDate string  `json:"received_date"`
+	CategoryID   string  `json:"category_id"` // accepted but ignored
 }
 
 // IncomeResponse is the response format for an income
@@ -81,13 +84,26 @@ func (h *IncomeHandler) Create(c *gin.Context) {
 		return
 	}
 
-	receivedDate, err := time.Parse(time.RFC3339, req.ReceivedDate)
-	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid received_date format, expected RFC3339"})
-		return
+	// Default source to description when not provided.
+	source := req.Source
+	if source == "" {
+		source = req.Description
 	}
 
-	income, err := domain.NewIncome(userID.(string), req.Amount, req.Source, req.Description, receivedDate)
+	// Default received_date to now when not provided.
+	var receivedDate time.Time
+	if req.ReceivedDate == "" {
+		receivedDate = time.Now().UTC()
+	} else {
+		var err error
+		receivedDate, err = time.Parse(time.RFC3339, req.ReceivedDate)
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid received_date format, expected RFC3339"})
+			return
+		}
+	}
+
+	income, err := domain.NewIncome(userID.(string), req.Amount, source, req.Description, receivedDate)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
@@ -139,10 +155,10 @@ func (h *IncomeHandler) List(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, gin.H{
-		"data":   response,
-		"total":  len(response),
-		"limit":  limit,
-		"offset": offset,
+		"incomes": response,
+		"total":   len(response),
+		"limit":   limit,
+		"offset":  offset,
 	})
 }
 
@@ -207,13 +223,24 @@ func (h *IncomeHandler) Update(c *gin.Context) {
 		return
 	}
 
-	receivedDate, err := time.Parse(time.RFC3339, req.ReceivedDate)
-	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid received_date format, expected RFC3339"})
-		return
+	source := req.Source
+	if source == "" {
+		source = req.Description
 	}
 
-	if err := income.Update(req.Amount, req.Source, req.Description, receivedDate); err != nil {
+	var receivedDate time.Time
+	if req.ReceivedDate == "" {
+		receivedDate = income.ReceivedDate // keep existing date
+	} else {
+		var parseErr error
+		receivedDate, parseErr = time.Parse(time.RFC3339, req.ReceivedDate)
+		if parseErr != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid received_date format, expected RFC3339"})
+			return
+		}
+	}
+
+	if err := income.Update(req.Amount, source, req.Description, receivedDate); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}

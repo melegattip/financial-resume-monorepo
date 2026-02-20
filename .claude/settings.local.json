@@ -34,7 +34,8 @@
       "Bash(where:*)",
       "Bash(cmd /c \"where npm 2>&1 && where node 2>&1\")",
       "Bash(cmd /c \"where npm\")",
-      "Bash(cmd /c \"where npm 2>&1\")"
+      "Bash(cmd /c \"where npm 2>&1\")",
+      "Bash(cd:*)"
     ]
   }
 }

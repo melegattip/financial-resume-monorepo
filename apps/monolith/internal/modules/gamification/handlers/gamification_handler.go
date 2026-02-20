@@ -98,10 +98,7 @@ func (h *GamificationHandler) GetAchievements(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{
-		"data":  achievements,
-		"total": len(achievements),
-	})
+	c.JSON(http.StatusOK, achievements)
 }
 
 // GetFeatures handles GET /gamification/features
@@ -114,7 +111,10 @@ func (h *GamificationHandler) GetFeatures(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, gin.H{
-		"features": []string{
+		"unlocked_features": []string{
+			"SAVINGS_GOALS",
+			"BUDGETS",
+			"AI_INSIGHTS",
 			"dashboard",
 			"expenses",
 			"incomes",
@@ -125,6 +125,7 @@ func (h *GamificationHandler) GetFeatures(c *gin.Context) {
 			"recurring",
 			"ai_insights",
 		},
+		"locked_features": []interface{}{},
 	})
 }
 

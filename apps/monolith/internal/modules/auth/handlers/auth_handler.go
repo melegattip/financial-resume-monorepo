@@ -90,10 +90,19 @@ func (h *AuthHandler) Login(c *gin.Context) {
 }
 
 // Check2FA checks whether a user has 2FA enabled.
+// Accepts the email either as a JSON body field or as a ?email= query parameter.
 func (h *AuthHandler) Check2FA(c *gin.Context) {
 	email := c.Query("email")
 	if email == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "email query parameter is required"})
+		var body struct {
+			Email string `json:"email"`
+		}
+		if err := c.ShouldBindJSON(&body); err == nil {
+			email = body.Email
+		}
+	}
+	if email == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "email is required"})
 		return
 	}
 

@@ -26,24 +26,30 @@ func NewExpenseHandler(repo ports.ExpenseRepository, eventBus ports.EventBus, lo
 	}
 }
 
-// CreateExpenseRequest is the request body for creating an expense
+// CreateExpenseRequest is the request body for creating an expense.
+// transaction_date is optional (defaults to now); due_date is accepted as an alias.
+// category_id is optional (defaults to empty string when not provided).
 type CreateExpenseRequest struct {
-	CategoryID      string  `json:"category_id" binding:"required"`
+	CategoryID      string  `json:"category_id"`
 	Amount          float64 `json:"amount" binding:"required,gt=0"`
 	Description     string  `json:"description" binding:"required"`
-	TransactionDate string  `json:"transaction_date" binding:"required"`
+	TransactionDate string  `json:"transaction_date"`
+	DueDate         string  `json:"due_date"`         // alias for transaction_date
 	PaymentMethod   string  `json:"payment_method"`
 	Notes           string  `json:"notes"`
+	Paid            bool    `json:"paid"` // accepted but ignored
 }
 
-// UpdateExpenseRequest is the request body for updating an expense
+// UpdateExpenseRequest is the request body for updating an expense.
 type UpdateExpenseRequest struct {
-	CategoryID      string  `json:"category_id" binding:"required"`
+	CategoryID      string  `json:"category_id"`
 	Amount          float64 `json:"amount" binding:"required,gt=0"`
 	Description     string  `json:"description" binding:"required"`
-	TransactionDate string  `json:"transaction_date" binding:"required"`
+	TransactionDate string  `json:"transaction_date"`
+	DueDate         string  `json:"due_date"` // alias for transaction_date
 	PaymentMethod   string  `json:"payment_method"`
 	Notes           string  `json:"notes"`
+	Paid            bool    `json:"paid"` // accepted but ignored
 }
 
 // ExpenseResponse is the response format for an expense
@@ -90,11 +96,21 @@ func (h *ExpenseHandler) Create(c *gin.Context) {
 		return
 	}
 
-	// Parse transaction date
-	transactionDate, err := time.Parse(time.RFC3339, req.TransactionDate)
-	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid transaction_date format, expected RFC3339"})
-		return
+	// Resolve transaction date: prefer transaction_date, fall back to due_date, then now.
+	rawDate := req.TransactionDate
+	if rawDate == "" {
+		rawDate = req.DueDate
+	}
+	var transactionDate time.Time
+	if rawDate == "" {
+		transactionDate = time.Now().UTC()
+	} else {
+		var parseErr error
+		transactionDate, parseErr = time.Parse(time.RFC3339, rawDate)
+		if parseErr != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid date format, expected RFC3339"})
+			return
+		}
 	}
 
 	// Create expense domain entity
@@ -162,10 +178,10 @@ func (h *ExpenseHandler) List(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, gin.H{
-		"data":   response,
-		"total":  len(response),
-		"limit":  limit,
-		"offset": offset,
+		"expenses": response,
+		"total":    len(response),
+		"limit":    limit,
+		"offset":   offset,
 	})
 }
 
@@ -232,15 +248,29 @@ func (h *ExpenseHandler) Update(c *gin.Context) {
 		return
 	}
 
-	// Parse transaction date
-	transactionDate, err := time.Parse(time.RFC3339, req.TransactionDate)
-	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid transaction_date format"})
-		return
+	rawDate := req.TransactionDate
+	if rawDate == "" {
+		rawDate = req.DueDate
+	}
+	var transactionDate time.Time
+	if rawDate == "" {
+		transactionDate = expense.TransactionDate // keep existing date
+	} else {
+		var parseErr error
+		transactionDate, parseErr = time.Parse(time.RFC3339, rawDate)
+		if parseErr != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid date format, expected RFC3339"})
+			return
+		}
+	}
+
+	categoryID := req.CategoryID
+	if categoryID == "" {
+		categoryID = expense.CategoryID // keep existing category
 	}
 
 	// Update expense
-	if err := expense.Update(req.CategoryID, req.Amount, req.Description, transactionDate, req.PaymentMethod, req.Notes); err != nil {
+	if err := expense.Update(categoryID, req.Amount, req.Description, transactionDate, req.PaymentMethod, req.Notes); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
