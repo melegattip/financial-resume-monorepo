@@ -4,14 +4,27 @@ import "time"
 
 // FinancialAnalysisData represents the data used for financial analysis.
 type FinancialAnalysisData struct {
-	UserID             string             `json:"user_id"`
-	TotalIncome        float64            `json:"total_income"`
-	TotalExpenses      float64            `json:"total_expenses"`
-	SavingsRate        float64            `json:"savings_rate"`
-	ExpensesByCategory map[string]float64 `json:"expenses_by_category"`
-	IncomeStability    float64            `json:"income_stability"`
-	FinancialScore     int                `json:"financial_score"`
-	Period             string             `json:"period"`
+	UserID             string              `json:"user_id"`
+	TotalIncome        float64             `json:"total_income"`
+	TotalExpenses      float64             `json:"total_expenses"`
+	SavingsRate        float64             `json:"savings_rate"`
+	ExpensesByCategory map[string]float64  `json:"expenses_by_category"`
+	IncomeStability    float64             `json:"income_stability"`
+	FinancialScore     int                 `json:"financial_score"`
+	Period             string              `json:"period"`
+	SavingsGoals       []SavingsGoalInfo   `json:"savings_goals,omitempty"`
+	BudgetsSummary     *BudgetsSummaryInfo `json:"budgets_summary,omitempty"`
+}
+
+// BudgetsSummaryInfo represents the budget compliance summary for AI analysis.
+type BudgetsSummaryInfo struct {
+	TotalBudgets   int     `json:"total_budgets"`
+	TotalAllocated float64 `json:"total_allocated"`
+	TotalSpent     float64 `json:"total_spent"`
+	OnTrackCount   int     `json:"on_track_count"`
+	WarningCount   int     `json:"warning_count"`
+	ExceededCount  int     `json:"exceeded_count"`
+	AverageUsage   float64 `json:"average_usage"`
 }
 
 // AIInsight represents a single AI-generated financial insight.

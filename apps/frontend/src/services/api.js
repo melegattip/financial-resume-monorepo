@@ -239,12 +239,10 @@ export const formatPercentage = (percentage) => {
 // Servicios de IA
 export const aiAPI = {
   // Obtener insights generados por IA (backend: POST /ai/insights)
-  getInsights: async (year = null, month = null) => {
-    const body = {};
-    if (year) body.year = year;
-    if (month) body.month = month;
-
-    const response = await api.post('/ai/insights', body);
+  // financialData: objeto con total_income, total_expenses, expenses_by_category, savings_goals, budgets_summary, etc.
+  getInsights: async (financialData = {}) => {
+    // AI requests can take up to 60 seconds — override the global 10s timeout
+    const response = await api.post('/ai/insights', financialData, { timeout: 60000 });
     // Backend returns { success: true, data: [...insights] }
     // Normalize to { insights: [...], generated_at: <now> }
     const data = response.data?.data || response.data || {};

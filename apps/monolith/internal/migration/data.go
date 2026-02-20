@@ -223,19 +223,8 @@ func CopyGamificationCore(gamDB, targetDB *gorm.DB, log zerolog.Logger, dryRun b
 	copied["achievements"] = c
 	skipped["achievements"] = s
 
-	// user_actions
-	c, s, err = copyTableGeneric[SrcUserAction](gamDB, targetDB, log, dryRun, "user_actions",
-		`INSERT INTO user_actions (id, user_id, action_type, entity_type, entity_id, score_contribution, component_affected, description, created_at)
-		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-		 ON CONFLICT (id) DO NOTHING`,
-		func(r SrcUserAction) []interface{} {
-			return []interface{}{r.ID, r.UserID, r.ActionType, r.EntityType, r.EntityID, r.ScoreContribution, r.ComponentAffected, r.Description, r.CreatedAt}
-		})
-	if err != nil {
-		return copied, skipped, fmt.Errorf("copy user_actions: %w", err)
-	}
-	copied["user_actions"] = c
-	skipped["user_actions"] = s
+	// user_actions: skipped — records already exist in target DB
+	log.Info().Msg("skipping user_actions (already migrated)")
 
 	return copied, skipped, nil
 }

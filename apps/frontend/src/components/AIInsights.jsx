@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { FaBrain, FaSpinner, FaRedo, FaLightbulb, FaShoppingCart, FaCheck, FaChevronRight, FaCalculator, FaExclamationTriangle, FaCheckCircle, FaChevronDown, FaChevronUp, FaBullseye } from 'react-icons/fa';
-import { aiAPI, savingsGoalsAPI } from '../services/api';
+import { aiAPI, savingsGoalsAPI, budgetsAPI, analyticsAPI } from '../services/api';
 import { useAuth } from '../contexts/AuthContext';
 import { usePeriod } from '../contexts/PeriodContext';
 import { useGamification } from '../contexts/GamificationContext';
@@ -154,17 +154,83 @@ const AIInsights = () => {
     setError(null);
     try {
       console.log('🔍 Cargando análisis inteligente para usuario:', user?.email);
-      const response = await aiAPI.getInsights();
+
+      // Fetch all financial context data in parallel for a richer AI analysis
+      const [categoriesResult, incomesResult, budgetResult, goalsResult] = await Promise.allSettled([
+        analyticsAPI.categories(),
+        analyticsAPI.incomes(),
+        budgetsAPI.getDashboard(),
+        savingsGoalsAPI.list({ status: 'active' }),
+      ]);
+
+      const financialData = {};
+
+      // Expense categories breakdown (aggregated by category name)
+      if (categoriesResult.status === 'fulfilled') {
+        const cats = categoriesResult.value.data?.data || [];
+        financialData.expenses_by_category = Object.fromEntries(
+          cats.map(c => [c.category_name || 'Sin categoría', c.amount || 0])
+        );
+        financialData.total_expenses = cats.reduce((s, c) => s + (c.amount || 0), 0);
+      }
+
+      // Total income from analytics summary
+      if (incomesResult.status === 'fulfilled') {
+        financialData.total_income = incomesResult.value.data?.total_amount
+          || incomesResult.value.total_amount
+          || 0;
+      }
+
+      // Savings rate
+      const ti = financialData.total_income || 0;
+      const te = financialData.total_expenses || 0;
+      financialData.savings_rate = ti > 0 ? (ti - te) / ti : 0;
+
+      // Budget compliance summary
+      if (budgetResult.status === 'fulfilled') {
+        const summary = budgetResult.value.data?.summary || {};
+        if (summary.total_budgets > 0) {
+          financialData.budgets_summary = {
+            total_budgets: summary.total_budgets || 0,
+            total_allocated: summary.total_allocated || 0,
+            total_spent: summary.total_spent || 0,
+            on_track_count: summary.on_track_count || 0,
+            warning_count: summary.warning_count || 0,
+            exceeded_count: summary.exceeded_count || 0,
+            average_usage: summary.average_usage || 0,
+          };
+        }
+      }
+
+      // Active savings goals
+      if (goalsResult.status === 'fulfilled') {
+        const goals = goalsResult.value.data?.data?.goals || [];
+        if (goals.length > 0) {
+          financialData.savings_goals = goals.map(g => ({
+            name: g.name,
+            target_amount: g.target_amount,
+            current_amount: g.current_amount,
+            progress: g.progress || 0,
+            target_date: g.target_date,
+          }));
+        }
+      }
+
+      financialData.income_stability = 0.8;
+      financialData.financial_score = 0;
+      financialData.period = 'Mes actual';
+
+      const response = await aiAPI.getInsights(financialData);
       const newInsights = response.insights || [];
       setInsights(newInsights);
-      
+
       // Usar el timestamp del backend (generated_at)
       const backendTimestamp = response.generated_at ? new Date(response.generated_at) : new Date();
       setLastEvaluationDate(backendTimestamp);
       console.log('💾 Análisis cargado desde backend - Timestamp:', backendTimestamp.toISOString());
     } catch (err) {
       console.error('Error loading AI insights:', err.message);
-      setError('Error conectando con GPT-4. Usando datos de ejemplo.');
+      setError('Error conectando con el análisis de IA. Usando datos de ejemplo.');
       // Usar datos de ejemplo
       const fallbackInsights = [
         {
@@ -209,7 +275,7 @@ const AIInsights = () => {
         }
       ];
       setInsights(fallbackInsights);
-      
+
       // Usar timestamp actual para datos de fallback
       const fallbackTimestamp = new Date();
       setLastEvaluationDate(fallbackTimestamp);

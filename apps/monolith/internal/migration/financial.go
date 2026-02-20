@@ -57,10 +57,10 @@ func CopyFinancialData(gamDB, targetDB *gorm.DB, log zerolog.Logger, dryRun bool
 	copied["incomes"] = c
 	skipped["incomes"] = s
 
-	// budgets
+	// budgets — monolith uses period_start/period_end (not start_date/end_date)
 	c, s, err = copyTableGeneric[SrcBudget](gamDB, targetDB, log, dryRun, "budgets",
-		`INSERT INTO budgets (id, user_id, category_id, amount, period, start_date, end_date, is_active, created_at, updated_at)
-		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+		`INSERT INTO budgets (id, user_id, category_id, amount, spent_amount, period, period_start, period_end, alert_at, status, is_active, created_at, updated_at)
+		 VALUES (?, ?, ?, ?, 0, ?, ?, ?, 0.8, 'on_track', ?, ?, ?)
 		 ON CONFLICT (id) DO NOTHING`,
 		func(r SrcBudget) []interface{} {
 			return []interface{}{r.ID, r.UserID, r.CategoryID, r.Amount, r.Period, r.StartDate, r.EndDate, r.IsActive, r.CreatedAt, r.UpdatedAt}
@@ -71,15 +71,15 @@ func CopyFinancialData(gamDB, targetDB *gorm.DB, log zerolog.Logger, dryRun bool
 	copied["budgets"] = c
 	skipped["budgets"] = s
 
-	// recurring_transactions
+	// recurring_transactions — monolith uses type/next_date (not transaction_type/next_execution)
 	c, s, err = copyTableGeneric[SrcRecurringTransaction](gamDB, targetDB, log, dryRun, "recurring_transactions",
-		`INSERT INTO recurring_transactions (id, user_id, category_id, amount, description, transaction_type, frequency, 
-		 day_of_month, day_of_week, start_date, end_date, next_execution, is_active, payment_method, created_at, updated_at)
-		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+		`INSERT INTO recurring_transactions (id, user_id, category_id, amount, description, type, frequency,
+		 end_date, next_date, is_active, auto_create, notify_before, execution_count, created_at, updated_at)
+		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, false, 0, 0, ?, ?)
 		 ON CONFLICT (id) DO NOTHING`,
 		func(r SrcRecurringTransaction) []interface{} {
 			return []interface{}{r.ID, r.UserID, r.CategoryID, r.Amount, r.Description, r.TransactionType, r.Frequency,
-				r.DayOfMonth, r.DayOfWeek, r.StartDate, r.EndDate, r.NextExecution, r.IsActive, r.PaymentMethod, r.CreatedAt, r.UpdatedAt}
+				r.EndDate, r.NextExecution, r.IsActive, r.CreatedAt, r.UpdatedAt}
 		})
 	if err != nil {
 		return copied, skipped, fmt.Errorf("copy recurring_transactions: %w", err)
@@ -87,15 +87,31 @@ func CopyFinancialData(gamDB, targetDB *gorm.DB, log zerolog.Logger, dryRun bool
 	copied["recurring_transactions"] = c
 	skipped["recurring_transactions"] = s
 
-	// savings_goals
+	// savings_goals — monolith uses target_date (not deadline); status derived from achieved/is_active
 	c, s, err = copyTableGeneric[SrcSavingsGoal](gamDB, targetDB, log, dryRun, "savings_goals",
-		`INSERT INTO savings_goals (id, user_id, name, description, target_amount, current_amount, deadline, 
-		 priority, category, icon, color, is_active, achieved, achieved_at, created_at, updated_at, created_by, updated_by)
-		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+		`INSERT INTO savings_goals (id, user_id, name, description, target_amount, current_amount,
+		 category, priority, target_date, status, monthly_target, weekly_target, daily_target,
+		 progress, remaining_amount, days_remaining, is_auto_save, auto_save_amount, auto_save_frequency,
+		 image_url, achieved_at, created_at, updated_at)
+		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, 0, 0, ?, ?, 0, false, 0, '', '', ?, ?, ?)
 		 ON CONFLICT (id) DO NOTHING`,
 		func(r SrcSavingsGoal) []interface{} {
-			return []interface{}{r.ID, r.UserID, r.Name, r.Description, r.TargetAmount, r.CurrentAmount, r.Deadline,
-				r.Priority, r.Category, r.Icon, r.Color, r.IsActive, r.Achieved, r.AchievedAt, r.CreatedAt, r.UpdatedAt, r.CreatedBy, r.UpdatedBy}
+			status := "active"
+			if r.Achieved {
+				status = "completed"
+			} else if !r.IsActive {
+				status = "paused"
+			}
+			progress := 0.0
+			if r.TargetAmount > 0 {
+				progress = (r.CurrentAmount / r.TargetAmount) * 100
+			}
+			remaining := r.TargetAmount - r.CurrentAmount
+			if remaining < 0 {
+				remaining = 0
+			}
+			return []interface{}{r.ID, r.UserID, r.Name, r.Description, r.TargetAmount, r.CurrentAmount,
+				r.Category, r.Priority, r.Deadline, status, progress, remaining, r.AchievedAt, r.CreatedAt, r.UpdatedAt}
 		})
 	if err != nil {
 		return copied, skipped, fmt.Errorf("copy savings_goals: %w", err)
@@ -103,21 +119,68 @@ func CopyFinancialData(gamDB, targetDB *gorm.DB, log zerolog.Logger, dryRun bool
 	copied["savings_goals"] = c
 	skipped["savings_goals"] = s
 
-	// savings_transactions
-	c, s, err = copyTableGeneric[SrcSavingsTransaction](gamDB, targetDB, log, dryRun, "savings_transactions",
-		`INSERT INTO savings_transactions (id, goal_id, amount, transaction_type, description, created_at)
-		 VALUES (?, ?, ?, ?, ?, ?)
-		 ON CONFLICT (id) DO NOTHING`,
-		func(r SrcSavingsTransaction) []interface{} {
-			return []interface{}{r.ID, r.GoalID, r.Amount, r.TransactionType, r.Description, r.CreatedAt}
-		})
+	// savings_transactions — monolith uses type (not transaction_type) and requires user_id (via JOIN)
+	stCopied, stSkipped, err := copySavingsTransactions(gamDB, targetDB, log, dryRun)
 	if err != nil {
 		return copied, skipped, fmt.Errorf("copy savings_transactions: %w", err)
 	}
-	copied["savings_transactions"] = c
-	skipped["savings_transactions"] = s
+	copied["savings_transactions"] = stCopied
+	skipped["savings_transactions"] = stSkipped
 
 	log.Info().Msg("financial data migration complete")
+	return copied, skipped, nil
+}
+
+// copySavingsTransactions copies savings_transactions joining with savings_goals
+// to obtain the user_id, which the monolith schema requires.
+func copySavingsTransactions(sourceDB, targetDB *gorm.DB, log zerolog.Logger, dryRun bool) (int64, int64, error) {
+	type srcRow struct {
+		ID              string    `gorm:"column:id"`
+		GoalID          string    `gorm:"column:goal_id"`
+		UserID          string    `gorm:"column:user_id"`
+		Amount          float64   `gorm:"column:amount"`
+		TransactionType string    `gorm:"column:transaction_type"`
+		Description     string    `gorm:"column:description"`
+		CreatedAt       time.Time `gorm:"column:created_at"`
+	}
+
+	var rows []srcRow
+	err := sourceDB.Raw(`
+		SELECT st.id, st.goal_id, sg.user_id, st.amount,
+		       COALESCE(st.type, 'deposit') AS transaction_type,
+		       st.description, st.created_at
+		FROM savings_transactions st
+		JOIN savings_goals sg ON sg.id = st.goal_id
+	`).Scan(&rows).Error
+	if err != nil {
+		return 0, 0, fmt.Errorf("read savings_transactions with user_id: %w", err)
+	}
+
+	log.Info().Str("table", "savings_transactions").Int("source_count", len(rows)).Msg("read from gamification-db")
+
+	if dryRun {
+		log.Info().Str("table", "savings_transactions").Int("count", len(rows)).Msg("[DRY RUN] would copy")
+		return int64(len(rows)), 0, nil
+	}
+
+	var copied, skipped int64
+	for _, r := range rows {
+		result := targetDB.Exec(`
+			INSERT INTO savings_transactions (id, goal_id, user_id, amount, type, description, created_at)
+			VALUES (?, ?, ?, ?, ?, ?, ?)
+			ON CONFLICT (id) DO NOTHING`,
+			r.ID, r.GoalID, r.UserID, r.Amount, r.TransactionType, r.Description, r.CreatedAt)
+		if result.Error != nil {
+			return copied, skipped, fmt.Errorf("insert savings_transaction %s: %w", r.ID, result.Error)
+		}
+		if result.RowsAffected == 0 {
+			skipped++
+		} else {
+			copied++
+		}
+	}
+
+	log.Info().Str("table", "savings_transactions").Int64("copied", copied).Int64("skipped", skipped).Msg("copy complete")
 	return copied, skipped, nil
 }
 

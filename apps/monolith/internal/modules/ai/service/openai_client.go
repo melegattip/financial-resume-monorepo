@@ -58,13 +58,13 @@ func (c *OpenAIClient) GenerateAnalysis(ctx context.Context, systemPrompt, userP
 	}
 
 	payload := chatRequest{
-		Model: "gpt-4o-mini",
+		Model: "gpt-4o",
 		Messages: []chatMessage{
 			{Role: "system", Content: systemPrompt},
 			{Role: "user", Content: userPrompt},
 		},
 		Temperature: 0.3,
-		MaxTokens:   800,
+		MaxTokens:   2000,
 	}
 
 	body, err := json.Marshal(payload)

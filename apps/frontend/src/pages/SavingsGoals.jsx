@@ -89,7 +89,7 @@ const SavingsGoals = () => {
         savingsGoalsAPI.getDashboard()
       ]);
       
-      setGoals(goalsRes.data.data?.goals || []);
+      setGoals(Array.isArray(goalsRes.data.data) ? goalsRes.data.data : goalsRes.data.data?.goals || []);
       setDashboard(dashboardRes.data.data);
     } catch (error) {
       console.error('Error loading savings goals:', error);
