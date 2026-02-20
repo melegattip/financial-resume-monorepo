@@ -63,8 +63,10 @@ const RecurringTransactions = () => {
       console.log('📊 Dashboard response:', dashboardRes.data);
       console.log('📊 Dashboard summary:', dashboardRes.data.data?.summary);
       
+      // List returns { data: { transactions: [...] }, total: N }
       setTransactions(transactionsRes.data.data?.transactions || []);
       setCategories(categoriesRes.data.data || []);
+      // Dashboard returns { data: { summary: {...}, upcoming: [...] } }
       setDashboard(dashboardRes.data.data);
     } catch (error) {
       console.error('Error loading recurring transactions:', error);
@@ -122,16 +124,19 @@ const RecurringTransactions = () => {
     }
     
     try {
+      // Convert YYYY-MM-DD date inputs to RFC3339 (required by backend)
+      const toISO = (dateStr) => dateStr ? new Date(dateStr + 'T00:00:00').toISOString() : undefined;
+
       const data = {
         description: formData.description.trim(),
         amount: parseFloat(formData.amount),
         type: formData.type,
         frequency: formData.frequency,
         category_id: formData.category_id || undefined,
-        next_date: formData.next_date,
+        next_date: toISO(formData.next_date),
         auto_create: true, // Por defecto habilitado
         notify_before: 1, // Notificar 1 día antes por defecto
-        end_date: formData.end_date || undefined,
+        end_date: formData.end_date ? toISO(formData.end_date) : undefined,
         max_executions: undefined // No implementado en el frontend aún
       };
 
@@ -156,14 +161,16 @@ const RecurringTransactions = () => {
 
   const handleEdit = (transaction) => {
     setEditingTransaction(transaction);
+    // Backend returns dates in RFC3339; date inputs need YYYY-MM-DD
+    const toDateInput = (dateStr) => dateStr ? String(dateStr).substring(0, 10) : '';
     setFormData({
       description: transaction.description || '',
       amount: transaction.amount.toString(),
       type: transaction.type,
       frequency: transaction.frequency,
       category_id: transaction.category_id || '',
-      next_date: transaction.next_date,
-      end_date: transaction.end_date || '',
+      next_date: toDateInput(transaction.next_date),
+      end_date: toDateInput(transaction.end_date),
       is_active: transaction.is_active
     });
     setShowModal(true);

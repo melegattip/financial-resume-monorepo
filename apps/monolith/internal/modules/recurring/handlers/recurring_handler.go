@@ -1,8 +1,10 @@
 package handlers
 
 import (
+	"context"
 	"fmt"
 	"net/http"
+	"strconv"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -99,6 +101,22 @@ type ExecuteResponse struct {
 	IsActive      bool   `json:"is_active"`
 }
 
+// monthlyEquivalent converts a recurring transaction amount to its monthly equivalent.
+func monthlyEquivalent(rt *domain.RecurringTransaction) float64 {
+	switch rt.Frequency {
+	case "daily":
+		return rt.Amount * 30
+	case "weekly":
+		return rt.Amount * 4.33
+	case "monthly":
+		return rt.Amount
+	case "yearly":
+		return rt.Amount / 12
+	default:
+		return rt.Amount
+	}
+}
+
 func toRecurringResponse(rt *domain.RecurringTransaction) RecurringResponse {
 	resp := RecurringResponse{
 		ID:             rt.ID,
@@ -185,19 +203,23 @@ func (h *RecurringHandler) GetDashboard(c *gin.Context) {
 	}
 
 	now := time.Now().UTC()
-	var totalMonthlyAmount float64
+	var monthlyIncomeTotal, monthlyExpenseTotal float64
+	var totalInactive int
 	upcoming := make([]RecurringResponse, 0)
 
+	// Count inactive recurring transactions too
+	allItems, err := h.repo.List(c.Request.Context(), userID.(string))
+	if err != nil {
+		allItems = items
+	}
+	totalInactive = len(allItems) - len(items)
+
 	for _, rt := range items {
-		switch rt.Frequency {
-		case "daily":
-			totalMonthlyAmount += rt.Amount * 30
-		case "weekly":
-			totalMonthlyAmount += rt.Amount * 4
-		case "monthly":
-			totalMonthlyAmount += rt.Amount
-		case "yearly":
-			totalMonthlyAmount += rt.Amount / 12
+		monthly := monthlyEquivalent(rt)
+		if rt.Type == "income" {
+			monthlyIncomeTotal += monthly
+		} else {
+			monthlyExpenseTotal += monthly
 		}
 		if !rt.NextDate.After(now.AddDate(0, 0, 30)) {
 			upcoming = append(upcoming, toRecurringResponse(rt))
@@ -205,10 +227,15 @@ func (h *RecurringHandler) GetDashboard(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, gin.H{
-		"active_count":         len(items),
-		"upcoming_count":       len(upcoming),
-		"total_monthly_amount": totalMonthlyAmount,
-		"upcoming":             upcoming,
+		"data": gin.H{
+			"summary": gin.H{
+				"total_active":          len(items),
+				"total_inactive":        totalInactive,
+				"monthly_income_total":  monthlyIncomeTotal,
+				"monthly_expense_total": monthlyExpenseTotal,
+			},
+			"upcoming": upcoming,
+		},
 	})
 }
 
@@ -334,7 +361,9 @@ func (h *RecurringHandler) List(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, gin.H{
-		"data":  response,
+		"data": gin.H{
+			"transactions": response,
+		},
 		"total": len(response),
 	})
 }
@@ -731,5 +760,199 @@ func (h *RecurringHandler) ManualExecute(c *gin.Context) {
 		NextDate:       rt.NextDate.Format(time.RFC3339),
 		ExecutionCount: rt.ExecutionCount,
 		IsActive:       rt.IsActive,
+	})
+}
+
+// GetProjection handles GET /recurring-transactions/projection?months=N
+// Returns a cash flow projection for the next N months based on active recurring transactions.
+func (h *RecurringHandler) GetProjection(c *gin.Context) {
+	userID, exists := c.Get("user_id")
+	if !exists {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
+		return
+	}
+
+	months := 6
+	if m := c.Query("months"); m != "" {
+		if parsed, err := strconv.Atoi(m); err == nil && parsed > 0 && parsed <= 24 {
+			months = parsed
+		}
+	}
+
+	items, err := h.repo.ListActive(c.Request.Context(), userID.(string))
+	if err != nil {
+		h.logger.Error().Err(err).Msg("failed to list active recurring transactions for projection")
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to compute projection"})
+		return
+	}
+
+	var totalMonthlyIncome, totalMonthlyExpenses float64
+	for _, rt := range items {
+		m := monthlyEquivalent(rt)
+		if rt.Type == "income" {
+			totalMonthlyIncome += m
+		} else {
+			totalMonthlyExpenses += m
+		}
+	}
+
+	now := time.Now().UTC()
+	monthNames := []string{
+		"enero", "febrero", "marzo", "abril", "mayo", "junio",
+		"julio", "agosto", "septiembre", "octubre", "noviembre", "diciembre",
+	}
+
+	monthlyProjections := make([]gin.H, months)
+	var cumulativeNet float64
+	for i := 0; i < months; i++ {
+		t := now.AddDate(0, i, 0)
+		netAmount := totalMonthlyIncome - totalMonthlyExpenses
+		cumulativeNet += netAmount
+		monthlyProjections[i] = gin.H{
+			"month":          t.Format("2006-01"),
+			"month_display":  monthNames[t.Month()-1] + " " + strconv.Itoa(t.Year()),
+			"income":         totalMonthlyIncome,
+			"expenses":       totalMonthlyExpenses,
+			"net_amount":     netAmount,
+			"cumulative_net": cumulativeNet,
+		}
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"data": gin.H{
+			"summary": gin.H{
+				"average_monthly_income":   totalMonthlyIncome,
+				"average_monthly_expenses": totalMonthlyExpenses,
+				"net_projected_amount":     totalMonthlyIncome - totalMonthlyExpenses,
+				"months":                  months,
+			},
+			"monthly_projections": monthlyProjections,
+		},
+	})
+}
+
+// executeRecurringTransaction creates the expense/income record and advances the recurring transaction.
+// Returns the created transaction ID and any error.
+func (h *RecurringHandler) executeRecurringTransaction(ctx context.Context, rt *domain.RecurringTransaction) (string, error) {
+	now := time.Now().UTC()
+	transactionID := uuid.New().String()
+
+	txErr := h.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		switch rt.Type {
+		case "expense":
+			categoryID := ""
+			if rt.CategoryID != nil {
+				categoryID = *rt.CategoryID
+			}
+			record := &expenseModel{
+				ID:              transactionID,
+				UserID:          rt.UserID,
+				CategoryID:      categoryID,
+				Amount:          rt.Amount,
+				Description:     rt.Description,
+				TransactionDate: now,
+				PaymentMethod:   "",
+				Notes:           "Auto-created from recurring transaction: " + rt.ID,
+				CreatedAt:       now,
+				UpdatedAt:       now,
+			}
+			if err := tx.Create(record).Error; err != nil {
+				return err
+			}
+		case "income":
+			record := &incomeModel{
+				ID:           transactionID,
+				UserID:       rt.UserID,
+				Amount:       rt.Amount,
+				Source:       "recurring",
+				Description:  rt.Description,
+				ReceivedDate: now,
+				CreatedAt:    now,
+				UpdatedAt:    now,
+			}
+			if err := tx.Create(record).Error; err != nil {
+				return err
+			}
+		default:
+			return fmt.Errorf("unknown recurring transaction type: %s", rt.Type)
+		}
+
+		rt.Execute()
+		rt.UpdatedAt = time.Now().UTC()
+		return tx.Table("recurring_transactions").
+			Where("id = ? AND user_id = ? AND deleted_at IS NULL", rt.ID, rt.UserID).
+			Updates(map[string]interface{}{
+				"next_date":       rt.NextDate,
+				"last_executed":   rt.LastExecuted,
+				"execution_count": rt.ExecutionCount,
+				"is_active":       rt.IsActive,
+				"updated_at":      rt.UpdatedAt,
+			}).Error
+	})
+
+	return transactionID, txErr
+}
+
+// ProcessPending handles POST /recurring-transactions/batch/process
+// Processes all due recurring transactions for the authenticated user.
+func (h *RecurringHandler) ProcessPending(c *gin.Context) {
+	userID, exists := c.Get("user_id")
+	if !exists {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
+		return
+	}
+
+	dueItems, err := h.repo.ListDue(c.Request.Context(), time.Now().UTC())
+	if err != nil {
+		h.logger.Error().Err(err).Msg("failed to list due recurring transactions")
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to list due transactions"})
+		return
+	}
+
+	var successCount, failureCount int
+	for _, rt := range dueItems {
+		if rt.UserID != userID.(string) || !rt.IsActive {
+			continue
+		}
+
+		_, txErr := h.executeRecurringTransaction(c.Request.Context(), rt)
+		if txErr != nil {
+			h.logger.Error().Err(txErr).Str("id", rt.ID).Msg("failed to process pending recurring transaction")
+			failureCount++
+		} else {
+			successCount++
+			event := domain.RecurringTransactionExecutedEvent{
+				RecurringID:   rt.ID,
+				User:          rt.UserID,
+				Type:          rt.Type,
+				Amount:        rt.Amount,
+				TransactionID: rt.ID,
+				Timestamp:     time.Now().UTC(),
+			}
+			if err := h.eventBus.Publish(c.Request.Context(), event); err != nil {
+				h.logger.Warn().Err(err).Msg("failed to publish RecurringTransactionExecutedEvent")
+			}
+		}
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"processed_count": successCount + failureCount,
+		"success_count":   successCount,
+		"failure_count":   failureCount,
+	})
+}
+
+// SendNotifications handles POST /recurring-transactions/batch/notify
+// Stub: notification service is not implemented yet.
+func (h *RecurringHandler) SendNotifications(c *gin.Context) {
+	_, exists := c.Get("user_id")
+	if !exists {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"sent_count": 0,
+		"message":    "notification service not implemented",
 	})
 }

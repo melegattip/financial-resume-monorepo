@@ -21,7 +21,7 @@ const TwoFASetup = ({ onComplete, onCancel }) => {
       setLoading(true);
       setError('');
       
-      const response = await authAPI.post('/users/security/2fa/setup');
+      const response = await authAPI.post('/users/2fa/setup');
       setSetupData(response.data);
       setBackupCodes(response.data.backup_codes || []);
       setStep('setup');
@@ -43,7 +43,7 @@ const TwoFASetup = ({ onComplete, onCancel }) => {
       setLoading(true);
       setError('');
       
-      await authAPI.post('/users/security/2fa/enable', {
+      await authAPI.post('/users/2fa/enable', {
         code: verificationCode
       });
       

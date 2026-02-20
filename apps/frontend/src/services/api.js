@@ -238,42 +238,42 @@ export const formatPercentage = (percentage) => {
 
 // Servicios de IA
 export const aiAPI = {
-  // Obtener insights generados por IA
+  // Obtener insights generados por IA (backend: POST /ai/insights)
   getInsights: async (year = null, month = null) => {
-    const params = new URLSearchParams();
-    if (year) params.append('year', year);
-    if (month) params.append('month', month);
-    
-    const queryString = params.toString();
-    const url = `/ai/insights${queryString ? '?' + queryString : ''}`;
-    
-    const response = await api.get(url);
-    return response.data;
+    const body = {};
+    if (year) body.year = year;
+    if (month) body.month = month;
+
+    const response = await api.post('/ai/insights', body);
+    // Backend returns { success: true, data: [...insights] }
+    // Normalize to { insights: [...], generated_at: <now> }
+    const data = response.data?.data || response.data || {};
+    return {
+      insights: Array.isArray(data) ? data : (data.insights || []),
+      generated_at: data.generated_at || new Date().toISOString(),
+    };
   },
 
   // Analizar si puedes permitirte una compra
   canIBuy: async (purchaseData) => {
     const response = await api.post('/ai/can-i-buy', purchaseData);
-    return response.data;
+    return response.data?.data || response.data;
   },
 
-  // Obtener plan de mejora crediticia
+  // Obtener plan de mejora crediticia (backend: POST /ai/credit-plan)
   getCreditImprovementPlan: async (year = null, month = null) => {
-    const params = new URLSearchParams();
-    if (year) params.append('year', year);
-    if (month) params.append('month', month);
-    
-    const queryString = params.toString();
-    const url = `/ai/credit-improvement-plan${queryString ? '?' + queryString : ''}`;
-    
-    const response = await api.get(url);
-    return response.data;
+    const body = {};
+    if (year) body.year = year;
+    if (month) body.month = month;
+
+    const response = await api.post('/ai/credit-plan', body);
+    return response.data?.data || response.data;
   },
 
   // Obtener puntuación de salud financiera
   getHealthScore: async () => {
     const response = await api.get('/insights/financial-health');
-    return response.data;
+    return response.data?.data || response.data;
   }
 };
 
@@ -295,9 +295,8 @@ export const savingsGoalsAPI = {
   create: (data) => api.post('/savings-goals', data),
   update: (id, data) => api.put(`/savings-goals/${id}`, data),
   delete: (id) => api.delete(`/savings-goals/${id}`),
-  // Backend endpoints: /:id/add-savings and /:id/withdraw-savings
-  deposit: (id, data) => api.post(`/savings-goals/${id}/add-savings`, data),
-  withdraw: (id, data) => api.post(`/savings-goals/${id}/withdraw-savings`, data),
+  deposit: (id, data) => api.post(`/savings-goals/${id}/deposit`, data),
+  withdraw: (id, data) => api.post(`/savings-goals/${id}/withdraw`, data),
   pause: (id) => api.post(`/savings-goals/${id}/pause`),
   resume: (id) => api.post(`/savings-goals/${id}/resume`),
   getDashboard: () => api.get('/savings-goals/dashboard'),

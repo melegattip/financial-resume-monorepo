@@ -3,9 +3,9 @@ const environments = {
   development: {
     name: 'Development',
     API_BASE_URL: 'http://localhost:8080/api/v1',
-    GAMIFICATION_API_URL: 'http://localhost:8081/api/v1',
-    AI_API_URL: 'http://localhost:8082/api/v1',
-    USERS_API_URL: 'http://localhost:8083/api/v1',
+    GAMIFICATION_API_URL: 'http://localhost:8080/api/v1',
+    AI_API_URL: 'http://localhost:8080/api/v1',
+    USERS_API_URL: 'http://localhost:8080/api/v1',
     REDIS_URL: 'redis://localhost:6379',
     WEBSOCKET_URL: 'ws://localhost:8080/ws',
     CORS_ORIGIN: 'http://localhost:3000',

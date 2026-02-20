@@ -61,9 +61,9 @@ class ConfigService {
         
         const config = {
           api_base_url: process.env.REACT_APP_API_URL || 'http://localhost:8080/api/v1',
-          gamification_url: process.env.REACT_APP_GAMIFICATION_URL || 'http://localhost:8081/api/v1',
-          ai_service_url: process.env.REACT_APP_AI_SERVICE_URL || 'http://localhost:8082/api/v1',
-          users_service_url: process.env.REACT_APP_USERS_SERVICE_URL || 'http://localhost:8083/api/v1',
+          gamification_url: process.env.REACT_APP_GAMIFICATION_URL || 'http://localhost:8080/api/v1',
+          ai_service_url: process.env.REACT_APP_AI_SERVICE_URL || 'http://localhost:8080/api/v1',
+          users_service_url: process.env.REACT_APP_USERS_SERVICE_URL || 'http://localhost:8080/api/v1',
           environment: currentEnv,
           version: '1.0.0'
         };
