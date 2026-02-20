@@ -214,6 +214,66 @@ func (h *AnalyticsHandler) GetMonthlyTrends(c *gin.Context) {
 	})
 }
 
+// GetFinancialHealth handles GET /insights/financial-health
+// Computes a financial health score from the current month's income vs. expense ratio.
+func (h *AnalyticsHandler) GetFinancialHealth(c *gin.Context) {
+	userID, exists := c.Get("user_id")
+	if !exists {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
+		return
+	}
+
+	summary, err := h.repo.GetDashboardSummary(c.Request.Context(), userID.(string))
+	if err != nil {
+		h.logger.Error().Err(err).Msg("failed to get financial health")
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to get financial health"})
+		return
+	}
+
+	score := 100.0
+	if summary.CurrentMonthIncomes > 0 {
+		ratio := summary.CurrentMonthExpenses / summary.CurrentMonthIncomes
+		switch {
+		case ratio >= 1.0:
+			score = 20.0
+		case ratio >= 0.9:
+			score = 40.0
+		case ratio >= 0.7:
+			score = 60.0
+		case ratio >= 0.5:
+			score = 80.0
+		}
+	} else if summary.CurrentMonthExpenses > 0 {
+		score = 10.0
+	}
+
+	status := "excellent"
+	switch {
+	case score < 40:
+		status = "critical"
+	case score < 60:
+		status = "poor"
+	case score < 80:
+		status = "fair"
+	case score < 90:
+		status = "good"
+	}
+
+	savingsRate := summary.SavingsRate
+	if savingsRate < 0 {
+		savingsRate = 0
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"score":                  score,
+		"status":                 status,
+		"savings_rate":           savingsRate,
+		"current_month_expenses": summary.CurrentMonthExpenses,
+		"current_month_incomes":  summary.CurrentMonthIncomes,
+		"current_month_balance":  summary.CurrentMonthBalance,
+	})
+}
+
 // GetDashboard handles GET /dashboard
 func (h *AnalyticsHandler) GetDashboard(c *gin.Context) {
 	userID, exists := c.Get("user_id")

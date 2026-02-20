@@ -104,6 +104,30 @@ func (h *GamificationHandler) GetAchievements(c *gin.Context) {
 	})
 }
 
+// GetFeatures handles GET /gamification/features
+// Returns the list of application features available to the authenticated user.
+func (h *GamificationHandler) GetFeatures(c *gin.Context) {
+	_, exists := c.Get("user_id")
+	if !exists {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"features": []string{
+			"dashboard",
+			"expenses",
+			"incomes",
+			"categories",
+			"analytics",
+			"savings_goals",
+			"budgets",
+			"recurring",
+			"ai_insights",
+		},
+	})
+}
+
 // RecordAction handles POST /gamification/actions
 // Records a user action and returns XP/level information.
 func (h *GamificationHandler) RecordAction(c *gin.Context) {

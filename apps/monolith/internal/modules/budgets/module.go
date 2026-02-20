@@ -6,6 +6,7 @@ import (
 	"gorm.io/gorm"
 
 	"github.com/melegattip/financial-resume-monorepo/apps/monolith/internal/infrastructure/config"
+	"github.com/melegattip/financial-resume-monorepo/apps/monolith/internal/infrastructure/middleware"
 	"github.com/melegattip/financial-resume-monorepo/apps/monolith/internal/modules/budgets/handlers"
 	"github.com/melegattip/financial-resume-monorepo/apps/monolith/internal/modules/budgets/repository"
 	sharedports "github.com/melegattip/financial-resume-monorepo/apps/monolith/internal/shared/ports"
@@ -15,29 +16,36 @@ import (
 type Module struct {
 	budgetHandler *handlers.BudgetHandler
 	logger        zerolog.Logger
+	authMW        *middleware.AuthMiddleware
 }
 
 // New creates a new budgets Module, wiring the repository and handler.
-func New(db *gorm.DB, logger zerolog.Logger, cfg *config.AppConfig, eventBus sharedports.EventBus) *Module {
+func New(db *gorm.DB, logger zerolog.Logger, cfg *config.AppConfig, eventBus sharedports.EventBus, authMW *middleware.AuthMiddleware) *Module {
 	budgetRepo := repository.NewBudgetRepository(db)
 	budgetHandler := handlers.NewBudgetHandler(budgetRepo, logger)
 
 	return &Module{
 		budgetHandler: budgetHandler,
 		logger:        logger,
+		authMW:        authMW,
 	}
 }
 
 // RegisterRoutes registers all HTTP routes for the budgets module.
-// The /budgets/status route must be registered before /budgets/:id so that
-// Gin matches the literal segment before the wildcard parameter.
+// Literal routes (/status, /dashboard) are registered before /:id so that
+// Gin matches them before the wildcard parameter.
 func (m *Module) RegisterRoutes(r *gin.RouterGroup) {
-	r.POST("/budgets", m.budgetHandler.Create)
-	r.GET("/budgets", m.budgetHandler.List)
-	r.GET("/budgets/status", m.budgetHandler.GetStatus)
-	r.GET("/budgets/:id", m.budgetHandler.GetByID)
-	r.PUT("/budgets/:id", m.budgetHandler.Update)
-	r.DELETE("/budgets/:id", m.budgetHandler.Delete)
+	budgets := r.Group("/budgets")
+	budgets.Use(m.authMW.RequireAuth())
+	{
+		budgets.POST("", m.budgetHandler.Create)
+		budgets.GET("", m.budgetHandler.List)
+		budgets.GET("/status", m.budgetHandler.GetStatus)
+		budgets.GET("/dashboard", m.budgetHandler.GetDashboard)
+		budgets.GET("/:id", m.budgetHandler.GetByID)
+		budgets.PUT("/:id", m.budgetHandler.Update)
+		budgets.DELETE("/:id", m.budgetHandler.Delete)
+	}
 
 	m.logger.Info().Msg("budgets module routes registered")
 }

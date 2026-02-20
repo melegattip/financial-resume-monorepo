@@ -281,6 +281,11 @@ func (h *BudgetHandler) GetStatus(c *gin.Context) {
 	})
 }
 
+// GetDashboard handles GET /budgets/dashboard — returns the same summary as GetStatus.
+func (h *BudgetHandler) GetDashboard(c *gin.Context) {
+	h.GetStatus(c)
+}
+
 // GetByID handles GET /budgets/:id
 func (h *BudgetHandler) GetByID(c *gin.Context) {
 	userID, exists := c.Get("user_id")

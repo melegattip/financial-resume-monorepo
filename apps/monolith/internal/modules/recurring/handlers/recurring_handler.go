@@ -168,6 +168,50 @@ func (incomeModel) TableName() string { return "incomes" }
 
 // --- Handlers ---
 
+// GetDashboard handles GET /recurring-transactions/dashboard
+// Returns a summary of active recurring transactions for the current user.
+func (h *RecurringHandler) GetDashboard(c *gin.Context) {
+	userID, exists := c.Get("user_id")
+	if !exists {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
+		return
+	}
+
+	items, err := h.repo.ListActive(c.Request.Context(), userID.(string))
+	if err != nil {
+		h.logger.Error().Err(err).Msg("failed to get recurring transactions dashboard")
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to get recurring transactions dashboard"})
+		return
+	}
+
+	now := time.Now().UTC()
+	var totalMonthlyAmount float64
+	upcoming := make([]RecurringResponse, 0)
+
+	for _, rt := range items {
+		switch rt.Frequency {
+		case "daily":
+			totalMonthlyAmount += rt.Amount * 30
+		case "weekly":
+			totalMonthlyAmount += rt.Amount * 4
+		case "monthly":
+			totalMonthlyAmount += rt.Amount
+		case "yearly":
+			totalMonthlyAmount += rt.Amount / 12
+		}
+		if !rt.NextDate.After(now.AddDate(0, 0, 30)) {
+			upcoming = append(upcoming, toRecurringResponse(rt))
+		}
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"active_count":         len(items),
+		"upcoming_count":       len(upcoming),
+		"total_monthly_amount": totalMonthlyAmount,
+		"upcoming":             upcoming,
+	})
+}
+
 // Create handles POST /recurring
 func (h *RecurringHandler) Create(c *gin.Context) {
 	userID, exists := c.Get("user_id")

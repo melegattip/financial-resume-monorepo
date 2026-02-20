@@ -78,33 +78,35 @@ func main() {
 	authModule.RegisterSubscribers(eventBus)
 	logger.Info().Msg("auth module registered")
 
-	// Transactions module (requires JWT auth middleware)
-	txModule := transactions.New(db, logger, cfg, eventBus)
+	// Auth middleware — created once and shared across all protected modules.
+	authMW := authModule.AuthMiddleware()
+
+	// Transactions module
+	txModule := transactions.New(db, logger, cfg, eventBus, authMW)
 	txModule.RegisterRoutes(apiV1)
 	txModule.RegisterSubscribers(eventBus)
 	logger.Info().Msg("transactions module registered")
 
 	// Savings module
-	savingsModule := savings.New(db, logger, eventBus)
+	savingsModule := savings.New(db, logger, eventBus, authMW)
 	savingsModule.RegisterRoutes(apiV1)
 	savingsModule.RegisterSubscribers(eventBus)
 	logger.Info().Msg("savings module registered")
 
 	// Gamification module
-	authMW := authModule.AuthMiddleware()
 	gamModule := gamification.New(db, logger, cfg, eventBus, authMW)
 	gamModule.RegisterRoutes(apiV1)
 	gamModule.RegisterSubscribers(eventBus)
 	logger.Info().Msg("gamification module registered")
 
 	// Recurring transactions module
-	recurringModule := recurring.New(db, logger, cfg, eventBus)
+	recurringModule := recurring.New(db, logger, cfg, eventBus, authMW)
 	recurringModule.RegisterRoutes(apiV1)
 	recurringModule.RegisterSubscribers(eventBus)
 	logger.Info().Msg("recurring module registered")
 
 	// Budgets module
-	budgetsModule := budgets.New(db, logger, cfg, eventBus)
+	budgetsModule := budgets.New(db, logger, cfg, eventBus, authMW)
 	budgetsModule.RegisterRoutes(apiV1)
 	budgetsModule.RegisterSubscribers(eventBus)
 	logger.Info().Msg("budgets module registered")

@@ -5,6 +5,7 @@ import (
 	"github.com/rs/zerolog"
 	"gorm.io/gorm"
 
+	"github.com/melegattip/financial-resume-monorepo/apps/monolith/internal/infrastructure/middleware"
 	"github.com/melegattip/financial-resume-monorepo/apps/monolith/internal/modules/savings/handlers"
 	"github.com/melegattip/financial-resume-monorepo/apps/monolith/internal/modules/savings/repository"
 	sharedports "github.com/melegattip/financial-resume-monorepo/apps/monolith/internal/shared/ports"
@@ -14,25 +15,30 @@ import (
 type Module struct {
 	savingsHandler *handlers.SavingsHandler
 	logger         zerolog.Logger
+	authMW         *middleware.AuthMiddleware
 }
 
 // New creates a new savings module
-func New(db *gorm.DB, logger zerolog.Logger, eventBus sharedports.EventBus) *Module {
+func New(db *gorm.DB, logger zerolog.Logger, eventBus sharedports.EventBus, authMW *middleware.AuthMiddleware) *Module {
 	savingsRepo := repository.NewSavingsRepository(db)
 	savingsHandler := handlers.NewSavingsHandler(savingsRepo, logger)
 
 	return &Module{
 		savingsHandler: savingsHandler,
 		logger:         logger,
+		authMW:         authMW,
 	}
 }
 
-// RegisterRoutes registers all HTTP routes for the savings module
+// RegisterRoutes registers all HTTP routes for the savings module.
+// All routes are under /savings-goals and require a valid JWT access token.
 func (m *Module) RegisterRoutes(r *gin.RouterGroup) {
-	savings := r.Group("/savings")
+	savings := r.Group("/savings-goals")
+	savings.Use(m.authMW.RequireAuth())
 	{
 		savings.POST("", m.savingsHandler.CreateGoal)
 		savings.GET("", m.savingsHandler.ListGoals)
+		savings.GET("/dashboard", m.savingsHandler.GetSummary)
 		savings.GET("/summary", m.savingsHandler.GetSummary)
 		savings.GET("/:id", m.savingsHandler.GetGoal)
 		savings.PUT("/:id", m.savingsHandler.UpdateGoal)

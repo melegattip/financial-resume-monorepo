@@ -28,7 +28,13 @@
       "Bash(git -C \"c:/Users/Los Meles/Documents/Development/Financial Resume/financial-resume-monorepo\" status --short)",
       "Bash(git add:*)",
       "Bash(git commit:*)",
-      "Bash(git push:*)"
+      "Bash(git push:*)",
+      "Bash(npx craco test --watchAll=false --testPathPattern=\"services/__tests__/authService\")",
+      "Bash(npm test:*)",
+      "Bash(where:*)",
+      "Bash(cmd /c \"where npm 2>&1 && where node 2>&1\")",
+      "Bash(cmd /c \"where npm\")",
+      "Bash(cmd /c \"where npm 2>&1\")"
     ]
   }
 }
