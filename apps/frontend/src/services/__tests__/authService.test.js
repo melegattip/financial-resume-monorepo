@@ -40,14 +40,12 @@ jest.mock('../configService', () => ({
 }));
 
 jest.mock('../../utils/notifications', () => ({
-  success: jest.fn(),
-  error: jest.fn(),
-  warn: jest.fn(),
+  __esModule: true,
   default: { success: jest.fn(), error: jest.fn(), warn: jest.fn() },
 }));
 
 jest.mock('../dataService', () => ({
-  clearCache: jest.fn(),
+  __esModule: true,
   default: { clearCache: jest.fn() },
 }));
 
