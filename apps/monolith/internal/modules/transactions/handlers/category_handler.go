@@ -34,6 +34,22 @@ type CategoryResponse struct {
 	UpdatedAt string `json:"updated_at"`
 }
 
+// CreateCategoryRequest is the request body for creating a category.
+type CreateCategoryRequest struct {
+	Name  string `json:"name" binding:"required"`
+	Color string `json:"color"`
+	Icon  string `json:"icon"`
+}
+
+// UpdateCategoryRequest is the request body for updating a category.
+// Accepts "new_name" (frontend convention) or "name" as the category name.
+type UpdateCategoryRequest struct {
+	NewName string `json:"new_name"`
+	Name    string `json:"name"`
+	Color   string `json:"color"`
+	Icon    string `json:"icon"`
+}
+
 func toCategoryResponse(c *domain.Category) CategoryResponse {
 	return CategoryResponse{
 		ID:        c.ID,
@@ -46,7 +62,7 @@ func toCategoryResponse(c *domain.Category) CategoryResponse {
 	}
 }
 
-// ListCategories handles GET /api/v1/categories
+// List handles GET /api/v1/categories
 func (h *CategoryHandler) List(c *gin.Context) {
 	userID, exists := c.Get("user_id")
 	if !exists {
@@ -70,4 +86,132 @@ func (h *CategoryHandler) List(c *gin.Context) {
 		"data":  response,
 		"total": len(response),
 	})
+}
+
+// Create handles POST /api/v1/categories
+func (h *CategoryHandler) Create(c *gin.Context) {
+	userID, exists := c.Get("user_id")
+	if !exists {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
+		return
+	}
+
+	var req CreateCategoryRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	category, err := domain.NewCategory(userID.(string), req.Name, req.Color, req.Icon)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	if err := h.repo.Create(c.Request.Context(), category); err != nil {
+		h.logger.Error().Err(err).Msg("failed to create category")
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to create category"})
+		return
+	}
+
+	c.JSON(http.StatusCreated, toCategoryResponse(category))
+}
+
+// Update handles PATCH /api/v1/categories/:id
+func (h *CategoryHandler) Update(c *gin.Context) {
+	userID, exists := c.Get("user_id")
+	if !exists {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
+		return
+	}
+
+	id := c.Param("id")
+	category, err := h.repo.FindByID(c.Request.Context(), id)
+	if err != nil {
+		h.logger.Error().Err(err).Str("id", id).Msg("failed to get category")
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to get category"})
+		return
+	}
+
+	if category == nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "category not found"})
+		return
+	}
+
+	if category.UserID != userID.(string) {
+		c.JSON(http.StatusForbidden, gin.H{"error": "forbidden"})
+		return
+	}
+
+	var req UpdateCategoryRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	// Accept "new_name" (frontend convention) or "name"
+	name := req.NewName
+	if name == "" {
+		name = req.Name
+	}
+	if name == "" {
+		name = category.Name // keep existing name
+	}
+
+	color := req.Color
+	if color == "" {
+		color = category.Color
+	}
+	icon := req.Icon
+	if icon == "" {
+		icon = category.Icon
+	}
+
+	if err := category.Update(name, color, icon); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	if err := h.repo.Update(c.Request.Context(), category); err != nil {
+		h.logger.Error().Err(err).Msg("failed to update category")
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to update category"})
+		return
+	}
+
+	c.JSON(http.StatusOK, toCategoryResponse(category))
+}
+
+// Delete handles DELETE /api/v1/categories/:id
+func (h *CategoryHandler) Delete(c *gin.Context) {
+	userID, exists := c.Get("user_id")
+	if !exists {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
+		return
+	}
+
+	id := c.Param("id")
+	category, err := h.repo.FindByID(c.Request.Context(), id)
+	if err != nil {
+		h.logger.Error().Err(err).Str("id", id).Msg("failed to get category")
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to get category"})
+		return
+	}
+
+	if category == nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "category not found"})
+		return
+	}
+
+	if category.UserID != userID.(string) {
+		c.JSON(http.StatusForbidden, gin.H{"error": "forbidden"})
+		return
+	}
+
+	if err := h.repo.Delete(c.Request.Context(), id); err != nil {
+		h.logger.Error().Err(err).Msg("failed to delete category")
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to delete category"})
+		return
+	}
+
+	c.JSON(http.StatusNoContent, nil)
 }

@@ -64,6 +64,9 @@ func (m *Module) RegisterRoutes(r *gin.RouterGroup) {
 
 		// Categories
 		tx.GET("/categories", m.categoryHandler.List)
+		tx.POST("/categories", m.categoryHandler.Create)
+		tx.PATCH("/categories/:id", m.categoryHandler.Update)
+		tx.DELETE("/categories/:id", m.categoryHandler.Delete)
 	}
 
 	m.logger.Info().Msg("transactions module routes registered")
