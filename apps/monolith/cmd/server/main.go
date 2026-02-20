@@ -139,11 +139,42 @@ func main() {
 	logger.Info().Msg("monolith stopped")
 }
 
+// migrateUsersColumns adds missing columns to the existing users table using
+// ADD COLUMN IF NOT EXISTS (idempotent). This is needed because the table was
+// created by the old microservice and AutoMigrate cannot reconcile the
+// constraint name mismatch (uni_users_email), causing it to roll back.
+func migrateUsersColumns(db *gorm.DB, logger zerolog.Logger) {
+	cols := []struct{ col, def string }{
+		{"phone", "VARCHAR(20)"},
+		{"avatar", "VARCHAR(500)"},
+		{"is_active", "BOOLEAN NOT NULL DEFAULT TRUE"},
+		{"is_verified", "BOOLEAN NOT NULL DEFAULT FALSE"},
+		{"email_verification_token", "VARCHAR(500)"},
+		{"email_verification_expires", "TIMESTAMPTZ"},
+		{"password_reset_token", "VARCHAR(500)"},
+		{"password_reset_expires", "TIMESTAMPTZ"},
+		{"last_login", "TIMESTAMPTZ"},
+		{"failed_login_attempts", "INTEGER NOT NULL DEFAULT 0"},
+		{"locked_until", "TIMESTAMPTZ"},
+		{"deleted_at", "TIMESTAMPTZ"},
+	}
+	for _, c := range cols {
+		sql := "ALTER TABLE users ADD COLUMN IF NOT EXISTS " + c.col + " " + c.def
+		if err := db.Exec(sql).Error; err != nil {
+			logger.Warn().Err(err).Str("column", c.col).Msg("users column migration warning")
+		}
+	}
+	logger.Info().Msg("users columns ensured")
+}
+
 // runMigrations creates missing tables for all modules.
 // Each model is migrated individually so a failure on one table
 // (e.g. a constraint name mismatch on an existing table) does not
 // prevent the remaining tables from being created.
 func runMigrations(db *gorm.DB, logger zerolog.Logger) {
+	// Ensure all columns exist on the legacy users table before module AutoMigrate runs
+	migrateUsersColumns(db, logger)
+
 	models := []struct {
 		name  string
 		model any
