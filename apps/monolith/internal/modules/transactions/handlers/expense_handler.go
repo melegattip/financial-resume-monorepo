@@ -37,19 +37,25 @@ type CreateExpenseRequest struct {
 	DueDate         string  `json:"due_date"`         // alias for transaction_date
 	PaymentMethod   string  `json:"payment_method"`
 	Notes           string  `json:"notes"`
-	Paid            bool    `json:"paid"` // accepted but ignored
+	Paid            bool    `json:"paid"`
 }
 
 // UpdateExpenseRequest is the request body for updating an expense.
+// All fields are optional; omitted fields keep their existing values.
+// payment_amount: delta amount being paid now (used for partial payments).
+// amount_paid: cumulative amount paid so far (used for total/overpayment payments).
 type UpdateExpenseRequest struct {
-	CategoryID      string  `json:"category_id"`
-	Amount          float64 `json:"amount" binding:"required,gt=0"`
-	Description     string  `json:"description" binding:"required"`
-	TransactionDate string  `json:"transaction_date"`
-	DueDate         string  `json:"due_date"` // alias for transaction_date
-	PaymentMethod   string  `json:"payment_method"`
-	Notes           string  `json:"notes"`
-	Paid            bool    `json:"paid"` // accepted but ignored
+	CategoryID      string   `json:"category_id"`
+	Amount          *float64 `json:"amount"`
+	Description     string   `json:"description"`
+	TransactionDate string   `json:"transaction_date"`
+	DueDate         string   `json:"due_date"` // alias for transaction_date
+	PaymentMethod   string   `json:"payment_method"`
+	Notes           string   `json:"notes"`
+	Paid            *bool    `json:"paid"`
+	AmountPaid      *float64 `json:"amount_paid"`
+	PendingAmount   *float64 `json:"pending_amount"`
+	PaymentAmount   *float64 `json:"payment_amount"` // delta: adds to existing amount_paid
 }
 
 // ExpenseResponse is the response format for an expense
@@ -62,6 +68,9 @@ type ExpenseResponse struct {
 	TransactionDate string  `json:"transaction_date"`
 	PaymentMethod   string  `json:"payment_method"`
 	Notes           string  `json:"notes"`
+	Paid            bool    `json:"paid"`
+	AmountPaid      float64 `json:"amount_paid"`
+	PendingAmount   float64 `json:"pending_amount"`
 	CreatedAt       string  `json:"created_at"`
 	UpdatedAt       string  `json:"updated_at"`
 }
@@ -76,6 +85,9 @@ func toExpenseResponse(e *domain.Expense) ExpenseResponse {
 		TransactionDate: e.TransactionDate.Format(time.RFC3339),
 		PaymentMethod:   e.PaymentMethod,
 		Notes:           e.Notes,
+		Paid:            e.Paid,
+		AmountPaid:      e.AmountPaid,
+		PendingAmount:   e.PendingAmount,
 		CreatedAt:       e.CreatedAt.Format(time.RFC3339),
 		UpdatedAt:       e.UpdatedAt.Format(time.RFC3339),
 	}
@@ -248,31 +260,77 @@ func (h *ExpenseHandler) Update(c *gin.Context) {
 		return
 	}
 
-	rawDate := req.TransactionDate
-	if rawDate == "" {
-		rawDate = req.DueDate
-	}
-	var transactionDate time.Time
-	if rawDate == "" {
-		transactionDate = expense.TransactionDate // keep existing date
-	} else {
-		var parseErr error
-		transactionDate, parseErr = time.Parse(time.RFC3339, rawDate)
-		if parseErr != nil {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid date format, expected RFC3339"})
+	// --- Handle paid-only update (e.g. toggle paid, partial payment) ---
+	// If the request only contains payment fields (no amount/description), skip Update() and
+	// go straight to ApplyPayment so we don't require amount/description in the payload.
+	hasCoreFields := req.Amount != nil || req.Description != ""
+	hasPaymentFields := req.Paid != nil || req.AmountPaid != nil || req.PaymentAmount != nil
+
+	if hasCoreFields {
+		rawDate := req.TransactionDate
+		if rawDate == "" {
+			rawDate = req.DueDate
+		}
+		var transactionDate time.Time
+		if rawDate == "" {
+			transactionDate = expense.TransactionDate
+		} else {
+			var parseErr error
+			transactionDate, parseErr = time.Parse(time.RFC3339, rawDate)
+			if parseErr != nil {
+				c.JSON(http.StatusBadRequest, gin.H{"error": "invalid date format, expected RFC3339"})
+				return
+			}
+		}
+
+		categoryID := req.CategoryID
+		if categoryID == "" {
+			categoryID = expense.CategoryID
+		}
+
+		amount := expense.Amount
+		if req.Amount != nil {
+			amount = *req.Amount
+		}
+		description := expense.Description
+		if req.Description != "" {
+			description = req.Description
+		}
+		paymentMethod := expense.PaymentMethod
+		if req.PaymentMethod != "" {
+			paymentMethod = req.PaymentMethod
+		}
+		notes := expense.Notes
+		if req.Notes != "" {
+			notes = req.Notes
+		}
+
+		if err := expense.Update(categoryID, amount, description, transactionDate, paymentMethod, notes); err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 			return
 		}
 	}
 
-	categoryID := req.CategoryID
-	if categoryID == "" {
-		categoryID = expense.CategoryID // keep existing category
-	}
-
-	// Update expense
-	if err := expense.Update(categoryID, req.Amount, req.Description, transactionDate, req.PaymentMethod, req.Notes); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
-		return
+	// --- Apply payment state changes ---
+	if hasPaymentFields {
+		if req.Paid != nil && !*req.Paid {
+			// Explicitly marking as unpaid
+			expense.ApplyPayment(false, 0)
+		} else if req.PaymentAmount != nil {
+			// Partial payment delta: add to existing amount_paid
+			newAmountPaid := expense.AmountPaid + *req.PaymentAmount
+			expense.ApplyPayment(true, newAmountPaid)
+		} else if req.AmountPaid != nil {
+			// Absolute cumulative amount paid provided
+			paid := true
+			if req.Paid != nil {
+				paid = *req.Paid
+			}
+			expense.ApplyPayment(paid, *req.AmountPaid)
+		} else if req.Paid != nil && *req.Paid {
+			// Mark fully paid without explicit amount — assume full amount
+			expense.ApplyPayment(true, expense.Amount)
+		}
 	}
 
 	if err := h.repo.Update(c.Request.Context(), expense); err != nil {

@@ -15,6 +15,9 @@ type Expense struct {
 	TransactionDate time.Time
 	PaymentMethod   string
 	Notes           string
+	Paid            bool
+	AmountPaid      float64
+	PendingAmount   float64
 	CreatedAt       time.Time
 	UpdatedAt       time.Time
 	DeletedAt       *time.Time
@@ -43,6 +46,9 @@ func NewExpense(userID, categoryID string, amount float64, description string, t
 		Description:     description,
 		TransactionDate: transactionDate,
 		PaymentMethod:   paymentMethod,
+		Paid:            false,
+		AmountPaid:      0,
+		PendingAmount:   amount,
 		CreatedAt:       now,
 		UpdatedAt:       now,
 	}, nil
@@ -68,6 +74,24 @@ func (e *Expense) Update(categoryID string, amount float64, description string, 
 	e.Notes = notes
 	e.UpdatedAt = time.Now().UTC()
 	return nil
+}
+
+// ApplyPayment updates the paid state. amountPaid is the new cumulative total paid.
+// Pass paid=false to mark the expense as unpaid (resets amountPaid to 0).
+func (e *Expense) ApplyPayment(paid bool, amountPaid float64) {
+	e.Paid = paid
+	if !paid {
+		e.AmountPaid = 0
+		e.PendingAmount = e.Amount
+	} else {
+		e.AmountPaid = amountPaid
+		pending := e.Amount - amountPaid
+		if pending < 0 {
+			pending = 0
+		}
+		e.PendingAmount = pending
+	}
+	e.UpdatedAt = time.Now().UTC()
 }
 
 // SoftDelete marks the expense as deleted

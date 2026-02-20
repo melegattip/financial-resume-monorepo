@@ -21,6 +21,9 @@ type ExpenseModel struct {
 	TransactionDate time.Time  `gorm:"column:transaction_date;not null;index"`
 	PaymentMethod   string     `gorm:"column:payment_method"`
 	Notes           string     `gorm:"column:notes"`
+	Paid            bool       `gorm:"column:paid;default:false"`
+	AmountPaid      float64    `gorm:"column:amount_paid;default:0"`
+	PendingAmount   float64    `gorm:"column:pending_amount;default:0"`
 	CreatedAt       time.Time  `gorm:"column:created_at"`
 	UpdatedAt       time.Time  `gorm:"column:updated_at"`
 	DeletedAt       *time.Time `gorm:"column:deleted_at;index"`
@@ -41,6 +44,9 @@ func (m *ExpenseModel) ToExpense() *domain.Expense {
 		TransactionDate: m.TransactionDate,
 		PaymentMethod:   m.PaymentMethod,
 		Notes:           m.Notes,
+		Paid:            m.Paid,
+		AmountPaid:      m.AmountPaid,
+		PendingAmount:   m.PendingAmount,
 		CreatedAt:       m.CreatedAt,
 		UpdatedAt:       m.UpdatedAt,
 		DeletedAt:       m.DeletedAt,
@@ -58,6 +64,9 @@ func FromExpense(e *domain.Expense) *ExpenseModel {
 		TransactionDate: e.TransactionDate,
 		PaymentMethod:   e.PaymentMethod,
 		Notes:           e.Notes,
+		Paid:            e.Paid,
+		AmountPaid:      e.AmountPaid,
+		PendingAmount:   e.PendingAmount,
 		CreatedAt:       e.CreatedAt,
 		UpdatedAt:       e.UpdatedAt,
 		DeletedAt:       e.DeletedAt,
