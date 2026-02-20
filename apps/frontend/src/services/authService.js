@@ -178,9 +178,9 @@ class AuthService {
         const originalRequest = error.config;
 
         // Solo intentar refresh si es un 401 y no es una petición de login/register/refresh
-        const isAuthEndpoint = originalRequest.url?.includes('/users/login') || 
-                              originalRequest.url?.includes('/users/register') ||
-                              originalRequest.url?.includes('/users/refresh');
+        const isAuthEndpoint = originalRequest.url?.includes('/auth/login') ||
+                              originalRequest.url?.includes('/auth/register') ||
+                              originalRequest.url?.includes('/auth/refresh');
 
         if (error.response?.status === 401 && !originalRequest._retry && !isAuthEndpoint) {
           originalRequest._retry = true;
@@ -242,7 +242,7 @@ class AuthService {
       
       console.log('🔧 Enviando datos de registro:', backendData);
       
-      const response = await authAPI.post('/users/register', backendData);
+      const response = await authAPI.post('/auth/register', backendData);
       const authData = response.data;
       
       // Verificar que la respuesta tenga la estructura esperada
@@ -271,7 +271,7 @@ class AuthService {
   async login(credentials) {
     try {
       console.log('🔧 [authService] Intentando login con credenciales:', { email: credentials.email });
-      const response = await authAPI.post('/users/login', credentials);
+      const response = await authAPI.post('/auth/login', credentials);
       console.log('🔧 [authService] Respuesta del servidor:', response.data);
       
       const authData = response.data;
@@ -336,7 +336,7 @@ class AuthService {
         throw new Error('No hay refresh token disponible');
       }
 
-      const response = await authAPI.post('/users/refresh', {
+      const response = await authAPI.post('/auth/refresh', {
         refresh_token: this.refreshToken_value
       });
       
@@ -383,7 +383,7 @@ class AuthService {
       console.log('🔧 [authService] Cambiando contraseña:', passwordData);
       
       // Usar el endpoint correcto del users-service
-      const response = await authAPI.put('/users/security/change-password', passwordData);
+      const response = await authAPI.put('/users/change-password', passwordData);
       console.log('✅ [authService] Contraseña cambiada exitosamente');
       
       toast.success('Contraseña cambiada exitosamente');
@@ -436,7 +436,7 @@ class AuthService {
       
       console.log('🔧 [authService] FormData creado, enviando petición...');
       
-      const response = await authAPI.post('/users/avatar', formData, {
+      const response = await authAPI.post('/users/profile/avatar', formData, {
         headers: {
           'Content-Type': 'multipart/form-data',
         },
