@@ -50,9 +50,9 @@ const Budgets = () => {
         budgetsAPI.getDashboard(periodParams)
       ]);
       
-      setBudgets(budgetsRes.data.data?.budgets || []);
+      setBudgets(budgetsRes.data.data || []);
       setCategories(categoriesRes.data.data || []);
-      setDashboard(dashboardRes.data.data);
+      setDashboard(dashboardRes.data);
     } catch (error) {
       console.error('Error loading budgets:', error);
       toast.error('Error cargando presupuestos');

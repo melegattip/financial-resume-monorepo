@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { FaBrain, FaSpinner, FaRedo, FaLightbulb, FaShoppingCart, FaCheck, FaChevronRight, FaCalculator, FaExclamationTriangle, FaCheckCircle, FaChevronDown, FaChevronUp, FaBullseye } from 'react-icons/fa';
-import { aiAPI, savingsGoalsAPI, budgetsAPI, analyticsAPI } from '../services/api';
+import { aiAPI, savingsGoalsAPI, budgetsAPI, analyticsAPI, formatCurrency } from '../services/api';
 import { useAuth } from '../contexts/AuthContext';
 import { usePeriod } from '../contexts/PeriodContext';
 import { useGamification } from '../contexts/GamificationContext';
@@ -16,6 +16,7 @@ const AIInsights = () => {
   const [error, setError] = useState(null);
   const [purchaseError, setPurchaseError] = useState(null);
   const [healthScore, setHealthScore] = useState(0);
+  const [healthDetails, setHealthDetails] = useState(null);
   const [healthScoreLoading, setHealthScoreLoading] = useState(false);
   const [lastEvaluationDate, setLastEvaluationDate] = useState(null);
   const [dashboardData, setDashboardData] = useState(null);
@@ -136,6 +137,7 @@ const AIInsights = () => {
       const response = await aiAPI.getHealthScore();
       // Backend returns score 0-100; display uses 0-1000 scale
       setHealthScore((response.score || response.health_score || 0) * 10);
+      setHealthDetails(response);
     } catch (err) {
       console.error('Error loading health score:', err.message);
       // Mantener el valor por defecto de 0 en caso de error
@@ -509,9 +511,10 @@ const AIInsights = () => {
   const displayedInsights = showAllInsights ? insights : insights.slice(0, 3);
 
   // Componente de salud financiera optimizado
-  const HealthScoreDisplay = ({ score, maxScore = 1000, loading = false }) => {
+  const HealthScoreDisplay = ({ score, maxScore = 1000, details = null, loading = false }) => {
+    const [expanded, setExpanded] = useState(false);
     const percentage = (score / maxScore) * 100;
-    
+
     const getScoreLevel = (score) => {
       if (score >= 800) return { level: 'Excelente', message: '¡Tu salud financiera es excepcional!', color: 'text-green-600 dark:text-green-400', bgColor: 'bg-green-50 dark:bg-green-900/20', borderColor: 'border-green-200 dark:border-green-700' };
       if (score >= 600) return { level: 'Bueno', message: 'Tu situación financiera es sólida', color: 'text-blue-600 dark:text-blue-400', bgColor: 'bg-blue-50 dark:bg-blue-900/20', borderColor: 'border-blue-200 dark:border-blue-700' };
@@ -520,6 +523,20 @@ const AIInsights = () => {
     };
 
     const { level, message, color, bgColor, borderColor } = getScoreLevel(score);
+
+    const incomes = details?.current_month_incomes || 0;
+    const expenses = details?.current_month_expenses || 0;
+    const balance = details?.current_month_balance || 0;
+    const ratio = incomes > 0 ? expenses / incomes : null;
+    const savingsRate = details?.savings_rate != null ? details.savings_rate * 100 : null;
+
+    const thresholds = [
+      { range: '< 50%', pts: 1000, label: 'Excelente', active: ratio !== null && ratio < 0.5 },
+      { range: '50 – 69%', pts: 800, label: 'Excelente', active: ratio !== null && ratio >= 0.5 && ratio < 0.7 },
+      { range: '70 – 89%', pts: 600, label: 'Bueno', active: ratio !== null && ratio >= 0.7 && ratio < 0.9 },
+      { range: '90 – 99%', pts: 400, label: 'Regular', active: ratio !== null && ratio >= 0.9 && ratio < 1.0 },
+      { range: '≥ 100%', pts: 200, label: 'Mejorable', active: ratio !== null && ratio >= 1.0 },
+    ];
 
     if (loading) {
       return (
@@ -555,7 +572,7 @@ const AIInsights = () => {
 
         {/* Barra de progreso */}
         <div className="w-full bg-gray-200 dark:bg-gray-600 rounded-full h-3 mb-4 overflow-hidden">
-          <div 
+          <div
             className="h-full bg-gradient-to-r from-blue-500 to-green-500 rounded-full transition-all duration-1000 ease-out"
             style={{ width: `${percentage}%` }}
           />
@@ -563,17 +580,104 @@ const AIInsights = () => {
 
         {/* Etiquetas de referencia */}
         <div className="flex justify-between text-xs text-gray-500 dark:text-gray-400 mb-4">
-          <span>0</span>
-          <span>250</span>
-          <span>500</span>
-          <span>750</span>
-          <span>1000</span>
+          <span>0</span><span>250</span><span>500</span><span>750</span><span>1000</span>
         </div>
 
         {/* Mensaje */}
         <div className="text-center">
           <p className="text-gray-600 dark:text-gray-400 text-sm leading-relaxed">{message}</p>
         </div>
+
+        {/* Desplegable de transparencia */}
+        {details && (
+          <div className="mt-4 pt-4 border-t border-gray-200 dark:border-gray-600">
+            <button
+              onClick={() => setExpanded(!expanded)}
+              className="w-full flex items-center justify-between text-sm text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 transition-colors"
+            >
+              <span className="flex items-center space-x-1">
+                <FaCalculator className="w-3 h-3" />
+                <span>¿Cómo se calculó este puntaje?</span>
+              </span>
+              {expanded ? <FaChevronUp className="w-3 h-3" /> : <FaChevronDown className="w-3 h-3" />}
+            </button>
+
+            {expanded && (
+              <div className="mt-4 space-y-3">
+                {/* Datos del mes */}
+                <div className="grid grid-cols-3 gap-2 text-center">
+                  <div className="bg-white/60 dark:bg-gray-700/60 rounded-lg p-3">
+                    <div className="text-xs text-gray-500 dark:text-gray-400 mb-1">Ingresos</div>
+                    <div className="text-sm font-semibold text-green-600 dark:text-green-400">{formatCurrency(incomes)}</div>
+                  </div>
+                  <div className="bg-white/60 dark:bg-gray-700/60 rounded-lg p-3">
+                    <div className="text-xs text-gray-500 dark:text-gray-400 mb-1">Gastos</div>
+                    <div className="text-sm font-semibold text-red-600 dark:text-red-400">{formatCurrency(expenses)}</div>
+                  </div>
+                  <div className="bg-white/60 dark:bg-gray-700/60 rounded-lg p-3">
+                    <div className="text-xs text-gray-500 dark:text-gray-400 mb-1">Balance</div>
+                    <div className={`text-sm font-semibold ${balance >= 0 ? 'text-blue-600 dark:text-blue-400' : 'text-red-600 dark:text-red-400'}`}>
+                      {formatCurrency(balance)}
+                    </div>
+                  </div>
+                </div>
+
+                {/* Ratio gastos/ingresos */}
+                {ratio !== null && (
+                  <div className="bg-white/60 dark:bg-gray-700/60 rounded-lg p-3">
+                    <div className="flex items-center justify-between mb-2">
+                      <span className="text-xs text-gray-500 dark:text-gray-400">Ratio gastos / ingresos</span>
+                      <span className="text-sm font-bold text-gray-700 dark:text-gray-200">
+                        {(ratio * 100).toFixed(1)}%
+                      </span>
+                    </div>
+                    <div className="w-full bg-gray-200 dark:bg-gray-600 rounded-full h-2 overflow-hidden">
+                      <div
+                        className={`h-2 rounded-full transition-all duration-700 ${ratio < 0.5 ? 'bg-green-500' : ratio < 0.7 ? 'bg-blue-500' : ratio < 0.9 ? 'bg-yellow-500' : 'bg-red-500'}`}
+                        style={{ width: `${Math.min(ratio * 100, 100)}%` }}
+                      />
+                    </div>
+                  </div>
+                )}
+
+                {/* Tabla de umbrales */}
+                <div className="bg-white/60 dark:bg-gray-700/60 rounded-lg p-3">
+                  <div className="text-xs font-medium text-gray-600 dark:text-gray-300 mb-2">Escala de puntuación</div>
+                  <div className="space-y-1">
+                    {thresholds.map((row) => (
+                      <div
+                        key={row.range}
+                        className={`flex items-center justify-between text-xs py-1.5 px-2 rounded transition-colors ${row.active ? 'bg-current/10 font-semibold ring-1 ring-current/20' : 'text-gray-500 dark:text-gray-400'}`}
+                      >
+                        <span>Gastos: <strong>{row.range}</strong> ingresos</span>
+                        <div className="flex items-center space-x-2">
+                          <span className="text-gray-400 dark:text-gray-500">{row.pts} pts</span>
+                          <span className={row.active ? color : 'text-gray-600 dark:text-gray-300'}>{row.label}</span>
+                          {row.active && <span className="text-gray-400">← ahora</span>}
+                        </div>
+                      </div>
+                    ))}
+                    {ratio === null && (
+                      <div className="text-xs text-gray-400 dark:text-gray-500 py-1 px-2">
+                        Sin ingresos registrados este mes
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                {/* Tasa de ahorro */}
+                {savingsRate !== null && (
+                  <div className="flex items-center justify-between text-xs bg-white/60 dark:bg-gray-700/60 rounded-lg p-3">
+                    <span className="text-gray-500 dark:text-gray-400">Tasa de ahorro del mes</span>
+                    <span className={`font-semibold ${savingsRate >= 20 ? 'text-green-600 dark:text-green-400' : savingsRate >= 10 ? 'text-blue-600 dark:text-blue-400' : 'text-yellow-600 dark:text-yellow-400'}`}>
+                      {savingsRate.toFixed(1)}%
+                    </span>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+        )}
       </div>
     );
   };
@@ -604,7 +708,7 @@ const AIInsights = () => {
           <h2 className="text-xl md:text-2xl font-semibold text-gray-900 dark:text-gray-100 mb-2">Tu salud financiera</h2>
           <p className="text-gray-600 dark:text-gray-400">Evaluación inteligente powered by IA</p>
         </div>
-        <HealthScoreDisplay score={healthScore} loading={healthScoreLoading} />
+        <HealthScoreDisplay score={healthScore} details={healthDetails} loading={healthScoreLoading} />
       </div>
 
       {/* Tabs Navigation */}
