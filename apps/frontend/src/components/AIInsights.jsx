@@ -134,7 +134,8 @@ const AIInsights = () => {
     setHealthScoreLoading(true);
     try {
       const response = await aiAPI.getHealthScore();
-      setHealthScore(response.health_score || 0);
+      // Backend returns score 0-100; display uses 0-1000 scale
+      setHealthScore((response.score || response.health_score || 0) * 10);
     } catch (err) {
       console.error('Error loading health score:', err.message);
       // Mantener el valor por defecto de 0 en caso de error
