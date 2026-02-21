@@ -527,8 +527,10 @@ const AIInsights = () => {
     const incomes = details?.current_month_incomes || 0;
     const expenses = details?.current_month_expenses || 0;
     const balance = details?.current_month_balance || 0;
-    const ratio = incomes > 0 ? expenses / incomes : null;
-    const savingsRate = details?.savings_rate != null ? details.savings_rate * 100 : null;
+    const productiveExpenses = details?.productive_expenses || 0;
+    const consumptionExpenses = details?.consumption_expenses ?? (expenses - productiveExpenses);
+    const ratio = incomes > 0 ? consumptionExpenses / incomes : null;
+    const savingsRate = details?.savings_rate != null ? details.savings_rate : null;
 
     const thresholds = [
       { range: '< 50%', pts: 1000, label: 'Excelente', active: ratio !== null && ratio < 0.5 },
@@ -611,7 +613,7 @@ const AIInsights = () => {
                     <div className="text-sm font-semibold text-green-600 dark:text-green-400">{formatCurrency(incomes)}</div>
                   </div>
                   <div className="bg-white/60 dark:bg-gray-700/60 rounded-lg p-3">
-                    <div className="text-xs text-gray-500 dark:text-gray-400 mb-1">Gastos</div>
+                    <div className="text-xs text-gray-500 dark:text-gray-400 mb-1">Egresos totales</div>
                     <div className="text-sm font-semibold text-red-600 dark:text-red-400">{formatCurrency(expenses)}</div>
                   </div>
                   <div className="bg-white/60 dark:bg-gray-700/60 rounded-lg p-3">
@@ -622,11 +624,31 @@ const AIInsights = () => {
                   </div>
                 </div>
 
-                {/* Ratio gastos/ingresos */}
+                {/* Desglose de egresos: consumo vs productivos */}
+                {productiveExpenses > 0 && (
+                  <div className="bg-white/60 dark:bg-gray-700/60 rounded-lg p-3 space-y-2">
+                    <div className="text-xs font-medium text-gray-600 dark:text-gray-300 mb-1">Desglose de egresos</div>
+                    <div className="flex items-center justify-between text-xs">
+                      <span className="text-gray-500 dark:text-gray-400">🛒 Consumo</span>
+                      <span className="font-semibold text-orange-600 dark:text-orange-400">{formatCurrency(consumptionExpenses)}</span>
+                    </div>
+                    <div className="flex items-center justify-between text-xs">
+                      <span className="text-gray-500 dark:text-gray-400">📈 Inversión / activos</span>
+                      <span className="font-semibold text-green-600 dark:text-green-400">{formatCurrency(productiveExpenses)}</span>
+                    </div>
+                    <p className="text-xs text-gray-400 dark:text-gray-500 mt-1">
+                      El puntaje se calcula sobre el consumo neto, excluyendo inversiones y activos.
+                    </p>
+                  </div>
+                )}
+
+                {/* Ratio consumo/ingresos */}
                 {ratio !== null && (
                   <div className="bg-white/60 dark:bg-gray-700/60 rounded-lg p-3">
                     <div className="flex items-center justify-between mb-2">
-                      <span className="text-xs text-gray-500 dark:text-gray-400">Ratio gastos / ingresos</span>
+                      <span className="text-xs text-gray-500 dark:text-gray-400">
+                        Ratio consumo / ingresos{productiveExpenses > 0 ? ' (neto)' : ''}
+                      </span>
                       <span className="text-sm font-bold text-gray-700 dark:text-gray-200">
                         {(ratio * 100).toFixed(1)}%
                       </span>
@@ -649,7 +671,7 @@ const AIInsights = () => {
                         key={row.range}
                         className={`flex items-center justify-between text-xs py-1.5 px-2 rounded transition-colors ${row.active ? 'bg-current/10 font-semibold ring-1 ring-current/20' : 'text-gray-500 dark:text-gray-400'}`}
                       >
-                        <span>Gastos: <strong>{row.range}</strong> ingresos</span>
+                        <span>Consumo: <strong>{row.range}</strong> ingresos</span>
                         <div className="flex items-center space-x-2">
                           <span className="text-gray-400 dark:text-gray-500">{row.pts} pts</span>
                           <span className={row.active ? color : 'text-gray-600 dark:text-gray-300'}>{row.label}</span>

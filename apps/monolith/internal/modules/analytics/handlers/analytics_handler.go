@@ -4,6 +4,7 @@ import (
 	"context"
 	"net/http"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -215,8 +216,31 @@ func (h *AnalyticsHandler) GetMonthlyTrends(c *gin.Context) {
 	})
 }
 
+// productiveKeywords identifies category names that represent investment, savings, or
+// capital allocation — these are positive financial behaviours and should not penalise
+// the consumption ratio used in the health score.
+var productiveKeywords = []string{
+	"invers", "ahorro", "seguro", "educac", "retiro", "pension", "fondo",
+	"activo", "propiedad", "inmueble", "capital", "emerg", "patrimonio",
+	"cripto", "bitcoin", "etf", "accion", "bono", "plazo fijo",
+}
+
+// isProductiveCategory returns true when the category name contains a keyword that
+// indicates investment, savings, insurance, or asset accumulation.
+func isProductiveCategory(name string) bool {
+	lower := strings.ToLower(name)
+	for _, kw := range productiveKeywords {
+		if strings.Contains(lower, kw) {
+			return true
+		}
+	}
+	return false
+}
+
 // GetFinancialHealth handles GET /insights/financial-health
-// Computes a financial health score from the current month's income vs. expense ratio.
+// Computes a financial health score that distinguishes consumption expenses from
+// productive expenses (investments, savings, insurance, assets). Only consumption
+// expenses are used in the ratio, so capital allocation does not penalise the score.
 func (h *AnalyticsHandler) GetFinancialHealth(c *gin.Context) {
 	userID, exists := c.Get("user_id")
 	if !exists {
@@ -224,24 +248,44 @@ func (h *AnalyticsHandler) GetFinancialHealth(c *gin.Context) {
 		return
 	}
 
-	summary, err := h.repo.GetDashboardSummary(c.Request.Context(), userID.(string))
+	ctx := c.Request.Context()
+	uid := userID.(string)
+
+	summary, err := h.repo.GetDashboardSummary(ctx, uid)
 	if err != nil {
 		h.logger.Error().Err(err).Msg("failed to get financial health")
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to get financial health"})
 		return
 	}
 
+	// Split expenses into consumption vs productive using category keyword matching.
+	now := time.Now().UTC()
+	monthStart := time.Date(now.Year(), now.Month(), 1, 0, 0, 0, 0, time.UTC)
+	categories, _ := h.repo.GetExpensesByCategory(ctx, uid, monthStart, now)
+
+	productiveExpenses := 0.0
+	for _, cat := range categories {
+		if isProductiveCategory(cat.CategoryName) {
+			productiveExpenses += cat.Amount
+		}
+	}
+	consumptionExpenses := summary.CurrentMonthExpenses - productiveExpenses
+	if consumptionExpenses < 0 {
+		consumptionExpenses = 0
+	}
+
+	// Score based on consumption ratio only (productive expenses are excluded).
 	score := 100.0
 	if summary.CurrentMonthIncomes > 0 {
-		ratio := summary.CurrentMonthExpenses / summary.CurrentMonthIncomes
+		consumptionRatio := consumptionExpenses / summary.CurrentMonthIncomes
 		switch {
-		case ratio >= 1.0:
+		case consumptionRatio >= 1.0:
 			score = 20.0
-		case ratio >= 0.9:
+		case consumptionRatio >= 0.9:
 			score = 40.0
-		case ratio >= 0.7:
+		case consumptionRatio >= 0.7:
 			score = 60.0
-		case ratio >= 0.5:
+		case consumptionRatio >= 0.5:
 			score = 80.0
 		}
 	} else if summary.CurrentMonthExpenses > 0 {
@@ -266,12 +310,14 @@ func (h *AnalyticsHandler) GetFinancialHealth(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, gin.H{
-		"score":                  score,
-		"status":                 status,
-		"savings_rate":           savingsRate,
-		"current_month_expenses": summary.CurrentMonthExpenses,
-		"current_month_incomes":  summary.CurrentMonthIncomes,
-		"current_month_balance":  summary.CurrentMonthBalance,
+		"score":                   score,
+		"status":                  status,
+		"savings_rate":            savingsRate,
+		"current_month_expenses":  summary.CurrentMonthExpenses,
+		"current_month_incomes":   summary.CurrentMonthIncomes,
+		"current_month_balance":   summary.CurrentMonthBalance,
+		"productive_expenses":     productiveExpenses,
+		"consumption_expenses":    consumptionExpenses,
 	})
 }
 

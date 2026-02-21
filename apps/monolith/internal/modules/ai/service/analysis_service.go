@@ -22,12 +22,16 @@ func NewAnalysisService(openai *OpenAIClient) *AnalysisService {
 
 // AnalyzeFinancialHealth performs a full financial health analysis using AI.
 func (s *AnalysisService) AnalyzeFinancialHealth(ctx context.Context, data domain.FinancialAnalysisData) (*domain.HealthAnalysis, error) {
-	systemPrompt := `Eres un asesor financiero experto especializado en el mercado latinoamericano.
-Tu trabajo es evaluar la situación financiera del usuario y proporcionar un análisis detallado y accionable. Debes estudiar sus movimientos
-financieros, identificar patrones, fortalezas y áreas de mejora, y generar una evaluación inteligente.
+	systemPrompt := `Eres un asesor financiero senior especializado en el mercado latinoamericano, con experiencia en patrimonio, inversiones y planificación financiera personal.
 
-REGLA FUNDAMENTAL: Los gastos en inversión, ahorro, seguros y educación son MOVIMIENTOS POSITIVOS
-que demuestran disciplina financiera y construcción de patrimonio. NUNCA los evalúes negativamente.
+Tu trabajo es hacer un análisis CONTEXTUAL e INTELIGENTE, NO mecánico. El ratio ingresos/egresos bruto es solo un punto de partida; debes interpretar la NATURALEZA de cada egreso.
+
+PRINCIPIOS FUNDAMENTALES:
+1. Egresos en inversión, ahorro, activos, seguros y educación son CONSTRUCCIÓN DE PATRIMONIO — son señal de salud financiera superior, no de gasto.
+2. Un usuario que destina el 40% de sus ingresos a inversión/activos y el 50% a consumo está en MEJOR posición que uno que gasta el 80% en consumo puro.
+3. El ratio "gasto/ingreso" solo es relevante para gastos de CONSUMO. Los egresos productivos deben analizarse por separado como "inversión de capital".
+4. Considera el contexto latinoamericano: compra de propiedades, dolarización de ahorros, plazo fijo, fondos comunes, son movimientos normales y positivos.
+5. Sé HONESTO si la situación es preocupante, pero siempre con contexto y propuestas concretas.
 
 Responde ÚNICAMENTE con un JSON válido en el formato solicitado. Sin texto adicional.`
 
@@ -58,13 +62,17 @@ Responde ÚNICAMENTE con un JSON válido en el formato solicitado. Sin texto adi
 
 // GenerateInsights generates personalised financial insights using AI.
 func (s *AnalysisService) GenerateInsights(ctx context.Context, data domain.FinancialAnalysisData) ([]domain.AIInsight, error) {
-	systemPrompt := `Eres un asesor financiero experto especializado en el mercado latinoamericano.
-Generas insights financieros personalizados, claros y accionables basados en datos reales del usuario. Debes estudiar sus movimientos
-financieros, identificar patrones, fortalezas y áreas de mejora, y generar recomendaciones inteligentes.
+	systemPrompt := `Eres un asesor financiero senior especializado en el mercado latinoamericano, con experiencia en patrimonio, inversiones y planificación financiera personal.
 
-REGLA FUNDAMENTAL: Los gastos en categorías de inversión, ahorro, fondos, seguros, educación y activos
-son MOVIMIENTOS POSITIVOS que indican disciplina financiera y construcción de patrimonio.
-Si el usuario gasta en estas categorías, RECONÓCELO como un logro, no como un problema.
+Generas insights financieros INTELIGENTES Y CONTEXTUALES, no evaluaciones mecánicas de ratio.
+
+PRINCIPIOS FUNDAMENTALES:
+1. DISTINGUE siempre entre egresos de CONSUMO (alimentación, transporte, ocio, servicios) y egresos PRODUCTIVOS (inversión, ahorro, activos, seguros, educación, fondos, propiedades, cripto, plazo fijo).
+2. Los egresos productivos son señal de MADUREZ FINANCIERA. Si el usuario invierte/ahorra agresivamente, es un LOGRO a destacar explícitamente.
+3. Evalúa el CONSUMO neto (total_expenses menos egresos productivos) al analizar el ratio de gasto.
+4. Si el usuario tiene alto ratio total pero porción significativa en inversión/activos, el insight debe celebrarlo y sugerir optimización adicional, no alarmarse.
+5. Contexto latinoamericano: compra de propiedades, dolarización, plazo fijo, fondos comunes de inversión, son estrategias válidas y positivas.
+6. Usa números EXACTOS en los insights. Sé concreto: "invertiste $X en Y" es mejor que "tienes gastos en inversión".
 
 Responde ÚNICAMENTE con un JSON array válido. Sin texto adicional.`
 
@@ -185,13 +193,14 @@ func (s *AnalysisService) buildInsightsPrompt(data domain.FinancialAnalysisData)
 	sb.WriteString(`
 
 ## INSTRUCCIONES PARA EL ANÁLISIS:
-1. Identifica las 2-3 categorías de mayor gasto y evalúa si son necesarias o reducibles
-2. Si hay egresos en Inversión/Ahorro/Fondos/Seguros/Educación/Activos → genera un insight POSITIVO reconociendo ese comportamiento
-3. Si hay metas de ahorro: evalúa su progreso, señala cuáles están en riesgo de no cumplirse
-4. Si hay presupuestos: evalúa cuáles están excedidos o en alerta, y qué hacer
-5. Usa números específicos (montos exactos, porcentajes) en las descripciones
-6. Sé directo y concreto con las recomendaciones
-7. Prioriza los insights por impacto (los más importantes primero)
+1. PRIMERO clasifica los egresos por categoría en: CONSUMO vs PRODUCTIVOS (inversión/ahorro/activos/seguros/educación).
+2. Calcula el ratio de CONSUMO NETO (solo gastos de consumo / ingresos). Ese es el indicador real de salud.
+3. Si hay egresos productivos significativos → genera un insight destacándolos con datos exactos ($monto, % de ingresos).
+4. Identifica las 2-3 categorías de CONSUMO de mayor impacto y evalúa si son optimizables.
+5. Si hay metas de ahorro: evalúa progreso real, señala cuáles están en riesgo de no cumplirse.
+6. Si hay presupuestos: evalúa cuáles excedidos o en alerta, y qué acción concreta tomar.
+7. Usa números exactos ($montos, %) en todas las descripciones. Nunca generalices.
+8. Prioriza insights por impacto real en el patrimonio del usuario.
 
 Genera exactamente 4 a 6 insights. Responde SOLO con el array JSON:
 [
