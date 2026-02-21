@@ -197,14 +197,14 @@ const Resumen = () => {
 
       // Process received responses
 
-      if (budgetsRes?.data?.data) {
-        setBudgetsSummary(budgetsRes.data.data);
+      if (budgetsRes?.data) {
+        setBudgetsSummary(budgetsRes.data);
       }
-      if (savingsRes?.data?.data) {
-        setSavingsGoalsSummary(savingsRes.data.data);
+      if (savingsRes?.data) {
+        setSavingsGoalsSummary(savingsRes.data);
       }
-      if (recurringRes?.data?.data) {
-        setRecurringTransactionsSummary(recurringRes.data.data);
+      if (recurringRes?.data) {
+        setRecurringTransactionsSummary(recurringRes.data);
       }
       if (healthRes) {
         // Extraer health score - usar estructura consistente con AIInsights
@@ -939,7 +939,7 @@ const Resumen = () => {
                   Metas de Ahorro
                 </p>
                 <p className="text-lg sm:text-xl font-bold text-green-600 break-words">
-                  {formatAmount(savingsGoalsSummary.summary?.total_saved || 0)}
+                  {formatAmount(savingsGoalsSummary.total_saved || 0)}
                 </p>
               </div>
               <div className="flex-shrink-0 p-1.5 sm:p-2 rounded-fr bg-green-100 dark:bg-green-900/30 ml-2">
@@ -947,8 +947,8 @@ const Resumen = () => {
               </div>
             </div>
             <div className="flex flex-col space-y-1 text-xs text-fr-gray-500 dark:text-gray-400">
-              <span>{savingsGoalsSummary.summary?.active_goals || 0} metas activas</span>
-              <span>Meta: {formatAmount(savingsGoalsSummary.summary?.total_target || 0)}</span>
+              <span>{savingsGoalsSummary.active_goals || 0} metas activas</span>
+              <span>Meta: {formatAmount(savingsGoalsSummary.total_target || 0)}</span>
             </div>
           </div>
         ) : (
