@@ -8,18 +8,18 @@ import (
 
 // Achievement represents a single gamification achievement for a user.
 type Achievement struct {
-	ID          string
-	UserID      string
-	Type        string
-	Name        string
-	Description string
-	Points      int
-	Progress    int
-	Target      int
-	Completed   bool
-	UnlockedAt  *time.Time
-	CreatedAt   time.Time
-	UpdatedAt   time.Time
+	ID          string     `json:"id"`
+	UserID      string     `json:"user_id"`
+	Type        string     `json:"type"`
+	Name        string     `json:"name"`
+	Description string     `json:"description"`
+	Points      int        `json:"points"`
+	Progress    int        `json:"progress"`
+	Target      int        `json:"target"`
+	Completed   bool       `json:"completed"`
+	UnlockedAt  *time.Time `json:"unlocked_at,omitempty"`
+	CreatedAt   time.Time  `json:"created_at"`
+	UpdatedAt   time.Time  `json:"updated_at"`
 }
 
 // IsCompleted returns true when the achievement's progress has reached its target.
