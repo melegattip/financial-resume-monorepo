@@ -46,7 +46,7 @@ const SavingsGoals = () => {
         } catch (_) {}
 
         const res = await savingsGoalsAPI.getTransactions(selectedGoal.id, { limit: 100, offset: 0 });
-        const txs = res?.data?.data?.transactions || res?.data?.transactions || [];
+        const txs = res?.data?.data || res?.data?.transactions || [];
         setTransactions(txs);
       } catch (error) {
         console.error('Error loading transactions:', error);
@@ -136,25 +136,7 @@ const SavingsGoals = () => {
       };
 
       if (editingGoal) {
-        // Construir payload parcial solo con cambios
-        const partial = {};
-        if (editingGoal.name !== fullPayload.name) partial.name = fullPayload.name;
-        if ((editingGoal.description || '') !== (fullPayload.description || '')) partial.description = fullPayload.description;
-        if (Number(editingGoal.target_amount) !== Number(fullPayload.target_amount)) partial.target_amount = fullPayload.target_amount;
-        if (editingGoal.category !== fullPayload.category) partial.category = fullPayload.category;
-        if (editingGoal.priority !== fullPayload.priority) partial.priority = fullPayload.priority;
-        if (targetDateISO) partial.target_date = targetDateISO;
-        if (fullPayload.is_auto_save !== undefined) {
-          // Solo enviar si cambió el flag o parámetros asociados
-          if (Boolean(editingGoal.is_auto_save) !== Boolean(fullPayload.is_auto_save)) partial.is_auto_save = fullPayload.is_auto_save;
-          if (fullPayload.is_auto_save) {
-            if (Number(editingGoal.auto_save_amount || 0) !== Number(fullPayload.auto_save_amount || 0)) partial.auto_save_amount = fullPayload.auto_save_amount;
-            if ((editingGoal.auto_save_frequency || '') !== (fullPayload.auto_save_frequency || '')) partial.auto_save_frequency = fullPayload.auto_save_frequency;
-          }
-        }
-        if (fullPayload.image_url) partial.image_url = fullPayload.image_url;
-
-        const res = await savingsGoalsAPI.update(editingGoal.id, Object.keys(partial).length ? partial : { name: fullPayload.name });
+        const res = await savingsGoalsAPI.update(editingGoal.id, fullPayload);
         const updated = res?.data?.data || null;
         // Refrescar la vista de detalle inmediatamente si estamos viendo esta meta
         if (updated && selectedGoal && selectedGoal.id === editingGoal.id) {
@@ -218,7 +200,7 @@ const SavingsGoals = () => {
         } catch (_) {}
         try {
           const txRes = await savingsGoalsAPI.getTransactions(justOperatedGoalId, { limit: 100, offset: 0 });
-          const txs = txRes?.data?.data?.transactions || txRes?.data?.transactions || [];
+          const txs = txRes?.data?.data || txRes?.data?.transactions || [];
           setTransactions(txs);
         } catch (_) {}
       }
