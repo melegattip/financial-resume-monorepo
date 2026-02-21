@@ -47,8 +47,8 @@ func (r *AnalyticsRepo) GetExpenseSummary(ctx context.Context, userID string, fr
 		SELECT COALESCE(SUM(amount), 0) AS total, COUNT(*) AS cnt
 		FROM expenses
 		WHERE user_id = ?
-		  AND transaction_date >= ?
-		  AND transaction_date <= ?
+		  AND created_at >= ?
+		  AND created_at <= ?
 		  AND deleted_at IS NULL
 	`, userID, from, to).Scan(&totals).Error
 	if err != nil {
@@ -64,14 +64,14 @@ func (r *AnalyticsRepo) GetExpenseSummary(ctx context.Context, userID string, fr
 	// --- By month ---
 	var monthlyRows []monthlyRow
 	err = r.db.WithContext(ctx).Raw(`
-		SELECT EXTRACT(YEAR FROM transaction_date)::int  AS yr,
-		       EXTRACT(MONTH FROM transaction_date)::int AS mo,
-		       COALESCE(SUM(amount), 0)                  AS amount,
-		       COUNT(*)                                   AS cnt
+		SELECT EXTRACT(YEAR FROM created_at)::int  AS yr,
+		       EXTRACT(MONTH FROM created_at)::int AS mo,
+		       COALESCE(SUM(amount), 0)            AS amount,
+		       COUNT(*)                             AS cnt
 		FROM expenses
 		WHERE user_id = ?
-		  AND transaction_date >= ?
-		  AND transaction_date <= ?
+		  AND created_at >= ?
+		  AND created_at <= ?
 		  AND deleted_at IS NULL
 		GROUP BY yr, mo
 		ORDER BY yr ASC, mo ASC
@@ -112,8 +112,8 @@ func (r *AnalyticsRepo) GetIncomeSummary(ctx context.Context, userID string, fro
 		SELECT COALESCE(SUM(amount), 0) AS total, COUNT(*) AS cnt
 		FROM incomes
 		WHERE user_id = ?
-		  AND received_date >= ?
-		  AND received_date <= ?
+		  AND created_at >= ?
+		  AND created_at <= ?
 		  AND deleted_at IS NULL
 	`, userID, from, to).Scan(&totals).Error
 	if err != nil {
@@ -123,14 +123,14 @@ func (r *AnalyticsRepo) GetIncomeSummary(ctx context.Context, userID string, fro
 	// --- By month ---
 	var monthlyRows []monthlyRow
 	err = r.db.WithContext(ctx).Raw(`
-		SELECT EXTRACT(YEAR FROM received_date)::int  AS yr,
-		       EXTRACT(MONTH FROM received_date)::int AS mo,
-		       COALESCE(SUM(amount), 0)               AS amount,
-		       COUNT(*)                                AS cnt
+		SELECT EXTRACT(YEAR FROM created_at)::int  AS yr,
+		       EXTRACT(MONTH FROM created_at)::int AS mo,
+		       COALESCE(SUM(amount), 0)            AS amount,
+		       COUNT(*)                             AS cnt
 		FROM incomes
 		WHERE user_id = ?
-		  AND received_date >= ?
-		  AND received_date <= ?
+		  AND created_at >= ?
+		  AND created_at <= ?
 		  AND deleted_at IS NULL
 		GROUP BY yr, mo
 		ORDER BY yr ASC, mo ASC
@@ -173,9 +173,9 @@ func (r *AnalyticsRepo) GetDashboardSummary(ctx context.Context, userID string) 
 	err := r.db.WithContext(ctx).Raw(`
 		SELECT
 		  COALESCE((SELECT SUM(amount) FROM expenses
-		            WHERE user_id = ? AND transaction_date >= ? AND deleted_at IS NULL), 0) AS expenses,
+		            WHERE user_id = ? AND created_at >= ? AND deleted_at IS NULL), 0) AS expenses,
 		  COALESCE((SELECT SUM(amount) FROM incomes
-		            WHERE user_id = ? AND received_date >= ? AND deleted_at IS NULL), 0) AS incomes
+		            WHERE user_id = ? AND created_at >= ? AND deleted_at IS NULL), 0) AS incomes
 	`, userID, monthStart, userID, monthStart).Scan(&mt).Error
 	if err != nil {
 		return nil, err
@@ -292,13 +292,13 @@ func (r *AnalyticsRepo) GetMonthlyExpenses(ctx context.Context, userID string, m
 
 	var rows []monthlyRow
 	err := r.db.WithContext(ctx).Raw(`
-		SELECT EXTRACT(YEAR FROM transaction_date)::int  AS yr,
-		       EXTRACT(MONTH FROM transaction_date)::int AS mo,
-		       COALESCE(SUM(amount), 0)                  AS amount,
-		       COUNT(*)                                   AS cnt
+		SELECT EXTRACT(YEAR FROM created_at)::int  AS yr,
+		       EXTRACT(MONTH FROM created_at)::int AS mo,
+		       COALESCE(SUM(amount), 0)            AS amount,
+		       COUNT(*)                             AS cnt
 		FROM expenses
 		WHERE user_id = ?
-		  AND transaction_date >= ?
+		  AND created_at >= ?
 		  AND deleted_at IS NULL
 		GROUP BY yr, mo
 		ORDER BY yr ASC, mo ASC
@@ -320,13 +320,13 @@ func (r *AnalyticsRepo) GetMonthlyIncomes(ctx context.Context, userID string, mo
 
 	var rows []monthlyRow
 	err := r.db.WithContext(ctx).Raw(`
-		SELECT EXTRACT(YEAR FROM received_date)::int  AS yr,
-		       EXTRACT(MONTH FROM received_date)::int AS mo,
-		       COALESCE(SUM(amount), 0)               AS amount,
-		       COUNT(*)                                AS cnt
+		SELECT EXTRACT(YEAR FROM created_at)::int  AS yr,
+		       EXTRACT(MONTH FROM created_at)::int AS mo,
+		       COALESCE(SUM(amount), 0)            AS amount,
+		       COUNT(*)                             AS cnt
 		FROM incomes
 		WHERE user_id = ?
-		  AND received_date >= ?
+		  AND created_at >= ?
 		  AND deleted_at IS NULL
 		GROUP BY yr, mo
 		ORDER BY yr ASC, mo ASC
@@ -357,15 +357,15 @@ func (r *AnalyticsRepo) GetTransactionsForReport(ctx context.Context, userID str
 		SELECT id, COALESCE(category_id, '') AS category_id, 'expense' AS tx_type, amount
 		FROM expenses
 		WHERE user_id = ?
-		  AND transaction_date >= ?
-		  AND transaction_date <= ?
+		  AND created_at >= ?
+		  AND created_at <= ?
 		  AND deleted_at IS NULL
 		UNION ALL
 		SELECT id, '' AS category_id, 'income' AS tx_type, amount
 		FROM incomes
 		WHERE user_id = ?
-		  AND received_date >= ?
-		  AND received_date <= ?
+		  AND created_at >= ?
+		  AND created_at <= ?
 		  AND deleted_at IS NULL
 	`, userID, from, to, userID, from, to).Scan(&rows).Error
 	if err != nil {
@@ -396,8 +396,8 @@ func (r *AnalyticsRepo) GetExpensesByCategory(ctx context.Context, userID string
 		FROM expenses e
 		LEFT JOIN categories c ON c.id = e.category_id AND c.deleted_at IS NULL
 		WHERE e.user_id = ?
-		  AND e.transaction_date >= ?
-		  AND e.transaction_date <= ?
+		  AND e.created_at >= ?
+		  AND e.created_at <= ?
 		  AND e.deleted_at IS NULL
 		GROUP BY e.category_id, c.name
 		ORDER BY amount DESC
