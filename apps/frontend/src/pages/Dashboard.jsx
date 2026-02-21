@@ -318,9 +318,9 @@ const Resumen = () => {
 
 
       const result = data.categoriesAnalytics.map((category, index) => ({
-        name: category.Name || category.CategoryName || category.category_name || 'Sin nombre',
-        value: category.Percentage || category.PercentageOfExpenses || category.percentage_of_expenses || 0,
-        amount: category.TotalAmount || category.total_amount || 0,
+        name: category.category_name || category.CategoryName || category.Name || 'Sin nombre',
+        value: category.percentage || category.Percentage || category.percentage_of_expenses || 0,
+        amount: category.amount || category.Amount || category.total_amount || category.TotalAmount || 0,
         color: colors[index % colors.length]
       })).filter(item => item.value > 0);
 

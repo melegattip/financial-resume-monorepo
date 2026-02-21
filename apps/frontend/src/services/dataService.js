@@ -78,6 +78,28 @@ class DataService {
   }
 
   /**
+   * Converts month/year filter params to analytics API date params (from/to ISO strings).
+   * The analytics backend endpoints use parsePeriod() which expects `from` and `to`,
+   * not `month` and `year`.
+   */
+  toAnalyticsDateParams(filterParams = {}) {
+    if (filterParams.month && filterParams.year) {
+      const year = parseInt(filterParams.year);
+      const month = parseInt(filterParams.month);
+      const from = new Date(Date.UTC(year, month - 1, 1)).toISOString();
+      const to = new Date(Date.UTC(year, month, 0, 23, 59, 59)).toISOString();
+      return { from, to };
+    }
+    if (filterParams.year) {
+      const year = parseInt(filterParams.year);
+      const from = new Date(Date.UTC(year, 0, 1)).toISOString();
+      const to = new Date(Date.UTC(year, 11, 31, 23, 59, 59)).toISOString();
+      return { from, to };
+    }
+    return {};
+  }
+
+  /**
    * Carga datos del dashboard de forma optimizada
    */
   async loadDashboardData(filterParams = {}, useOptimizedEndpoints = true) {
@@ -85,10 +107,13 @@ class DataService {
       if (useOptimizedEndpoints) {
         console.log('🚀 Cargando dashboard con endpoints optimizados...');
 
+        // Convert month/year to from/to for analytics endpoints
+        const analyticsParams = this.toAnalyticsDateParams(filterParams);
+
         // Llamadas paralelas con cache.
         // - /dashboard: métricas pre-calculadas del backend
         // - /expenses y /incomes: items individuales (transactions module)
-        // - /analytics/categories: breakdown por categoría
+        // - /analytics/categories: breakdown por categoría (usa from/to, no month/year)
         // - /categories: lista para dropdowns
         const [dashboard, expenses, incomes, categories, categoriesDropdown] = await Promise.all([
           this.getCachedData(
@@ -104,8 +129,8 @@ class DataService {
             () => incomesAPI.list()
           ),
           this.getCachedData(
-            this.getCacheKey('analytics_categories', filterParams),
-            () => analyticsAPI.categories(filterParams)
+            this.getCacheKey('analytics_categories', analyticsParams),
+            () => analyticsAPI.categories(analyticsParams)
           ),
           this.getCachedData(
             this.getCacheKey('categories_list', {}),
@@ -212,8 +237,10 @@ class DataService {
       // Datos del /dashboard backend (para health score y otros widgets que lo consuman directamente)
       dashboardMetrics: dashboard || {},
       expensesSummary: expenses?.Summary || {},
-      // GET /analytics/categories retorna { data: [...] } no { Categories: [...] }
-      categoriesAnalytics: categories?.data || categories?.Categories || [],
+      // GET /analytics/categories → axios response: { data: { data: [...], total: N } }
+      // categories.data = response body = { data: [...], total: N }
+      // categories.data.data = the actual array of CategorySummary items
+      categoriesAnalytics: categories?.data?.data || categories?.data?.Categories || [],
 
       // Datos sin filtrar (para cálculos globales)
       allExpenses: normalizedExpenses,

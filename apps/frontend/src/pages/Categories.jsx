@@ -1,10 +1,15 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { FaPlus, FaSearch, FaTag, FaEdit, FaTrash } from 'react-icons/fa';
+import { FaPlus, FaSearch, FaTag, FaEdit, FaTrash, FaChartBar } from 'react-icons/fa';
 import { useOptimizedAPI } from '../hooks/useOptimizedAPI';
 import { useGamification } from '../contexts/GamificationContext';
+import { usePeriod } from '../contexts/PeriodContext';
 import ValidatedInput from '../components/ValidatedInput';
 import { validateCategoryName } from '../utils/validation';
+import { analyticsAPI, formatCurrency } from '../services/api';
+import dataService from '../services/dataService';
 import toast from 'react-hot-toast';
+
+const CHART_COLORS = ['#009ee3', '#00a650', '#ff6900', '#e53e3e', '#6b7280', '#8b5cf6', '#f59e0b', '#06b6d4', '#ec4899'];
 
 const Categories = () => {
   const [categories, setCategories] = useState([]);
@@ -21,10 +26,17 @@ const Categories = () => {
   const [isFormValid, setIsFormValid] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
+  // Spending analytics
+  const [spendingByCategory, setSpendingByCategory] = useState([]);
+  const [spendingLoading, setSpendingLoading] = useState(false);
+
   // Usar el hook optimizado para operaciones API
-  const { 
+  const {
     categories: categoriesAPI
   } = useOptimizedAPI();
+
+  // Global period filter
+  const { getFilterParams, getPeriodTitle } = usePeriod();
 
   // Hook de gamificación
   const { recordAction } = useGamification();
@@ -55,9 +67,25 @@ const Categories = () => {
     }
   }, [categoriesAPI]);
 
+  const loadSpendingAnalytics = useCallback(async () => {
+    setSpendingLoading(true);
+    try {
+      const analyticsParams = dataService.toAnalyticsDateParams(getFilterParams());
+      const response = await analyticsAPI.categories(analyticsParams);
+      const items = response?.data?.data || response?.data?.Categories || [];
+      setSpendingByCategory(Array.isArray(items) ? items : []);
+    } catch (err) {
+      console.error('Error loading category spending:', err);
+      setSpendingByCategory([]);
+    } finally {
+      setSpendingLoading(false);
+    }
+  }, [getFilterParams]);
+
   useEffect(() => {
     loadCategories();
-  }, [loadCategories]);
+    loadSpendingAnalytics();
+  }, [loadCategories, loadSpendingAnalytics]);
 
   // Validar formulario completo
   const validateForm = useCallback(() => {
@@ -212,6 +240,54 @@ const Categories = () => {
             <span>Nueva Categoría</span>
           </button>
         </div>
+      </div>
+
+      {/* Gastos por categoría — período seleccionado */}
+      <div className="card">
+        <div className="flex items-center justify-between mb-4">
+          <h3 className="text-base font-semibold text-fr-gray-900 dark:text-gray-100 flex items-center space-x-2">
+            <FaChartBar className="w-4 h-4 text-fr-primary dark:text-blue-400" />
+            <span>Gastos por categoría — {getPeriodTitle()}</span>
+          </h3>
+        </div>
+
+        {spendingLoading ? (
+          <div className="space-y-2">
+            {[1, 2, 3].map(i => (
+              <div key={i} className="h-8 bg-gray-200 dark:bg-gray-700 rounded animate-pulse" />
+            ))}
+          </div>
+        ) : spendingByCategory.length === 0 ? (
+          <p className="text-sm text-fr-gray-500 dark:text-gray-400 py-4 text-center">
+            Sin gastos registrados con categoría en este período.
+          </p>
+        ) : (
+          <div className="space-y-3">
+            {spendingByCategory.map((cat, index) => {
+              const pct = cat.percentage || 0;
+              const color = CHART_COLORS[index % CHART_COLORS.length];
+              return (
+                <div key={cat.category_id || index}>
+                  <div className="flex items-center justify-between text-sm mb-1">
+                    <span className="font-medium text-fr-gray-800 dark:text-gray-200 truncate max-w-xs">
+                      {cat.category_name || 'Sin nombre'}
+                    </span>
+                    <div className="flex items-center space-x-3 flex-shrink-0 ml-4">
+                      <span className="text-fr-gray-500 dark:text-gray-400 text-xs">{pct.toFixed(1)}%</span>
+                      <span className="font-semibold text-fr-gray-900 dark:text-gray-100">{formatCurrency(cat.amount || 0)}</span>
+                    </div>
+                  </div>
+                  <div className="w-full bg-gray-100 dark:bg-gray-700 rounded-full h-2 overflow-hidden">
+                    <div
+                      className="h-2 rounded-full transition-all duration-500"
+                      style={{ width: `${Math.min(pct, 100)}%`, backgroundColor: color }}
+                    />
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
       </div>
 
       {/* Lista de categorías */}
