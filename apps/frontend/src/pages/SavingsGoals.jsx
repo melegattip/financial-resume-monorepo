@@ -63,6 +63,7 @@ const SavingsGoals = () => {
     description: '',
     target_amount: '',
     current_amount: '',
+    adjustment_description: '',
     target_date: '',
     category: 'emergency',
     priority: 'medium',
@@ -90,7 +91,7 @@ const SavingsGoals = () => {
       ]);
       
       setGoals(Array.isArray(goalsRes.data.data) ? goalsRes.data.data : goalsRes.data.data?.goals || []);
-      setDashboard(dashboardRes.data.data);
+      setDashboard(dashboardRes.data);
     } catch (error) {
       console.error('Error loading savings goals:', error);
       toast.error('Error cargando metas de ahorro');
@@ -137,6 +138,20 @@ const SavingsGoals = () => {
 
       if (editingGoal) {
         const res = await savingsGoalsAPI.update(editingGoal.id, fullPayload);
+
+        // Ajustar el monto ahorrado si cambió
+        const newCurrentAmount = parseFloat(formData.current_amount || 0);
+        const oldCurrentAmount = Number(editingGoal.current_amount || 0);
+        const diff = newCurrentAmount - oldCurrentAmount;
+        if (Math.abs(diff) > 0.001) {
+          const txDescription = formData.adjustment_description || (diff > 0 ? 'Ajuste manual (depósito)' : 'Ajuste manual (retiro)');
+          if (diff > 0) {
+            await savingsGoalsAPI.deposit(editingGoal.id, { amount: diff, description: txDescription });
+          } else {
+            await savingsGoalsAPI.withdraw(editingGoal.id, { amount: Math.abs(diff), description: txDescription });
+          }
+        }
+
         const updated = res?.data?.data || null;
         // Refrescar la vista de detalle inmediatamente si estamos viendo esta meta
         if (updated && selectedGoal && selectedGoal.id === editingGoal.id) {
@@ -285,6 +300,7 @@ const SavingsGoals = () => {
       description: '',
       target_amount: '',
       current_amount: '',
+      adjustment_description: '',
       target_date: '',
       // Usar categoría válida por defecto
       category: 'emergency',
@@ -563,6 +579,37 @@ const SavingsGoals = () => {
                   />
                 </div>
 
+                {editingGoal && (
+                  <>
+                    <div>
+                      <label className="block text-lg font-medium text-gray-900 dark:text-gray-100 mb-2">
+                        Monto ahorrado
+                      </label>
+                      <input
+                        type="number"
+                        step="0.01"
+                        min="0"
+                        value={formData.current_amount}
+                        onChange={(e) => setFormData({...formData, current_amount: e.target.value})}
+                        className="w-full border border-gray-300 dark:border-gray-600 rounded-lg px-4 py-3 text-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
+                        placeholder="Monto actualmente ahorrado"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-lg font-medium text-gray-900 dark:text-gray-100 mb-2">
+                        Descripción del ajuste
+                      </label>
+                      <input
+                        type="text"
+                        value={formData.adjustment_description}
+                        onChange={(e) => setFormData({...formData, adjustment_description: e.target.value})}
+                        className="w-full border border-gray-300 dark:border-gray-600 rounded-lg px-4 py-3 text-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
+                        placeholder="Ej: Depósito inicial, Cobro de sueldo, Retiro parcial..."
+                      />
+                    </div>
+                  </>
+                )}
+
                 <div>
                   <label className="block text-lg font-medium text-gray-900 dark:text-gray-100 mb-2">
                     Plazo
@@ -693,7 +740,7 @@ const SavingsGoals = () => {
             <h2 className="text-lg font-medium text-gray-600 dark:text-gray-400 mb-3">Total ahorrado</h2>
             <div className="mb-8">
               <span className="text-4xl sm:text-5xl font-bold text-gray-900 dark:text-gray-100">
-                {formatAmount(dashboard?.summary?.total_saved || 0, balancesHidden)}
+                {formatAmount(dashboard?.total_saved || 0, balancesHidden)}
               </span>
             </div>
           </div>
@@ -895,6 +942,37 @@ const SavingsGoals = () => {
                   required
                 />
               </div>
+
+              {editingGoal && (
+                <>
+                  <div>
+                    <label className="block text-lg font-medium text-gray-900 dark:text-gray-100 mb-2">
+                      Monto ahorrado
+                    </label>
+                    <input
+                      type="number"
+                      step="0.01"
+                      min="0"
+                      value={formData.current_amount}
+                      onChange={(e) => setFormData({...formData, current_amount: e.target.value})}
+                      className="w-full border border-gray-300 dark:border-gray-600 rounded-lg px-4 py-3 text-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
+                      placeholder="Monto actualmente ahorrado"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-lg font-medium text-gray-900 dark:text-gray-100 mb-2">
+                      Descripción del ajuste
+                    </label>
+                    <input
+                      type="text"
+                      value={formData.adjustment_description}
+                      onChange={(e) => setFormData({...formData, adjustment_description: e.target.value})}
+                      className="w-full border border-gray-300 dark:border-gray-600 rounded-lg px-4 py-3 text-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
+                      placeholder="Ej: Depósito inicial, Cobro de sueldo, Retiro parcial..."
+                    />
+                  </div>
+                </>
+              )}
 
               <div>
                 <label className="block text-lg font-medium text-gray-900 dark:text-gray-100 mb-2">
