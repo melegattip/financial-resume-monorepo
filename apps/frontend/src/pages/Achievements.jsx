@@ -51,20 +51,20 @@ const Achievements = () => {
   };
 
   const getLevelInfo = (level) => {
-    const levels = [
-      { level: 0, name: "Financial Newbie", color: "#94A3B8", emoji: "🌱", description: "Comenzando tu viaje financiero" },
-      { level: 1, name: "Money Aware", color: "#60A5FA", emoji: "👀", description: "Consciente de tus finanzas" },
-      { level: 2, name: "Budget Tracker", color: "#34D399", emoji: "📊", description: "Seguimiento activo del presupuesto" },
-      { level: 3, name: "Savings Starter", color: "#FBBF24", emoji: "💰", description: "Iniciando el camino del ahorro" },
-      { level: 4, name: "Financial Explorer", color: "#F472B6", emoji: "🧭", description: "Explorando nuevas estrategias" },
-      { level: 5, name: "Money Manager", color: "#A78BFA", emoji: "💼", description: "Gestión avanzada del dinero" },
-      { level: 6, name: "Investment Learner", color: "#FB7185", emoji: "📈", description: "Aprendiendo sobre inversiones" },
-      { level: 7, name: "Financial Guru", color: "#10B981", emoji: "🧠", description: "Maestro de las finanzas" },
-      { level: 8, name: "Money Master", color: "#8B5CF6", emoji: "👑", description: "Dominio total del dinero" },
-      { level: 9, name: "Financial Magnate", color: "#EF4444", emoji: "💎", description: "Magnate financiero supremo" }
-    ];
-    
-    return levels[level] || levels[0];
+    const levels = {
+      1:  { level: 1,  name: "Financial Newbie",     color: "#9CA3AF", emoji: "🌱", description: "Comenzando tu viaje financiero" },
+      2:  { level: 2,  name: "Money Tracker",         color: "#10B981", emoji: "👀", description: "Registrando tus movimientos financieros" },
+      3:  { level: 3,  name: "Smart Saver",           color: "#3B82F6", emoji: "💰", description: "Ahorrando de forma inteligente" },
+      4:  { level: 4,  name: "Budget Master",         color: "#8B5CF6", emoji: "📊", description: "Dominando el control del presupuesto" },
+      5:  { level: 5,  name: "Financial Planner",     color: "#F59E0B", emoji: "📅", description: "Planificando tu futuro financiero" },
+      6:  { level: 6,  name: "Investment Seeker",     color: "#EF4444", emoji: "📈", description: "Explorando oportunidades de inversión" },
+      7:  { level: 7,  name: "Wealth Builder",        color: "#EC4899", emoji: "🏦", description: "Construyendo tu patrimonio" },
+      8:  { level: 8,  name: "Financial Strategist",  color: "#06B6D4", emoji: "🧠", description: "Estratega de las finanzas personales" },
+      9:  { level: 9,  name: "Money Mentor",          color: "#84CC16", emoji: "👑", description: "Mentor financiero experto" },
+      10: { level: 10, name: "Financial Magnate",     color: "#F97316", emoji: "💎", description: "Magnate financiero supremo" }
+    };
+
+    return levels[level] || levels[1];
   };
 
   const getAchievementIcon = (type) => {
@@ -120,8 +120,8 @@ const Achievements = () => {
     );
   }
 
-  const currentLevel = getLevelInfo(gamificationData?.current_level || 0);
-  const nextLevel = getLevelInfo((gamificationData?.current_level || 0) + 1);
+  const currentLevel = getLevelInfo(gamificationData?.current_level || 1);
+  const nextLevel = getLevelInfo((gamificationData?.current_level || 1) + 1);
   const completedAchievements = achievements?.filter(a => a.completed) || [];
   const pendingAchievements = achievements?.filter(a => !a.completed) || [];
 

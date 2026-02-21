@@ -16,13 +16,13 @@ const GamificationWidget = () => {
   const navigate = useNavigate();
   const { userProfile, loading, error, getLevelInfo, refreshTrigger } = useGamification();
   const [localXP, setLocalXP] = useState(0);
-  const [localLevel, setLocalLevel] = useState(0);
+  const [localLevel, setLocalLevel] = useState(1);
 
   // Sincronizar estado local con userProfile (sin dependencias circulares)
   useEffect(() => {
     if (userProfile) {
       const newXP = userProfile.total_xp || 0;
-      const newLevel = userProfile.current_level || 0;
+      const newLevel = userProfile.current_level || 1;
       
       // Solo actualizar si los valores realmente cambiaron
       if (newXP !== localXP || newLevel !== localLevel) {

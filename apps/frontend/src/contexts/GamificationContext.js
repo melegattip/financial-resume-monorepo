@@ -344,22 +344,22 @@ export const GamificationProvider = ({ children }) => {
     return recordAction('use_suggestion', 'suggestion', suggestionId, `Applied suggestion: ${suggestionTitle}`);
   }, [recordAction]);
 
-  // Información de niveles
+  // Información de niveles (1-based, alineado con backend)
   const getLevelInfo = (level) => {
-    const levels = [
-      { level: 0, name: "Financial Newbie", color: "#94A3B8", emoji: "🌱" },
-      { level: 1, name: "Money Aware", color: "#60A5FA", emoji: "👀" },
-      { level: 2, name: "Budget Tracker", color: "#34D399", emoji: "📊" },
-      { level: 3, name: "Savings Starter", color: "#FBBF24", emoji: "💰" },
-      { level: 4, name: "Financial Explorer", color: "#F472B6", emoji: "🧭" },
-      { level: 5, name: "Money Manager", color: "#A78BFA", emoji: "💼" },
-      { level: 6, name: "Investment Learner", color: "#FB7185", emoji: "📈" },
-      { level: 7, name: "Financial Guru", color: "#10B981", emoji: "🧠" },
-      { level: 8, name: "Money Master", color: "#8B5CF6", emoji: "👑" },
-      { level: 9, name: "Financial Magnate", color: "#EF4444", emoji: "💎" }
-    ];
-    
-    return levels[level] || levels[0];
+    const levels = {
+      1:  { level: 1,  name: "Financial Newbie",      color: "#9CA3AF", emoji: "🌱" },
+      2:  { level: 2,  name: "Money Tracker",          color: "#10B981", emoji: "👀" },
+      3:  { level: 3,  name: "Smart Saver",            color: "#3B82F6", emoji: "💰" },
+      4:  { level: 4,  name: "Budget Master",          color: "#8B5CF6", emoji: "📊" },
+      5:  { level: 5,  name: "Financial Planner",      color: "#F59E0B", emoji: "📅" },
+      6:  { level: 6,  name: "Investment Seeker",      color: "#EF4444", emoji: "📈" },
+      7:  { level: 7,  name: "Wealth Builder",         color: "#EC4899", emoji: "🏦" },
+      8:  { level: 8,  name: "Financial Strategist",   color: "#06B6D4", emoji: "🧠" },
+      9:  { level: 9,  name: "Money Mentor",           color: "#84CC16", emoji: "👑" },
+      10: { level: 10, name: "Financial Magnate",      color: "#F97316", emoji: "💎" }
+    };
+
+    return levels[level] || levels[1];
   };
 
   // Refresh de datos (útil después de acciones importantes)

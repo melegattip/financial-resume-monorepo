@@ -21,18 +21,18 @@ var levelNames = []string{
 
 // UserGamification is the aggregate root for a user's gamification state.
 type UserGamification struct {
-	ID                  string
-	UserID              string
-	TotalXP             int
-	CurrentLevel        int
-	InsightsViewed      int
-	ActionsCompleted    int
-	AchievementsCount   int
-	CurrentStreak       int
-	LastActivity        time.Time
-	CreatedAt           time.Time
-	UpdatedAt           time.Time
-	DeletedAt           *time.Time
+	ID                  string     `json:"id"`
+	UserID              string     `json:"user_id"`
+	TotalXP             int        `json:"total_xp"`
+	CurrentLevel        int        `json:"current_level"`
+	InsightsViewed      int        `json:"insights_viewed"`
+	ActionsCompleted    int        `json:"actions_completed"`
+	AchievementsCount   int        `json:"achievements_count"`
+	CurrentStreak       int        `json:"current_streak"`
+	LastActivity        time.Time  `json:"last_activity"`
+	CreatedAt           time.Time  `json:"created_at"`
+	UpdatedAt           time.Time  `json:"updated_at"`
+	DeletedAt           *time.Time `json:"deleted_at,omitempty"`
 }
 
 // NewUserGamification creates a new UserGamification for a user, starting at level 1.

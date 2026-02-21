@@ -208,7 +208,8 @@ const Resumen = () => {
       }
       if (healthRes) {
         // Extraer health score - usar estructura consistente con AIInsights
-        const healthScore = healthRes.health_score || healthRes.data?.health_score || 0;
+        // analytics endpoint returns { score: 0-100, status }, scale to 0-1000 for display
+        const healthScore = (healthRes.score || healthRes.health_score || 0) * 10;
         let healthLevel = healthRes.health_level || healthRes.data?.health_level;
 
         // Si no hay level pero hay score, calcularlo usando la misma lógica que AIInsights
