@@ -255,7 +255,6 @@ const Budgets = () => {
             <option value="">Todos los períodos</option>
             <option value="weekly">Semanal</option>
             <option value="monthly">Mensual</option>
-            <option value="quarterly">Trimestral</option>
             <option value="yearly">Anual</option>
           </select>
 
@@ -342,19 +341,13 @@ const Budgets = () => {
                 {budgets.map((budget) => (
                   <tr key={budget.id} className="hover:bg-gray-50 dark:hover:bg-gray-700/50">
                     <td className="px-6 py-4 whitespace-nowrap">
-                      <div>
-                        <div className="text-sm font-medium text-gray-900 dark:text-gray-100">{budget.name}</div>
-                        <div className="text-sm text-gray-500 dark:text-gray-400">
-                          {budget.period_start ? new Date(budget.period_start).toLocaleDateString() : ''} - {budget.period_end ? new Date(budget.period_end).toLocaleDateString() : 'Sin fin'}
-                        </div>
+                      <div className="text-sm text-gray-500 dark:text-gray-400">
+                        {budget.period_start ? new Date(budget.period_start).toLocaleDateString() : ''} - {budget.period_end ? new Date(budget.period_end).toLocaleDateString() : 'Sin fin'}
                       </div>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
-                      <div>
-                        <div className="text-sm font-medium text-gray-900 dark:text-gray-100">{budget.category_name}</div>
-                        <div className="text-sm text-gray-500 dark:text-gray-400">
-                          {budget.period_start ? new Date(budget.period_start).toLocaleDateString() : ''} - {budget.period_end ? new Date(budget.period_end).toLocaleDateString() : 'Sin fin'}
-                        </div>
+                      <div className="text-sm font-medium text-gray-900 dark:text-gray-100">
+                        {getCategoryName(budget.category_id)}
                       </div>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 dark:text-gray-100">
@@ -419,19 +412,6 @@ const Budgets = () => {
             <form onSubmit={handleSubmit} className="space-y-4">
               <div>
                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                  Nombre
-                </label>
-                <input
-                  type="text"
-                  value={formData.name}
-                  onChange={(e) => setFormData({...formData, name: e.target.value})}
-                  className="w-full border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
-                  required
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
                   Monto
                 </label>
                 <input
@@ -472,7 +452,6 @@ const Budgets = () => {
                 >
                   <option value="weekly">Semanal</option>
                   <option value="monthly">Mensual</option>
-                  <option value="quarterly">Trimestral</option>
                   <option value="yearly">Anual</option>
                 </select>
               </div>
@@ -489,31 +468,6 @@ const Budgets = () => {
                   onChange={(e) => setFormData({...formData, alert_threshold: e.target.value})}
                   className="w-full border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
                   required
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                  Fecha de inicio
-                </label>
-                <input
-                  type="date"
-                  value={formData.start_date}
-                  onChange={(e) => setFormData({...formData, start_date: e.target.value})}
-                  className="w-full border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
-                  required
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                  Fecha de fin (opcional)
-                </label>
-                <input
-                  type="date"
-                  value={formData.end_date}
-                  onChange={(e) => setFormData({...formData, end_date: e.target.value})}
-                  className="w-full border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
                 />
               </div>
 
