@@ -304,15 +304,22 @@ func (h *AnalyticsHandler) GetFinancialHealth(c *gin.Context) {
 		status = "good"
 	}
 
-	savingsRate := summary.SavingsRate
-	if savingsRate < 0 {
-		savingsRate = 0
+	// True savings rate: money NOT consumed (cash balance + money allocated to
+	// investments/assets/savings). Productive expenses are capital allocation,
+	// not spending — so they count toward savings.
+	trueSavingsRate := 0.0
+	if summary.CurrentMonthIncomes > 0 {
+		trueSavings := summary.CurrentMonthBalance + productiveExpenses
+		trueSavingsRate = trueSavings / summary.CurrentMonthIncomes * 100
+		if trueSavingsRate < 0 {
+			trueSavingsRate = 0
+		}
 	}
 
 	c.JSON(http.StatusOK, gin.H{
 		"score":                   score,
 		"status":                  status,
-		"savings_rate":            savingsRate,
+		"savings_rate":            trueSavingsRate,
 		"current_month_expenses":  summary.CurrentMonthExpenses,
 		"current_month_incomes":   summary.CurrentMonthIncomes,
 		"current_month_balance":   summary.CurrentMonthBalance,

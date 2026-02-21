@@ -687,13 +687,22 @@ const AIInsights = () => {
                   </div>
                 </div>
 
-                {/* Tasa de ahorro */}
+                {/* Tasa de ahorro real */}
                 {savingsRate !== null && (
-                  <div className="flex items-center justify-between text-xs bg-white/60 dark:bg-gray-700/60 rounded-lg p-3">
-                    <span className="text-gray-500 dark:text-gray-400">Tasa de ahorro del mes</span>
-                    <span className={`font-semibold ${savingsRate >= 20 ? 'text-green-600 dark:text-green-400' : savingsRate >= 10 ? 'text-blue-600 dark:text-blue-400' : 'text-yellow-600 dark:text-yellow-400'}`}>
-                      {savingsRate.toFixed(1)}%
-                    </span>
+                  <div className="bg-white/60 dark:bg-gray-700/60 rounded-lg p-3">
+                    <div className="flex items-center justify-between text-xs">
+                      <div>
+                        <span className="text-gray-500 dark:text-gray-400">Tasa de ahorro real del mes</span>
+                        {productiveExpenses > 0 && (
+                          <p className="text-gray-400 dark:text-gray-500 mt-0.5">
+                            Balance + inversiones / ingresos
+                          </p>
+                        )}
+                      </div>
+                      <span className={`font-semibold text-sm ${savingsRate >= 20 ? 'text-green-600 dark:text-green-400' : savingsRate >= 10 ? 'text-blue-600 dark:text-blue-400' : 'text-yellow-600 dark:text-yellow-400'}`}>
+                        {savingsRate.toFixed(1)}%
+                      </span>
+                    </div>
                   </div>
                 )}
               </div>
