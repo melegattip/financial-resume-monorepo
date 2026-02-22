@@ -24,22 +24,21 @@ export const PeriodProvider = ({ children }) => {
   const updateAvailableData = useCallback((expenses = [], incomes = []) => {
     const years = new Set();
     const months = new Set();
-    
-    // Procesar todas las transacciones sin filtrar
-    [...expenses, ...incomes].forEach(item => {
-      if (item.created_at) {
-        const date = new Date(item.created_at);
-        
-        // Validar que la fecha sea válida
-        if (!isNaN(date.getTime())) {
-          const year = date.getFullYear().toString();
-          const month = date.toISOString().slice(0, 7);
-          
-          years.add(year);
-          months.add(month);
-        }
+
+    const addDate = (dateStr) => {
+      if (!dateStr) return;
+      const date = new Date(dateStr);
+      if (!isNaN(date.getTime())) {
+        years.add(date.getFullYear().toString());
+        months.add(date.toISOString().slice(0, 7));
       }
-    });
+    };
+
+    // Expenses: use transaction_date (business date), fallback to created_at (audit only)
+    expenses.forEach(item => addDate(item.due_date || item.transaction_date || item.created_at));
+
+    // Incomes: use received_date (business date), fallback to created_at (audit only)
+    incomes.forEach(item => addDate(item.received_date || item.created_at));
     
     // Siempre incluir el año y mes actual
     const currentDate = new Date();

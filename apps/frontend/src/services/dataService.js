@@ -206,6 +206,7 @@ class DataService {
       amount: income.Amount || income.amount || 0,
       description: income.Description || income.description,
       category_id: income.CategoryID || income.category_id,
+      received_date: income.ReceivedDate || income.received_date,
       created_at: income.CreatedAt || income.created_at,
       updated_at: income.UpdatedAt || income.updated_at
     }));
@@ -298,17 +299,19 @@ class DataService {
    */
   filterDataByMonthAndYear(dataArray, monthFilter, yearFilter) {
     if (!Array.isArray(dataArray)) return [];
-    
+
     return dataArray.filter(item => {
-      if (!item.created_at) return true;
-      
-      const itemDate = new Date(item.created_at);
+      // Use the business date field; fall back to created_at only for audit purposes
+      const dateStr = item.due_date || item.transaction_date || item.received_date || item.created_at;
+      if (!dateStr) return true;
+
+      const itemDate = new Date(dateStr);
       const itemYear = itemDate.getFullYear();
       const itemMonth = itemDate.getMonth() + 1;
-      
+
       if (yearFilter && itemYear !== parseInt(yearFilter)) return false;
       if (monthFilter && itemMonth !== parseInt(monthFilter)) return false;
-      
+
       return true;
     });
   }

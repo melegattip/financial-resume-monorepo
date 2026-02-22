@@ -217,10 +217,11 @@ const Expenses = () => {
     }
 
     try {
-      // Convertir amount a número antes de enviar
+      // Convertir amount a número y fecha a RFC3339 antes de enviar
       const dataToSend = {
         ...formData,
-        amount: parseFloat(formData.amount)
+        amount: parseFloat(formData.amount),
+        due_date: formData.due_date ? `${formData.due_date}T00:00:00Z` : '',
       };
 
       // Lanzar la operación sin bloquear la UI
@@ -585,7 +586,8 @@ const Expenses = () => {
       } else if (field === 'category_id') {
         updateData.category_id = newValue;
       } else if (field === 'due_date') {
-        updateData.due_date = newValue;
+        // Convert YYYY-MM-DD from date input to RFC3339 for the backend
+        updateData.due_date = newValue ? `${newValue}T00:00:00Z` : '';
       } else {
         updateData[field] = newValue;
       }
@@ -660,10 +662,11 @@ const Expenses = () => {
         (filterPaid === 'paid' && expense.paid) ||
         (filterPaid === 'unpaid' && !expense.paid);
 
-      // Filtros de fecha
-      const expenseDate = new Date(expense.created_at);
+      // Filtros de fecha — usar transaction_date (fecha funcional del gasto)
+      const txDate = expense.due_date || expense.transaction_date || expense.created_at;
+      const expenseDate = new Date(txDate);
       const matchesYear = !selectedYear || expenseDate.getFullYear().toString() === selectedYear;
-      const matchesMonth = !selectedMonth || expense.created_at.slice(0, 7) === selectedMonth;
+      const matchesMonth = !selectedMonth || txDate.slice(0, 7) === selectedMonth;
 
       return matchesSearch && matchesFilter && matchesYear && matchesMonth;
     })

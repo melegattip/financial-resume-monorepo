@@ -29,6 +29,7 @@ const Incomes = () => {
     description: '',
     amount: '',
     category_id: '',
+    received_date: '',
   });
 
   // Estados para validación del formulario
@@ -167,10 +168,11 @@ const Incomes = () => {
     }
 
     try {
-      // Convertir amount a número antes de enviar
+      // Convertir amount a número y fecha a RFC3339 antes de enviar
       const dataToSend = {
         ...formData,
-        amount: parseFloat(formData.amount)
+        amount: parseFloat(formData.amount),
+        received_date: formData.received_date ? `${formData.received_date}T00:00:00Z` : '',
       };
 
       if (editingIncome) {
@@ -192,7 +194,7 @@ const Incomes = () => {
       
       setShowModal(false);
       setEditingIncome(null);
-      setFormData({ description: '', amount: '', category_id: '' });
+      setFormData({ description: '', amount: '', category_id: '', received_date: '' });
       setFormErrors({});
       await loadData();
     } catch (error) {
@@ -207,6 +209,7 @@ const Incomes = () => {
       description: income.description,
       amount: income.amount.toString(),
       category_id: income.category_id || '',
+      received_date: income.received_date ? income.received_date.slice(0, 10) : '',
     });
     setShowModal(true);
   };
@@ -249,10 +252,11 @@ const Incomes = () => {
     ? incomes.filter(income => {
         const matchesSearch = income.description.toLowerCase().includes(searchTerm.toLowerCase());
         
-        // Filtros de fecha
-        const incomeDate = new Date(income.created_at);
+        // Filtros de fecha — usar received_date (fecha funcional del ingreso)
+        const rcvDate = income.received_date || income.created_at;
+        const incomeDate = new Date(rcvDate);
         const matchesYear = !selectedYear || incomeDate.getFullYear().toString() === selectedYear;
-        const matchesMonth = !selectedMonth || income.created_at.slice(0, 7) === selectedMonth;
+        const matchesMonth = !selectedMonth || rcvDate.slice(0, 7) === selectedMonth;
         
         return matchesSearch && matchesYear && matchesMonth;
       })
@@ -528,13 +532,25 @@ const Incomes = () => {
                   </select>
                 </div>
 
+                <div>
+                  <label className="block text-sm font-medium text-fr-gray-700 dark:text-gray-300 mb-2">
+                    Fecha del ingreso
+                  </label>
+                  <input
+                    type="date"
+                    value={formData.received_date}
+                    onChange={(e) => setFormData({ ...formData, received_date: e.target.value })}
+                    className="input"
+                  />
+                </div>
+
                 <div className="flex space-x-4 pt-4">
                   <button
                     type="button"
                     onClick={() => {
                       setShowModal(false);
                       setEditingIncome(null);
-                      setFormData({ description: '', amount: '', category_id: '' });
+                      setFormData({ description: '', amount: '', category_id: '', received_date: '' });
                       setFormErrors({});
                     }}
                     className="btn-outline flex-1"
