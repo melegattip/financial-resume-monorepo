@@ -114,7 +114,10 @@ export const GamificationProvider = ({ children }) => {
   const loadGamificationData = async () => {
     try {
       setLoading(true);
-      
+
+      // Registrar login diario antes de cargar datos para que la racha ya esté actualizada
+      await api.recordAction('daily_login', 'user', 'daily-login', 'User daily login').catch(() => {});
+
       const [profileData, achievementsData, statsData, featuresData] = await Promise.all([
         api.getUserProfile().catch(err => {
           console.warn('Error loading user profile:', err);
