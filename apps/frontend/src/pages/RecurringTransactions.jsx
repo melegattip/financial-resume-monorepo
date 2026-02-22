@@ -162,16 +162,21 @@ const RecurringTransactions = () => {
   const handleEdit = (transaction) => {
     setEditingTransaction(transaction);
     // Backend returns dates in RFC3339; date inputs need YYYY-MM-DD
-    const toDateInput = (dateStr) => dateStr ? String(dateStr).substring(0, 10) : '';
+    const toDateInput = (dateStr) => {
+      if (!dateStr) return '';
+      const s = String(dateStr).substring(0, 10);
+      // Guard against Go's zero time value (year 0001) — treat as empty
+      return s.startsWith('0001') ? '' : s;
+    };
     setFormData({
       description: transaction.description || '',
-      amount: transaction.amount.toString(),
-      type: transaction.type,
-      frequency: transaction.frequency,
+      amount: transaction.amount ? transaction.amount.toString() : '',
+      type: transaction.type || 'expense',
+      frequency: transaction.frequency || 'monthly',
       category_id: transaction.category_id || '',
-      next_date: toDateInput(transaction.next_date),
+      next_date: toDateInput(transaction.next_date) || getDefaultDate(),
       end_date: toDateInput(transaction.end_date),
-      is_active: transaction.is_active
+      is_active: transaction.is_active !== undefined ? transaction.is_active : true
     });
     setShowModal(true);
   };
