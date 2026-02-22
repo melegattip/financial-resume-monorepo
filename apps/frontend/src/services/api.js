@@ -243,12 +243,12 @@ export const aiAPI = {
   getInsights: async (financialData = {}) => {
     // AI requests can take up to 60 seconds — override the global 10s timeout
     const response = await api.post('/ai/insights', financialData, { timeout: 60000 });
-    // Backend returns { success: true, data: [...insights] }
-    // Normalize to { insights: [...], generated_at: <now> }
-    const data = response.data?.data || response.data || {};
+    // Backend returns { success: true, data: [...insights], generated_at: "..." }
+    const outerData = response.data || {};
+    const insightsData = outerData.data || [];
     return {
-      insights: Array.isArray(data) ? data : (data.insights || []),
-      generated_at: data.generated_at || new Date().toISOString(),
+      insights: Array.isArray(insightsData) ? insightsData : (insightsData.insights || []),
+      generated_at: outerData.generated_at || new Date().toISOString(),
     };
   },
 

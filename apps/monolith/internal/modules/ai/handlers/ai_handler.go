@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"net/http"
+	"sync"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -11,12 +12,22 @@ import (
 	"github.com/melegattip/financial-resume-monorepo/apps/monolith/internal/modules/ai/service"
 )
 
+// cachedInsights holds the result of a GenerateInsights call for one calendar day.
+type cachedInsights struct {
+	insights    []domain.AIInsight
+	generatedAt time.Time
+}
+
 // AIHandler handles HTTP requests for all AI capabilities.
 type AIHandler struct {
 	analysisService *service.AnalysisService
 	purchaseService *service.PurchaseService
 	creditService   *service.CreditService
 	logger          zerolog.Logger
+
+	// Daily cache for GenerateInsights: key is "<userID>_<YYYY-MM-DD UTC>".
+	mu            sync.Mutex
+	insightsCache map[string]cachedInsights
 }
 
 // NewAIHandler creates a new AIHandler.
@@ -31,6 +42,7 @@ func NewAIHandler(
 		purchaseService: purchase,
 		creditService:   credit,
 		logger:          logger,
+		insightsCache:   make(map[string]cachedInsights),
 	}
 }
 
@@ -86,6 +98,24 @@ func (h *AIHandler) GenerateInsights(c *gin.Context) {
 		}
 	}
 
+	// Return cached response if it was generated today (calendar day, UTC).
+	today := time.Now().UTC().Format("2006-01-02")
+	cacheKey := req.UserID + "_" + today
+
+	h.mu.Lock()
+	cached, hit := h.insightsCache[cacheKey]
+	h.mu.Unlock()
+
+	if hit {
+		h.logger.Info().Str("user_id", req.UserID).Str("date", today).Msg("returning cached insights")
+		c.JSON(http.StatusOK, gin.H{
+			"success":      true,
+			"data":         cached.insights,
+			"generated_at": cached.generatedAt,
+		})
+		return
+	}
+
 	h.logger.Info().Str("user_id", req.UserID).Msg("generating financial insights")
 
 	insights, err := h.analysisService.GenerateInsights(c.Request.Context(), req)
@@ -95,9 +125,16 @@ func (h *AIHandler) GenerateInsights(c *gin.Context) {
 		return
 	}
 
+	// Store in daily cache.
+	now := time.Now().UTC()
+	h.mu.Lock()
+	h.insightsCache[cacheKey] = cachedInsights{insights: insights, generatedAt: now}
+	h.mu.Unlock()
+
 	c.JSON(http.StatusOK, gin.H{
-		"success": true,
-		"data":    insights,
+		"success":      true,
+		"data":         insights,
+		"generated_at": now,
 	})
 }
 
