@@ -91,6 +91,12 @@ type RecurringResponse struct {
 	UpdatedAt      string  `json:"updated_at"`
 }
 
+// ManualExecuteRequest allows the caller to specify a target execution date.
+// If omitted, the execution date defaults to now.
+type ManualExecuteRequest struct {
+	ExecutionDate string `json:"execution_date"` // RFC3339; optional
+}
+
 // ExecuteResponse is the response body returned after a manual execution
 type ExecuteResponse struct {
 	RecurringID   string `json:"recurring_id"`
@@ -667,7 +673,22 @@ func (h *RecurringHandler) ManualExecute(c *gin.Context) {
 		return
 	}
 
+	// Parse optional execution_date from request body.
+	// If not provided, fall back to now so existing callers are unaffected.
+	var req ManualExecuteRequest
+	_ = c.ShouldBindJSON(&req) // deliberately ignore binding errors — body is optional
+
 	now := time.Now().UTC()
+	transactionDate := now
+	if req.ExecutionDate != "" {
+		parsed, parseErr := time.Parse(time.RFC3339, req.ExecutionDate)
+		if parseErr != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid execution_date format, expected RFC3339"})
+			return
+		}
+		transactionDate = parsed
+	}
+
 	transactionID := uuid.New().String()
 
 	// Execute atomically: create the expense/income AND update the recurring transaction
@@ -686,7 +707,7 @@ func (h *RecurringHandler) ManualExecute(c *gin.Context) {
 				CategoryID:      categoryID,
 				Amount:          rt.Amount,
 				Description:     rt.Description,
-				TransactionDate: now,
+				TransactionDate: transactionDate,
 				PaymentMethod:   "",
 				Notes:           "Auto-created from recurring transaction: " + rt.ID,
 				CreatedAt:       now,
@@ -703,7 +724,7 @@ func (h *RecurringHandler) ManualExecute(c *gin.Context) {
 				Amount:       rt.Amount,
 				Source:       "recurring",
 				Description:  rt.Description,
-				ReceivedDate: now,
+				ReceivedDate: transactionDate,
 				CreatedAt:    now,
 				UpdatedAt:    now,
 			}
@@ -713,6 +734,12 @@ func (h *RecurringHandler) ManualExecute(c *gin.Context) {
 
 		default:
 			return fmt.Errorf("unknown recurring transaction type: %s", rt.Type)
+		}
+
+		// When the caller specified a target date, advance NextDate from that date
+		// so the next occurrence is calculated relative to the chosen period.
+		if req.ExecutionDate != "" {
+			rt.NextDate = transactionDate
 		}
 
 		// Advance the recurring transaction state

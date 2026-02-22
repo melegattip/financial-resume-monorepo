@@ -1103,7 +1103,7 @@ const Expenses = () => {
 
               <div>
                 <label className="block text-sm font-medium text-fr-gray-700 dark:text-gray-300 mb-2">
-                  Fecha de vencimiento
+                  Fecha del gasto
                 </label>
                 <input
                   type="date"

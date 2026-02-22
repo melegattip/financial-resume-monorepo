@@ -20,6 +20,8 @@ const RecurringTransactions = () => {
   const [editingTransaction, setEditingTransaction] = useState(null);
   const [deletingTransaction, setDeletingTransaction] = useState(null);
   const [projectionMonths, setProjectionMonths] = useState(6);
+  const [executeModalTransaction, setExecuteModalTransaction] = useState(null);
+  const [selectedOccurrence, setSelectedOccurrence] = useState('');
   const [filters, setFilters] = useState({
     type: '',
     frequency: '',
@@ -267,23 +269,68 @@ const RecurringTransactions = () => {
     }
   };
 
+  // Calculates upcoming occurrences for a recurring transaction starting from next_date
+  const getOccurrences = (transaction, maxCount = 12) => {
+    const occurrences = [];
+    const endDate = transaction.end_date ? new Date(transaction.end_date) : null;
+    const maxExec = transaction.max_executions ?? null;
+    const executedCount = transaction.execution_count || 0;
+    let current = new Date(transaction.next_date);
+
+    for (let i = 0; i < maxCount; i++) {
+      if (endDate && current > endDate) break;
+      if (maxExec !== null && executedCount + i + 1 > maxExec) break;
+      occurrences.push(new Date(current));
+      switch (transaction.frequency) {
+        case 'daily':   current = new Date(current); current.setDate(current.getDate() + 1); break;
+        case 'weekly':  current = new Date(current); current.setDate(current.getDate() + 7); break;
+        case 'monthly': current = new Date(current); current.setMonth(current.getMonth() + 1); break;
+        case 'yearly':  current = new Date(current); current.setFullYear(current.getFullYear() + 1); break;
+        default: break;
+      }
+    }
+    return occurrences;
+  };
+
+  const openExecuteModal = (transaction) => {
+    const occurrences = getOccurrences(transaction);
+    setExecuteModalTransaction(transaction);
+    setSelectedOccurrence(occurrences.length > 0 ? occurrences[0].toISOString() : '');
+  };
+
+  const confirmExecute = async () => {
+    if (!executeModalTransaction) return;
+    try {
+      const body = selectedOccurrence ? { execution_date: selectedOccurrence } : {};
+      await recurringTransactionsAPI.execute(executeModalTransaction.id, body);
+      toast.success('Transacción ejecutada exitosamente');
+      setExecuteModalTransaction(null);
+      setSelectedOccurrence('');
+      await loadData();
+      dataService.invalidateAfterMutation('recurring_transaction');
+    } catch (error) {
+      console.error('Error executing transaction:', error);
+      toast.error('Error ejecutando transacción');
+    }
+  };
+
   const handleExecuteTransaction = async (id) => {
     try {
       const response = await recurringTransactionsAPI.execute(id);
       const result = response.data.data;
-      
+
       if (result.success) {
         toast.success(`✅ Transacción ejecutada exitosamente`);
         if (result.next_execution_date) {
           toast.info(`📅 Próxima ejecución: ${formatDate(result.next_execution_date)}`);
         }
-        
+
         // Recargar datos locales primero
         await loadData();
-        
+
         // Invalidar cache inmediatamente
         dataService.invalidateAfterMutation('recurring_transaction');
-        
+
         // Forzar actualización adicional con delay para asegurar sincronización
         setTimeout(() => {
           console.log('🔄 Forzando actualización adicional después de ejecutar transacción individual');
@@ -292,7 +339,7 @@ const RecurringTransactions = () => {
       } else {
         toast.error(`❌ Error: ${result.message}`);
       }
-      
+
     } catch (error) {
       console.error('Error executing transaction:', error);
       toast.error('Error ejecutando transacción');
@@ -492,15 +539,15 @@ const RecurringTransactions = () => {
       align: 'right',
       render: (_, transaction) => (
         <div className="flex justify-end space-x-2">
-          {/* Botón de ejecutar para transacciones vencidas y activas */}
-          {transaction.is_active && isTransactionOverdue(transaction.next_date) && (
+          {/* Botón de ejecutar para todas las transacciones activas */}
+          {transaction.is_active && (
             <button
               onClick={(e) => {
                 e.stopPropagation();
-                handleExecuteTransaction(transaction.id);
+                openExecuteModal(transaction);
               }}
               className="text-purple-600 hover:text-purple-900 dark:text-purple-400 dark:hover:text-purple-300 p-1"
-              title="Ejecutar ahora (vencida)"
+              title="Ejecutar / pre-registrar ocurrencia"
             >
               ⚡
             </button>
@@ -639,11 +686,11 @@ const RecurringTransactions = () => {
 
         {/* Acciones */}
         <div className="flex justify-end space-x-3 pt-2 border-t border-gray-200 dark:border-gray-600">
-          {transaction.is_active && isTransactionOverdue(transaction.next_date) && (
+          {transaction.is_active && (
             <button
               onClick={(e) => {
                 e.stopPropagation();
-                handleExecuteTransaction(transaction.id);
+                openExecuteModal(transaction);
               }}
               className="flex items-center space-x-1 px-3 py-1 text-xs font-medium text-purple-600 hover:text-purple-900 dark:text-purple-400 dark:hover:text-purple-300 bg-purple-50 dark:bg-purple-900/20 rounded-full transition-colors"
             >
@@ -1177,6 +1224,65 @@ const RecurringTransactions = () => {
 
       {/* Delete Confirmation Modal */}
       {showDeleteModal && deletingTransaction && (
+        {/* Modal: selección de ocurrencia a ejecutar */}
+        {executeModalTransaction && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+            <div className="bg-white dark:bg-gray-800 rounded-lg p-6 w-full max-w-md">
+              <h3 className="text-lg font-bold text-gray-900 dark:text-gray-100 mb-1">
+                ⚡ Ejecutar transacción
+              </h3>
+              <p className="text-sm text-gray-500 dark:text-gray-400 mb-4">
+                <span className="font-medium text-gray-700 dark:text-gray-300">{executeModalTransaction.description}</span>
+                {' · '}
+                {executeModalTransaction.frequency === 'daily' ? 'Diaria' :
+                  executeModalTransaction.frequency === 'weekly' ? 'Semanal' :
+                  executeModalTransaction.frequency === 'monthly' ? 'Mensual' : 'Anual'}
+              </p>
+
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                Seleccioná el período a registrar
+              </label>
+              <select
+                value={selectedOccurrence}
+                onChange={(e) => setSelectedOccurrence(e.target.value)}
+                className="input mb-6"
+              >
+                {getOccurrences(executeModalTransaction).map((date, i) => {
+                  const label = date.toLocaleDateString('es-AR', {
+                    day: executeModalTransaction.frequency === 'monthly' || executeModalTransaction.frequency === 'yearly' ? undefined : 'numeric',
+                    month: 'long',
+                    year: 'numeric',
+                  });
+                  const overdue = date < new Date();
+                  return (
+                    <option key={i} value={date.toISOString()}>
+                      {`Ocurrencia ${i + 1}: ${label}${overdue ? ' (vencida)' : ''}`}
+                    </option>
+                  );
+                })}
+              </select>
+
+              <div className="flex justify-end space-x-3">
+                <button
+                  type="button"
+                  onClick={() => { setExecuteModalTransaction(null); setSelectedOccurrence(''); }}
+                  className="btn-outline"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="button"
+                  onClick={confirmExecute}
+                  disabled={!selectedOccurrence}
+                  className="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 dark:bg-purple-700 dark:hover:bg-purple-800 transition-colors disabled:opacity-50"
+                >
+                  Confirmar
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
           <div className="bg-white dark:bg-gray-800 rounded-lg p-6 w-full max-w-md">
             <div className="flex items-center mb-4">

@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import { FaPlus, FaSearch, FaArrowUp, FaEdit, FaTrash, FaDollarSign } from 'react-icons/fa';
 import { formatCurrency } from '../services/api';
+import dataService from '../services/dataService';
 import { usePeriod } from '../contexts/PeriodContext';
 import { useGamification } from '../contexts/GamificationContext';
 import { useOptimizedAPI } from '../hooks/useOptimizedAPI';
@@ -192,6 +193,7 @@ const Incomes = () => {
         recordCreateIncome(incomeId, `Nuevo ingreso: ${dataToSend.description}`);
       }
       
+      dataService.invalidateAfterMutation('income');
       setShowModal(false);
       setEditingIncome(null);
       setFormData({ description: '', amount: '', category_id: '', received_date: '' });
@@ -230,7 +232,7 @@ const Incomes = () => {
       // 🎮 Registrar acción de gamificación
       console.log(`🎯 [Incomes] Registrando eliminación de income: ${deletingIncome.id}`);
       recordDeleteIncome(deletingIncome.id, `Ingreso eliminado: ${deletingIncome.description}`);
-      
+      dataService.invalidateAfterMutation('income');
       await loadData();
     } catch (error) {
       // useOptimizedAPI ya maneja el error

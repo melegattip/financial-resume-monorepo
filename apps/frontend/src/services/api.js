@@ -312,7 +312,7 @@ export const recurringTransactionsAPI = {
   delete: (id) => api.delete(`/recurring-transactions/${id}`),
   pause: (id) => api.post(`/recurring-transactions/${id}/pause`),
   resume: (id) => api.post(`/recurring-transactions/${id}/resume`),
-  execute: (id) => api.post(`/recurring-transactions/${id}/execute`),
+  execute: (id, data = {}) => api.post(`/recurring-transactions/${id}/execute`, data),
   getDashboard: () => api.get('/recurring-transactions/dashboard'),
   getProjection: (months = 6) => api.get('/recurring-transactions/projection', { 
     params: { months } 
