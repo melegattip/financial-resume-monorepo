@@ -1222,67 +1222,67 @@ const RecurringTransactions = () => {
         </div>
       )}
 
-      {/* Delete Confirmation Modal */}
-      {showDeleteModal && deletingTransaction && (
-        {/* Modal: selección de ocurrencia a ejecutar */}
-        {executeModalTransaction && (
-          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-            <div className="bg-white dark:bg-gray-800 rounded-lg p-6 w-full max-w-md">
-              <h3 className="text-lg font-bold text-gray-900 dark:text-gray-100 mb-1">
-                ⚡ Ejecutar transacción
-              </h3>
-              <p className="text-sm text-gray-500 dark:text-gray-400 mb-4">
-                <span className="font-medium text-gray-700 dark:text-gray-300">{executeModalTransaction.description}</span>
-                {' · '}
-                {executeModalTransaction.frequency === 'daily' ? 'Diaria' :
-                  executeModalTransaction.frequency === 'weekly' ? 'Semanal' :
-                  executeModalTransaction.frequency === 'monthly' ? 'Mensual' : 'Anual'}
-              </p>
+      {/* Execute period selection modal */}
+      {executeModalTransaction && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white dark:bg-gray-800 rounded-lg p-6 w-full max-w-md">
+            <h3 className="text-lg font-bold text-gray-900 dark:text-gray-100 mb-1">
+              ⚡ Ejecutar transacción
+            </h3>
+            <p className="text-sm text-gray-500 dark:text-gray-400 mb-4">
+              <span className="font-medium text-gray-700 dark:text-gray-300">{executeModalTransaction.description}</span>
+              {' · '}
+              {executeModalTransaction.frequency === 'daily' ? 'Diaria' :
+                executeModalTransaction.frequency === 'weekly' ? 'Semanal' :
+                executeModalTransaction.frequency === 'monthly' ? 'Mensual' : 'Anual'}
+            </p>
 
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                Seleccioná el período a registrar
-              </label>
-              <select
-                value={selectedOccurrence}
-                onChange={(e) => setSelectedOccurrence(e.target.value)}
-                className="input mb-6"
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+              Seleccioná el período a registrar
+            </label>
+            <select
+              value={selectedOccurrence}
+              onChange={(e) => setSelectedOccurrence(e.target.value)}
+              className="input mb-6"
+            >
+              {getOccurrences(executeModalTransaction).map((date, i) => {
+                const label = date.toLocaleDateString('es-AR', {
+                  day: executeModalTransaction.frequency === 'monthly' || executeModalTransaction.frequency === 'yearly' ? undefined : 'numeric',
+                  month: 'long',
+                  year: 'numeric',
+                });
+                const overdue = date < new Date();
+                return (
+                  <option key={i} value={date.toISOString()}>
+                    {`Ocurrencia ${i + 1}: ${label}${overdue ? ' (vencida)' : ''}`}
+                  </option>
+                );
+              })}
+            </select>
+
+            <div className="flex justify-end space-x-3">
+              <button
+                type="button"
+                onClick={() => { setExecuteModalTransaction(null); setSelectedOccurrence(''); }}
+                className="btn-outline"
               >
-                {getOccurrences(executeModalTransaction).map((date, i) => {
-                  const label = date.toLocaleDateString('es-AR', {
-                    day: executeModalTransaction.frequency === 'monthly' || executeModalTransaction.frequency === 'yearly' ? undefined : 'numeric',
-                    month: 'long',
-                    year: 'numeric',
-                  });
-                  const overdue = date < new Date();
-                  return (
-                    <option key={i} value={date.toISOString()}>
-                      {`Ocurrencia ${i + 1}: ${label}${overdue ? ' (vencida)' : ''}`}
-                    </option>
-                  );
-                })}
-              </select>
-
-              <div className="flex justify-end space-x-3">
-                <button
-                  type="button"
-                  onClick={() => { setExecuteModalTransaction(null); setSelectedOccurrence(''); }}
-                  className="btn-outline"
-                >
-                  Cancelar
-                </button>
-                <button
-                  type="button"
-                  onClick={confirmExecute}
-                  disabled={!selectedOccurrence}
-                  className="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 dark:bg-purple-700 dark:hover:bg-purple-800 transition-colors disabled:opacity-50"
-                >
-                  Confirmar
-                </button>
-              </div>
+                Cancelar
+              </button>
+              <button
+                type="button"
+                onClick={confirmExecute}
+                disabled={!selectedOccurrence}
+                className="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 dark:bg-purple-700 dark:hover:bg-purple-800 transition-colors disabled:opacity-50"
+              >
+                Confirmar
+              </button>
             </div>
           </div>
-        )}
+        </div>
+      )}
 
+      {/* Delete Confirmation Modal */}
+      {showDeleteModal && deletingTransaction && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
           <div className="bg-white dark:bg-gray-800 rounded-lg p-6 w-full max-w-md">
             <div className="flex items-center mb-4">
