@@ -15,7 +15,8 @@ import { useGamificationNotifications } from '../components/GamificationNotifica
 
 const DAY_LABELS = ['L', 'M', 'X', 'J', 'V', 'S', 'D'];
 
-const isStreakAchievement = (achievement) => achievement.type === 'streak_keeper';
+const isStreakAchievement = (achievement) =>
+  achievement.type === 'weekly_warrior' || achievement.type === 'monthly_legend';
 
 const StreakDayTracker = ({ progress, target }) => {
   if (target <= 7) {
