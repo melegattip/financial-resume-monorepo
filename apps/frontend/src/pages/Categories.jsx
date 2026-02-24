@@ -19,6 +19,7 @@ const Categories = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [formData, setFormData] = useState({
     name: '',
+    priority: '',
   });
 
   // Estados para validación del formulario
@@ -131,14 +132,16 @@ const Categories = () => {
       if (editingCategory) {
         // Para actualización, el backend espera el campo "new_name"
         const updateData = {
-          new_name: formData.name
+          new_name: formData.name,
+          priority: parseInt(formData.priority) || 0,
         };
         await categoriesAPI.update(editingCategory.id, updateData);
         // useOptimizedAPI ya muestra el toast de éxito
       } else {
-        // Para creación, enviar solo el nombre (sin descripción por ahora)
+        // Para creación, enviar nombre y prioridad
         const createData = {
-          name: formData.name
+          name: formData.name,
+          priority: parseInt(formData.priority) || 0,
         };
         console.log('🚀 [Categories] Enviando datos para crear:', createData);
         const result = await categoriesAPI.create(createData);
@@ -165,7 +168,7 @@ const Categories = () => {
       
       setShowModal(false);
       setEditingCategory(null);
-      setFormData({ name: '' });
+      setFormData({ name: '', priority: '' });
       console.log('🔄 [Categories] Recargando categorías después de operación...');
       await loadCategories();
     } catch (error) {
@@ -180,6 +183,7 @@ const Categories = () => {
     setEditingCategory(category);
     setFormData({
       name: category.name,
+      priority: category.priority > 0 ? String(category.priority) : '',
     });
     setShowModal(true);
     setIsSubmitting(false);
@@ -308,6 +312,11 @@ const Categories = () => {
                   </div>
                   <div>
                     <h3 className="font-medium text-fr-gray-900 dark:text-gray-100">{category.name}</h3>
+                    {category.priority > 0 && (
+                      <span className="text-xs text-fr-gray-500 dark:text-gray-400">
+                        Prioridad: {category.priority}
+                      </span>
+                    )}
                   </div>
                 </div>
 
@@ -354,7 +363,22 @@ const Categories = () => {
                 maxLength={50}
               />
 
-
+              <div>
+                <label className="block text-sm font-medium text-fr-gray-700 dark:text-gray-300 mb-1">
+                  Prioridad
+                </label>
+                <input
+                  type="number"
+                  min="0"
+                  value={formData.priority}
+                  onChange={(e) => setFormData({ ...formData, priority: e.target.value })}
+                  placeholder="0 = sin prioridad"
+                  className="input w-full"
+                />
+                <p className="text-xs text-fr-gray-500 dark:text-gray-400 mt-1">
+                  Número entero — menor valor = mayor prioridad (1, 2, 3...). 0 = sin prioridad.
+                </p>
+              </div>
 
               <div className="flex space-x-4 pt-4">
                 <button
@@ -362,7 +386,7 @@ const Categories = () => {
                   onClick={() => {
                     setShowModal(false);
                     setEditingCategory(null);
-                    setFormData({ name: '' });
+                    setFormData({ name: '', priority: '' });
                     setIsSubmitting(false);
                   }}
                   className="btn-outline flex-1"

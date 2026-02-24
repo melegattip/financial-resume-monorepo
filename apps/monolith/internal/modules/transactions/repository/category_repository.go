@@ -18,6 +18,7 @@ type CategoryModel struct {
 	Name      string     `gorm:"column:name;not null"`
 	Color     string     `gorm:"column:color"`
 	Icon      string     `gorm:"column:icon"`
+	Priority  int        `gorm:"column:priority;default:0"`
 	CreatedAt time.Time  `gorm:"column:created_at"`
 	UpdatedAt time.Time  `gorm:"column:updated_at"`
 	DeletedAt *time.Time `gorm:"column:deleted_at;index"`
@@ -35,6 +36,7 @@ func (m *CategoryModel) ToCategory() *domain.Category {
 		Name:      m.Name,
 		Color:     m.Color,
 		Icon:      m.Icon,
+		Priority:  m.Priority,
 		CreatedAt: m.CreatedAt,
 		UpdatedAt: m.UpdatedAt,
 		DeletedAt: m.DeletedAt,
@@ -49,6 +51,7 @@ func FromCategory(c *domain.Category) *CategoryModel {
 		Name:      c.Name,
 		Color:     c.Color,
 		Icon:      c.Icon,
+		Priority:  c.Priority,
 		CreatedAt: c.CreatedAt,
 		UpdatedAt: c.UpdatedAt,
 		DeletedAt: c.DeletedAt,
@@ -99,7 +102,7 @@ func (r *CategoryRepo) FindByUserID(ctx context.Context, userID string) ([]*doma
 	var models []CategoryModel
 	err := r.db.WithContext(ctx).
 		Where("user_id = ? AND deleted_at IS NULL", userID).
-		Order("name ASC").
+		Order("CASE WHEN priority = 0 THEN 1 ELSE 0 END ASC, priority ASC, name ASC").
 		Find(&models).Error
 
 	if err != nil {

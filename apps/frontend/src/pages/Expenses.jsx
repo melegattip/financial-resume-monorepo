@@ -36,7 +36,7 @@ const Expenses = () => {
   const [savingCell, setSavingCell] = useState(null);
 
   // Estados para nuevos filtros de ordenamiento
-  const [sortBy, setSortBy] = useState('created_at');
+  const [sortBy, setSortBy] = useState('category_priority');
   const [sortOrder, setSortOrder] = useState('desc');
   const [totalIncome, setTotalIncome] = useState(0);
   const [formData, setFormData] = useState({
@@ -674,16 +674,30 @@ const Expenses = () => {
         let aValue, bValue;
 
         switch (sortBy) {
+          case 'category_priority': {
+            const aCatP = categories.find(c => c.id === a.category_id);
+            const bCatP = categories.find(c => c.id === b.category_id);
+            const aPrio = aCatP?.priority || 0;
+            const bPrio = bCatP?.priority || 0;
+            // 0 (sin prioridad) siempre va al final, sin importar el orden
+            if (aPrio === 0 && bPrio === 0) return 0;
+            if (aPrio === 0) return 1;
+            if (bPrio === 0) return -1;
+            aValue = aPrio;
+            bValue = bPrio;
+            break;
+          }
           case 'amount':
             aValue = a.amount;
             bValue = b.amount;
             break;
-          case 'category':
+          case 'category': {
             const aCat = categories.find(c => c.id === a.category_id);
             const bCat = categories.find(c => c.id === b.category_id);
             aValue = (aCat?.name || 'Sin categoría').toLowerCase();
             bValue = (bCat?.name || 'Sin categoría').toLowerCase();
             break;
+          }
           case 'due_date':
             aValue = a.due_date ? new Date(a.due_date).getTime() : 0;
             bValue = b.due_date ? new Date(b.due_date).getTime() : 0;
@@ -811,6 +825,7 @@ const Expenses = () => {
                   onChange={(e) => setSortBy(e.target.value)}
                   className="input w-full sm:w-auto"
                 >
+                  <option value="category_priority">Prioridad</option>
                   <option value="created_at">Fecha de creación</option>
                   <option value="due_date">Fecha de vencimiento</option>
                   <option value="amount">Monto</option>

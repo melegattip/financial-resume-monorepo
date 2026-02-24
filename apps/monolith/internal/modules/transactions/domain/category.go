@@ -12,13 +12,14 @@ type Category struct {
 	Name      string
 	Color     string
 	Icon      string
+	Priority  int
 	CreatedAt time.Time
 	UpdatedAt time.Time
 	DeletedAt *time.Time
 }
 
 // NewCategory creates a new category with validation
-func NewCategory(userID, name, color, icon string) (*Category, error) {
+func NewCategory(userID, name, color, icon string, priority int) (*Category, error) {
 	if userID == "" {
 		return nil, errors.New("user_id is required")
 	}
@@ -32,13 +33,14 @@ func NewCategory(userID, name, color, icon string) (*Category, error) {
 		Name:      name,
 		Color:     color,
 		Icon:      icon,
+		Priority:  priority,
 		CreatedAt: now,
 		UpdatedAt: now,
 	}, nil
 }
 
 // Update updates mutable fields
-func (c *Category) Update(name, color, icon string) error {
+func (c *Category) Update(name, color, icon string, priority int) error {
 	if name == "" {
 		return errors.New("name is required")
 	}
@@ -46,6 +48,7 @@ func (c *Category) Update(name, color, icon string) error {
 	c.Name = name
 	c.Color = color
 	c.Icon = icon
+	c.Priority = priority
 	c.UpdatedAt = time.Now().UTC()
 	return nil
 }

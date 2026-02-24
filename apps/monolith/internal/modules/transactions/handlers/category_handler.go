@@ -30,24 +30,27 @@ type CategoryResponse struct {
 	Name      string `json:"name"`
 	Color     string `json:"color"`
 	Icon      string `json:"icon"`
+	Priority  int    `json:"priority"`
 	CreatedAt string `json:"created_at"`
 	UpdatedAt string `json:"updated_at"`
 }
 
 // CreateCategoryRequest is the request body for creating a category.
 type CreateCategoryRequest struct {
-	Name  string `json:"name" binding:"required"`
-	Color string `json:"color"`
-	Icon  string `json:"icon"`
+	Name     string `json:"name" binding:"required"`
+	Color    string `json:"color"`
+	Icon     string `json:"icon"`
+	Priority int    `json:"priority"`
 }
 
 // UpdateCategoryRequest is the request body for updating a category.
 // Accepts "new_name" (frontend convention) or "name" as the category name.
 type UpdateCategoryRequest struct {
-	NewName string `json:"new_name"`
-	Name    string `json:"name"`
-	Color   string `json:"color"`
-	Icon    string `json:"icon"`
+	NewName  string `json:"new_name"`
+	Name     string `json:"name"`
+	Color    string `json:"color"`
+	Icon     string `json:"icon"`
+	Priority *int   `json:"priority"`
 }
 
 func toCategoryResponse(c *domain.Category) CategoryResponse {
@@ -57,6 +60,7 @@ func toCategoryResponse(c *domain.Category) CategoryResponse {
 		Name:      c.Name,
 		Color:     c.Color,
 		Icon:      c.Icon,
+		Priority:  c.Priority,
 		CreatedAt: c.CreatedAt.Format(time.RFC3339),
 		UpdatedAt: c.UpdatedAt.Format(time.RFC3339),
 	}
@@ -102,7 +106,7 @@ func (h *CategoryHandler) Create(c *gin.Context) {
 		return
 	}
 
-	category, err := domain.NewCategory(userID.(string), req.Name, req.Color, req.Icon)
+	category, err := domain.NewCategory(userID.(string), req.Name, req.Color, req.Icon, req.Priority)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
@@ -166,8 +170,12 @@ func (h *CategoryHandler) Update(c *gin.Context) {
 	if icon == "" {
 		icon = category.Icon
 	}
+	priority := category.Priority
+	if req.Priority != nil {
+		priority = *req.Priority
+	}
 
-	if err := category.Update(name, color, icon); err != nil {
+	if err := category.Update(name, color, icon, priority); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
