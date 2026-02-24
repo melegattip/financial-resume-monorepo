@@ -227,6 +227,8 @@ func (s *GamificationService) GetAchievements(ctx context.Context, userID string
 // ---------------------------------------------------------------------------
 
 // updateStreak adjusts the user's login streak based on the last activity date.
+// A 1-day grace period is applied: missing exactly one day does not reset the
+// streak, it simply does not increment it for that gap day.
 func (s *GamificationService) updateStreak(g *domain.UserGamification) {
 	now := time.Now().UTC()
 	lastDay := time.Date(g.LastActivity.Year(), g.LastActivity.Month(), g.LastActivity.Day(), 0, 0, 0, 0, time.UTC)
@@ -240,8 +242,12 @@ func (s *GamificationService) updateStreak(g *domain.UserGamification) {
 	case daysDiff == 1:
 		// Consecutive day — extend the streak.
 		g.CurrentStreak++
+	case daysDiff == 2:
+		// 1-day grace period: user missed one day but streak is preserved.
+		// We still increment because today counts as the next active day.
+		g.CurrentStreak++
 	default:
-		// Gap in streak — reset to 1.
+		// Missed more than one day — reset to 1.
 		g.CurrentStreak = 1
 	}
 }
