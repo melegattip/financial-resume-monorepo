@@ -135,19 +135,30 @@ const Sidebar = ({ isDesktopCollapsed = false, onDesktopToggle }) => {
       {/* Sidebar */}
       <div className={`
         fixed lg:fixed inset-y-0 left-0 z-40 bg-white dark:bg-gray-800 border-r border-gray-200 dark:border-gray-700 transform transition-all duration-300 ease-in-out
-        ${isDesktopCollapsed ? 'lg:w-16' : 'lg:w-64'}
-        w-64
+        ${isDesktopCollapsed ? 'lg:w-16' : 'lg:w-52'}
+        w-52
         ${isOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'}
       `}>
         <div className="flex flex-col h-full">
           {/* Header */}
-          <div className={`flex items-center border-b border-gray-200 dark:border-gray-700 transition-all duration-300 ${isDesktopCollapsed ? 'p-3 justify-center' : 'p-6'}`}>
-            {!isDesktopCollapsed && <Brand size="sm" showTagline={true} />}
+          <div className={`flex items-center border-b border-gray-200 dark:border-gray-700 transition-all duration-300 ${isDesktopCollapsed ? 'p-2 flex-col gap-2' : 'px-4 py-3 justify-between'}`}>
+            {!isDesktopCollapsed && <Brand size="sm" showTagline={false} />}
             {isDesktopCollapsed && (
               <div className="w-8 h-8 rounded-full bg-blue-600 flex items-center justify-center text-white text-xs font-bold">
                 N
               </div>
             )}
+            {/* Desktop collapse toggle - top of sidebar */}
+            <button
+              onClick={onDesktopToggle}
+              title={isDesktopCollapsed ? 'Expandir menú' : 'Colapsar menú'}
+              className="hidden lg:flex p-1.5 rounded-lg text-gray-400 dark:text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-700 hover:text-gray-600 dark:hover:text-gray-300 transition-colors flex-shrink-0"
+            >
+              {isDesktopCollapsed
+                ? <FaChevronRight className="w-3.5 h-3.5" />
+                : <FaChevronLeft className="w-3.5 h-3.5" />
+              }
+            </button>
           </div>
 
           {/* Navigation */}
@@ -172,19 +183,6 @@ const Sidebar = ({ isDesktopCollapsed = false, onDesktopToggle }) => {
             </div>
           </nav>
 
-          {/* Desktop collapse toggle */}
-          <div className="hidden lg:flex border-t border-gray-200 dark:border-gray-700 p-2 justify-end">
-            <button
-              onClick={onDesktopToggle}
-              title={isDesktopCollapsed ? 'Expandir menú' : 'Colapsar menú'}
-              className="p-2 rounded-lg text-gray-400 dark:text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-700 hover:text-gray-600 dark:hover:text-gray-300 transition-colors"
-            >
-              {isDesktopCollapsed
-                ? <FaChevronRight className="w-4 h-4" />
-                : <FaChevronLeft className="w-4 h-4" />
-              }
-            </button>
-          </div>
         </div>
       </div>
     </>

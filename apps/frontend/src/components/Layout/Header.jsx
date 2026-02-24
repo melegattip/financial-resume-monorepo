@@ -35,57 +35,46 @@ const Header = () => {
     const routes = {
       '/dashboard': { 
         title: 'Resumen', 
-        subtitle: 'Resumen de tu actividad financiera',
         icon: FaHome
       },
       '/insights': { 
         title: 'Análisis Inteligente', 
-        subtitle: 'Recomendaciones personalizadas con inteligencia artificial',
         icon: FaBrain
       },
       '/expenses': { 
         title: 'Gastos', 
-        subtitle: 'Gestiona tus gastos y pagos pendientes',
         icon: FaMinusCircle
       },
       '/incomes': { 
         title: 'Ingresos', 
-        subtitle: 'Registra y controla tus ingresos',
         icon: FaPlusCircle
       },
       '/categories': { 
         title: 'Categorías', 
-        subtitle: 'Organiza tus transacciones',
         icon: FaFolderOpen
       },
       '/reports': { 
         title: 'Reportes', 
-        subtitle: 'Análisis detallado de tus finanzas',
         icon: FaFileAlt
       },
       '/budgets': { 
         title: 'Presupuestos', 
-        subtitle: 'Controla tus límites de gasto',
         icon: FaChartPie
       },
       '/savings-goals': { 
         title: 'Metas de Ahorro', 
-        subtitle: 'Alcanza tus objetivos financieros',
         icon: FaBullseye
       },
       '/recurring-transactions': { 
         title: 'Transacciones Recurrentes', 
-        subtitle: 'Automatiza tus transacciones',
         icon: FaRedo
       },
       '/achievements': { 
         title: 'Logros y Progreso', 
-        subtitle: 'Tu evolución en el manejo financiero inteligente',
         icon: FaTrophy
       },
       '/settings': { 
         title: 'Configuración', 
-        subtitle: 'Ajustes de tu cuenta',
         icon: FaCog
       },
     };
@@ -123,7 +112,7 @@ const Header = () => {
   return (
     <header className="bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 sticky top-0 z-40 shadow-sm dark:shadow-gray-900/20 transition-colors duration-300">
       <div className="pl-14 pr-4 lg:px-6 xl:px-8">
-        <div className="flex items-center justify-between h-16 sm:h-20">
+        <div className="flex items-center justify-between h-12 sm:h-14">
           
           {/* Left Side - Page title and info */}
           <div className="flex items-center flex-1 min-w-0 mr-2 sm:mr-4">

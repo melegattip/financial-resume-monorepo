@@ -155,7 +155,7 @@ export const categoriesAPI = {
 
 // Servicios de Gastos
 export const expensesAPI = {
-  list: () => api.get('/expenses'),
+  list: (params) => api.get('/expenses', { params }),
   listUnpaid: () => api.get('/expenses/unpaid'),
   get: (userId, id) => api.get(`/expenses/${id}`),
   create: (data) => api.post('/expenses', data, { timeout: 30000 }),

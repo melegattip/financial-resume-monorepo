@@ -25,8 +25,9 @@ import { useOptimizedAPI } from '../hooks/useOptimizedAPI';
 const Resumen = () => {
   const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
-  const [sortBy, setSortBy] = useState('fecha');
+  const [sortBy, setSortBy] = useState('prioridad');
   const [rowsToShow, setRowsToShow] = useState('all'); // 'all' | '10' | '25' | '50'
+  const [activeTab, setActiveTab] = useState('Metricas'); // 'Metricas' | 'transacciones'
   const [data, setData] = useState({
     totalIncome: 0,
     totalExpenses: 0,
@@ -434,6 +435,8 @@ const Resumen = () => {
           const categoryB = data.categories.find(c => c.id === b.category_id)?.name || 'Sin categoría';
           return categoryA.localeCompare(categoryB);
         });
+      case 'prioridad':
+        return sorted.sort((a, b) => (b.priority || 0) - (a.priority || 0));
       default:
         return sorted;
     }
@@ -760,11 +763,32 @@ const Resumen = () => {
   }
 
   return (
-    <div className="space-y-4 sm:space-y-6">
+    <div className="space-y-3 sm:space-y-4">
+      {/* Tab bar */}
+      <div className="flex border-b border-gray-200 dark:border-gray-700">
+        <button
+          onClick={() => setActiveTab('transacciones')}
+          className={`px-4 py-2.5 text-sm font-medium border-b-2 transition-colors -mb-px flex items-center gap-1.5 ${activeTab === 'transacciones' ? 'border-blue-500 text-blue-600 dark:text-blue-400' : 'border-transparent text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200'}`}
+        >
+          Transacciones
+          {(data.expenses.length + data.incomes.length) > 0 && (
+            <span className="text-xs bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400 px-1.5 py-0.5 rounded-full">
+              {data.expenses.length + data.incomes.length}
+            </span>
+          )}
+        </button>
+        <button
+          onClick={() => setActiveTab('Metricas')}
+          className={`px-4 py-2.5 text-sm font-medium border-b-2 transition-colors -mb-px ${activeTab === 'Metricas' ? 'border-blue-500 text-blue-600 dark:text-blue-400' : 'border-transparent text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200'}`}
+        >
+          Métricas
+        </button>
+      </div>
+
       {/* Métricas principales */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3 sm:gap-4 lg:gap-6">
+      <div className={activeTab === 'transacciones' ? 'hidden' : 'grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3 sm:gap-4'}>
         {/* Balance total */}
-        <div className="card p-4 sm:p-5">
+        <div className="card p-3 sm:p-4">
           <div className="flex items-start justify-between">
             <div className="flex-1 min-w-0">
               <p className="text-xs sm:text-sm font-medium text-fr-gray-600 dark:text-gray-400 mb-1">
@@ -860,21 +884,21 @@ const Resumen = () => {
       </div>
 
       {/* Fila unificada: Todos los widgets en una sola cuadrícula */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
+      <div className={activeTab === 'transacciones' ? 'hidden' : 'grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4'}>
         {/* Widget de Transacciones Recurrentes - Siempre visible */}
         {recurringTransactionsSummary && (
-          <div className="card p-3 sm:p-4 cursor-pointer hover:shadow-lg transition-shadow" onClick={navigateToRecurringTransactions}>
-            <div className="flex items-start justify-between mb-2">
+          <div className="card p-4 sm:p-5 cursor-pointer hover:shadow-lg transition-shadow" onClick={navigateToRecurringTransactions}>
+            <div className="flex items-start justify-between mb-3">
               <div className="flex-1 min-w-0">
                 <p className="text-xs sm:text-sm font-medium text-fr-gray-600 dark:text-gray-400">
                   Transacciones Recurrentes
                 </p>
-                <p className="text-lg sm:text-xl font-bold text-fr-gray-900 dark:text-gray-100 break-words">
+                <p className="text-xl sm:text-2xl font-bold text-fr-gray-900 dark:text-gray-100 break-words">
                   {recurringTransactionsSummary.summary?.total_active || 0}
                 </p>
               </div>
-              <div className="flex-shrink-0 p-1.5 sm:p-2 rounded-fr bg-purple-100 dark:bg-purple-900/30 ml-2">
-                <FaRedo className="w-3 h-3 sm:w-4 sm:h-4 text-purple-600 dark:text-purple-400" />
+              <div className="flex-shrink-0 p-2 sm:p-2.5 rounded-fr bg-purple-100 dark:bg-purple-900/30 ml-2">
+                <FaRedo className="w-4 h-4 sm:w-5 sm:h-5 text-purple-600 dark:text-purple-400" />
               </div>
             </div>
             <div className="space-y-1 text-xs">
@@ -890,18 +914,18 @@ const Resumen = () => {
 
         {/* Widget de Presupuestos - Desbloqueado o Bloqueado */}
         {isFeatureUnlocked('BUDGETS') && budgetsSummary ? (
-          <div className="card p-3 sm:p-4 cursor-pointer hover:shadow-lg transition-shadow" onClick={navigateToBudgets}>
-            <div className="flex items-start justify-between mb-2">
+          <div className="card p-4 sm:p-5 cursor-pointer hover:shadow-lg transition-shadow" onClick={navigateToBudgets}>
+            <div className="flex items-start justify-between mb-3">
               <div className="flex-1 min-w-0">
                 <p className="text-xs sm:text-sm font-medium text-fr-gray-600 dark:text-gray-400">
                   Presupuestos
                 </p>
-                <p className="text-lg sm:text-xl font-bold text-fr-gray-900 dark:text-gray-100 break-words">
+                <p className="text-xl sm:text-2xl font-bold text-fr-gray-900 dark:text-gray-100 break-words">
                   {budgetsSummary.summary?.total_budgets || 0}
                 </p>
               </div>
-              <div className="flex-shrink-0 p-1.5 sm:p-2 rounded-fr bg-blue-100 dark:bg-blue-900/30 ml-2">
-                <FaChartPie className="w-3 h-3 sm:w-4 sm:h-4 text-blue-600 dark:text-blue-400" />
+              <div className="flex-shrink-0 p-2 sm:p-2.5 rounded-fr bg-blue-100 dark:bg-blue-900/30 ml-2">
+                <FaChartPie className="w-4 h-4 sm:w-5 sm:h-5 text-blue-600 dark:text-blue-400" />
               </div>
             </div>
             <div className="flex items-center justify-between text-xs">
@@ -932,18 +956,18 @@ const Resumen = () => {
 
         {/* Widget de Metas de Ahorro - Desbloqueado o Bloqueado */}
         {isFeatureUnlocked('SAVINGS_GOALS') && savingsGoalsSummary ? (
-          <div className="card p-3 sm:p-4 cursor-pointer hover:shadow-lg transition-shadow" onClick={navigateToSavingsGoals}>
-            <div className="flex items-start justify-between mb-2">
+          <div className="card p-4 sm:p-5 cursor-pointer hover:shadow-lg transition-shadow" onClick={navigateToSavingsGoals}>
+            <div className="flex items-start justify-between mb-3">
               <div className="flex-1 min-w-0">
                 <p className="text-xs sm:text-sm font-medium text-fr-gray-600 dark:text-gray-400">
                   Metas de Ahorro
                 </p>
-                <p className="text-lg sm:text-xl font-bold text-green-600 break-words">
+                <p className="text-xl sm:text-2xl font-bold text-green-600 break-words">
                   {formatAmount(savingsGoalsSummary.total_saved || 0)}
                 </p>
               </div>
-              <div className="flex-shrink-0 p-1.5 sm:p-2 rounded-fr bg-green-100 dark:bg-green-900/30 ml-2">
-                <FaBullseye className="w-3 h-3 sm:w-4 sm:h-4 text-green-600" />
+              <div className="flex-shrink-0 p-2 sm:p-2.5 rounded-fr bg-green-100 dark:bg-green-900/30 ml-2">
+                <FaBullseye className="w-4 h-4 sm:w-5 sm:h-5 text-green-600" />
               </div>
             </div>
             <div className="flex flex-col space-y-1 text-xs text-fr-gray-500 dark:text-gray-400">
@@ -967,13 +991,13 @@ const Resumen = () => {
 
         {/* Widget de IA Financiera - Desbloqueado o Bloqueado */}
         {isFeatureUnlocked('AI_INSIGHTS') ? (
-          <div className="card p-3 sm:p-4 cursor-pointer hover:shadow-lg transition-shadow" onClick={navigateToAI}>
-            <div className="flex items-start justify-between mb-2">
+          <div className="card p-4 sm:p-5 cursor-pointer hover:shadow-lg transition-shadow" onClick={navigateToAI}>
+            <div className="flex items-start justify-between mb-3">
               <div className="flex-1 min-w-0">
                 <p className="text-xs sm:text-sm font-medium text-fr-gray-600 dark:text-gray-400">
                   IA Financiera
                 </p>
-                <p className="text-lg sm:text-xl font-bold break-words">
+                <p className="text-xl sm:text-2xl font-bold break-words">
                   {healthScore?.score !== null && healthScore?.score !== undefined ? (
                     <span className={getHealthScoreColor(healthScore.level)}>
                       <span className="text-2xl">{healthScore.score}</span>
@@ -984,8 +1008,8 @@ const Resumen = () => {
                   )}
                 </p>
               </div>
-              <div className="flex-shrink-0 p-1.5 sm:p-2 rounded-fr bg-purple-100 dark:bg-purple-900/30 ml-2">
-                <FaBrain className="w-3 h-3 sm:w-4 sm:h-4 text-purple-600 dark:text-purple-400" />
+              <div className="flex-shrink-0 p-2 sm:p-2.5 rounded-fr bg-purple-100 dark:bg-purple-900/30 ml-2">
+                <FaBrain className="w-4 h-4 sm:w-5 sm:h-5 text-purple-600 dark:text-purple-400" />
               </div>
             </div>
             <div className="text-xs text-fr-gray-500 dark:text-gray-400">
@@ -1014,11 +1038,11 @@ const Resumen = () => {
       </div>
 
       {/* Transacciones por mes - Dos columnas */}
-      {hasActiveFilters && (data.expenses.length > 0 || data.incomes.length > 0) && (
-        <div className="card">
-          <div className="flex items-center justify-between mb-6 sticky top-0 z-10 bg-white/80 dark:bg-gray-800/80 backdrop-blur supports-[backdrop-filter]:bg-white/60 supports-[backdrop-filter]:dark:bg-gray-800/60 rounded-t-lg px-3 py-2 -mx-3">
-            <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100">
-              💰 Transacciones de {getPeriodTitle()}
+      {(data.expenses.length > 0 || data.incomes.length > 0) && (
+        <div className={activeTab === 'Metricas' ? 'hidden' : 'card'}>
+          <div className="flex items-center justify-between mb-3 sticky top-0 z-10 bg-white/90 dark:bg-gray-800/90 backdrop-blur rounded-t-lg px-3 py-2 -mx-3 border-b border-gray-100 dark:border-gray-700">
+            <h3 className="text-base font-semibold text-gray-900 dark:text-gray-100">
+              Transacciones{hasActiveFilters ? ` · ${getPeriodTitle()}` : ''}
             </h3>
             <div className="grid grid-cols-2 gap-3 sm:flex sm:flex-row sm:items-center sm:space-x-4 sm:space-y-0">
               {/* Dropdown de ordenamiento */}
@@ -1030,6 +1054,7 @@ const Resumen = () => {
                   className="text-sm border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-1 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                 >
                   <option value="fecha">Fecha</option>
+                  <option value="prioridad">Prioridad</option>
                   <option value="monto">Monto</option>
                   <option value="categoria">Categoría</option>
                 </select>
@@ -1307,12 +1332,12 @@ const Resumen = () => {
       )}
 
       {/* Gráficos */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 lg:gap-6">
+      <div className={activeTab === 'transacciones' ? 'hidden' : 'grid grid-cols-1 md:grid-cols-2 gap-3 sm:gap-4'}>
         {/* Métricas clave */}
         <div className="card overflow-hidden">
-          <div className="flex items-center justify-between mb-6">
+          <div className="flex items-center justify-between mb-4">
             <div>
-              <h3 className="text-lg font-semibold text-fr-gray-900 dark:text-gray-100">
+              <h3 className="text-base font-semibold text-fr-gray-900 dark:text-gray-100">
                 {hasActiveFilters ? `Métricas de ${getPeriodTitle()}` : 'Métricas del Período'}
               </h3>
               <p className="text-sm text-fr-gray-500 dark:text-gray-400 mt-1">
@@ -1408,7 +1433,7 @@ const Resumen = () => {
 
         {/* Gráfico de categorías */}
         <div className="card overflow-hidden">
-          <h3 className="text-lg font-semibold text-fr-gray-900 dark:text-gray-100 mb-6">
+          <h3 className="text-base font-semibold text-fr-gray-900 dark:text-gray-100 mb-4">
             Gastos por Categoría{hasActiveFilters && ` - ${getPeriodTitle()}`}
           </h3>
           {pieData.length > 0 ? (
@@ -1500,9 +1525,9 @@ const Resumen = () => {
       </div>
 
       {/* Transacciones recientes */}
-      <div className="card">
-        <div className="flex items-center justify-between mb-6">
-          <h3 className="text-lg font-semibold text-fr-gray-900 dark:text-gray-100">Transacciones Recientes</h3>
+      <div className={activeTab === 'Metricas' ? 'hidden' : 'card'}>
+        <div className="flex items-center justify-between mb-4">
+          <h3 className="text-base font-semibold text-fr-gray-900 dark:text-gray-100">Transacciones Recientes</h3>
           <button
             onClick={() => navigate('/expenses')}
             className="btn-ghost"

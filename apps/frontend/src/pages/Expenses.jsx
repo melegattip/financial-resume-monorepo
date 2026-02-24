@@ -730,139 +730,103 @@ const Expenses = () => {
   }
 
   return (
-    <div className="space-y-6">
-      {/* Page Title */}
-      <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold text-fr-gray-900 dark:text-gray-100">Gastos</h1>
-      </div>
-
+    <div className="space-y-3">
       {/* Header con métricas */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        <div className="card">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+        <div className="card py-3 px-4">
           <div className="flex items-center justify-between">
-            <div className="flex-1">
-              <div className="flex items-center space-x-6">
-                <div>
-                  <p className="text-sm font-medium text-fr-gray-600 dark:text-gray-400">Total Gastos</p>
-                  <p className="text-2xl font-bold text-fr-gray-900 dark:text-gray-100">{formatAmount(totalExpenses)}</p>
-                </div>
-                <div className="h-12 w-px bg-fr-gray-200 dark:bg-gray-600"></div>
-                <div>
-                  <p className="text-sm font-medium text-fr-gray-600 dark:text-gray-400">Cantidad</p>
-                  <p className="text-2xl font-bold text-fr-gray-900 dark:text-gray-100">{filteredExpenses.length}</p>
-                </div>
+            <div className="flex items-center gap-6">
+              <div>
+                <p className="text-xs font-medium text-fr-gray-500 dark:text-gray-400">Total Gastos</p>
+                <p className="text-xl font-bold text-fr-gray-900 dark:text-gray-100">{formatAmount(totalExpenses)}</p>
+              </div>
+              <div className="h-8 w-px bg-fr-gray-200 dark:bg-gray-600"></div>
+              <div>
+                <p className="text-xs font-medium text-fr-gray-500 dark:text-gray-400">Cantidad</p>
+                <p className="text-xl font-bold text-fr-gray-900 dark:text-gray-100">{filteredExpenses.length}</p>
               </div>
             </div>
-            <div className="flex-shrink-0 p-3 rounded-fr bg-gray-100 dark:bg-gray-700 ml-4">
-              <FaArrowDown className="w-6 h-6 text-fr-gray-900 dark:text-gray-300" />
+            <div className="flex-shrink-0 p-2 rounded-fr bg-gray-100 dark:bg-gray-700">
+              <FaArrowDown className="w-4 h-4 text-fr-gray-900 dark:text-gray-300" />
             </div>
           </div>
         </div>
 
-        <div className="card">
+        <div className="card py-3 px-4">
           <div className="flex items-center justify-between">
-            <div className="flex-1">
-              <div className="flex items-center space-x-6">
-                <div>
-                  <p className="text-sm font-medium text-fr-gray-600 dark:text-gray-400">Pendientes</p>
-                  <p className="text-2xl font-bold text-fr-gray-900 dark:text-gray-100">{unpaidExpenses.length}</p>
-                </div>
-                <div className="h-12 w-px bg-fr-gray-200 dark:bg-gray-600"></div>
-                <div>
-                  <p className="text-sm font-medium text-fr-gray-600 dark:text-gray-400">Monto</p>
-                  <p className="text-2xl font-bold text-fr-gray-900 dark:text-gray-100">
-                    {formatAmount(unpaidExpenses.reduce((sum, e) => sum + e.amount, 0))}
-                  </p>
-                </div>
+            <div className="flex items-center gap-6">
+              <div>
+                <p className="text-xs font-medium text-fr-gray-500 dark:text-gray-400">Pendientes</p>
+                <p className="text-xl font-bold text-fr-gray-900 dark:text-gray-100">{unpaidExpenses.length}</p>
+              </div>
+              <div className="h-8 w-px bg-fr-gray-200 dark:bg-gray-600"></div>
+              <div>
+                <p className="text-xs font-medium text-fr-gray-500 dark:text-gray-400">Monto pendiente</p>
+                <p className="text-xl font-bold text-fr-gray-900 dark:text-gray-100">
+                  {formatAmount(unpaidExpenses.reduce((sum, e) => sum + e.amount, 0))}
+                </p>
               </div>
             </div>
-            <div className="flex-shrink-0 p-3 rounded-fr bg-red-100 dark:bg-red-900/30 ml-4">
-              <FaTimesCircle className="w-6 h-6 text-fr-error dark:text-red-400" />
+            <div className="flex-shrink-0 p-2 rounded-fr bg-red-100 dark:bg-red-900/30">
+              <FaTimesCircle className="w-4 h-4 text-fr-error dark:text-red-400" />
             </div>
           </div>
         </div>
       </div>
 
-      {/* Controles */}
-      <div className="card">
-        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between space-y-4 sm:space-y-0">
-          <div className="flex flex-col lg:flex-row space-y-4 lg:space-y-0 lg:space-x-4">
-            {/* Primera fila: Búsqueda y Estado */}
-            <div className="flex flex-col sm:flex-row space-y-4 sm:space-y-0 sm:space-x-4">
-              {/* Búsqueda */}
-              <div className="relative">
-                <FaSearch className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-fr-gray-400 dark:text-gray-500" />
-                <input
-                  type="text"
-                  placeholder="Buscar gastos..."
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                  className="pl-10 input w-full sm:w-64"
-                />
-              </div>
-
-              {/* Filtro de estado */}
-              <select
-                value={filterPaid}
-                onChange={(e) => setFilterPaid(e.target.value)}
-                className="input w-full sm:w-auto"
-              >
-                <option value="all">Todos los gastos</option>
-                <option value="paid">Pagados</option>
-                <option value="unpaid">Pendientes</option>
-              </select>
-            </div>
-
-            {/* Segunda fila: Ordenamiento */}
-            <div className="flex flex-col sm:flex-row space-y-4 sm:space-y-0 sm:space-x-4">
-              {/* Ordenar por */}
-              <div className="flex items-center space-x-2">
-                <label className="text-sm font-medium text-fr-gray-700 dark:text-gray-300 whitespace-nowrap">
-                  Ordenar por:
-                </label>
-                <select
-                  value={sortBy}
-                  onChange={(e) => setSortBy(e.target.value)}
-                  className="input w-full sm:w-auto"
-                >
-                  <option value="category_priority">Prioridad</option>
-                  <option value="created_at">Fecha de creación</option>
-                  <option value="due_date">Fecha de vencimiento</option>
-                  <option value="amount">Monto</option>
-                  <option value="category">Categoría</option>
-                </select>
-              </div>
-
-              {/* Orden */}
-              <div className="flex items-center space-x-2">
-                <label className="text-sm font-medium text-fr-gray-700 dark:text-gray-300 whitespace-nowrap">
-                  Orden:
-                </label>
-                <select
-                  value={sortOrder}
-                  onChange={(e) => setSortOrder(e.target.value)}
-                  className="input w-full sm:w-auto"
-                >
-                  <option value="desc">Descendente</option>
-                  <option value="asc">Ascendente</option>
-                </select>
-              </div>
-            </div>
+      {/* Controles + Lista unificados */}
+      <div className="card p-0 overflow-hidden">
+        {/* Toolbar compacta */}
+        <div className="flex flex-wrap items-center gap-2 px-3 py-2 border-b border-gray-100 dark:border-gray-700 bg-gray-50 dark:bg-gray-800/50">
+          <div className="relative flex-1 min-w-[160px]">
+            <FaSearch className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3 h-3 text-gray-400 dark:text-gray-500" />
+            <input
+              type="text"
+              placeholder="Buscar gastos..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="pl-8 pr-3 py-1.5 text-sm border border-gray-200 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-1 focus:ring-blue-500 w-full"
+            />
           </div>
-
+          <select
+            value={filterPaid}
+            onChange={(e) => setFilterPaid(e.target.value)}
+            className="text-sm border border-gray-200 dark:border-gray-600 rounded-lg px-2 py-1.5 bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-300 focus:outline-none focus:ring-1 focus:ring-blue-500"
+          >
+            <option value="all">Todos</option>
+            <option value="paid">Pagados</option>
+            <option value="unpaid">Pendientes</option>
+          </select>
+          <select
+            value={sortBy}
+            onChange={(e) => setSortBy(e.target.value)}
+            className="text-sm border border-gray-200 dark:border-gray-600 rounded-lg px-2 py-1.5 bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-300 focus:outline-none focus:ring-1 focus:ring-blue-500"
+          >
+            <option value="category_priority">Prioridad</option>
+            <option value="created_at">Fecha creación</option>
+            <option value="due_date">Vencimiento</option>
+            <option value="amount">Monto</option>
+            <option value="category">Categoría</option>
+          </select>
+          <select
+            value={sortOrder}
+            onChange={(e) => setSortOrder(e.target.value)}
+            className="text-sm border border-gray-200 dark:border-gray-600 rounded-lg px-2 py-1.5 bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-300 focus:outline-none focus:ring-1 focus:ring-blue-500"
+          >
+            <option value="desc">↓ Desc</option>
+            <option value="asc">↑ Asc</option>
+          </select>
           <button
             onClick={() => setShowModal(true)}
-            className="btn-primary flex items-center space-x-2"
+            className="ml-auto btn-primary flex items-center gap-1.5 py-1.5 px-3 text-sm"
           >
-            <FaPlus className="w-4 h-4" />
-            <span>Nuevo Gasto</span>
+            <FaPlus className="w-3 h-3" />
+            <span>Nuevo</span>
           </button>
         </div>
-      </div>
 
-      {/* Lista de gastos */}
-      <div className="card">
-        <div className="space-y-4">
+        {/* Lista de gastos - estilo Gmail */}
+        <div className="divide-y divide-gray-100 dark:divide-gray-700/50">
           {filteredExpenses.length === 0 ? (
             <div className="text-center py-12">
               <FaArrowDown className="w-12 h-12 text-fr-gray-400 dark:text-gray-500 mx-auto mb-4" />
@@ -876,7 +840,7 @@ const Expenses = () => {
               const incomePercentage = totalIncome > 0 ? (expense.amount / totalIncome) * 100 : 0;
 
               return (
-                <div key={expense.id} className="flex items-center gap-2 py-1.5 px-3 rounded-lg bg-fr-gray-50 dark:bg-gray-700 hover:bg-fr-gray-100 dark:hover:bg-gray-600 transition-colors">
+                <div key={expense.id} className="flex items-center gap-2 py-1.5 px-3 hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors">
                   {/* Estado de pago compacto */}
                   <div className="flex-shrink-0 w-6 h-6">
                     <button

@@ -17,12 +17,12 @@ const Layout = () => {
         />
 
         {/* Main content area */}
-        <div className={`transition-all duration-300 ease-in-out ${isDesktopCollapsed ? 'lg:ml-16' : 'lg:ml-64'}`}>
+        <div className={`transition-all duration-300 ease-in-out ${isDesktopCollapsed ? 'lg:ml-16' : 'lg:ml-52'}`}>
           {/* Header */}
           <Header />
 
           {/* Page content */}
-          <main className="p-6 pt-4 sm:pt-6">
+          <main className="p-3 sm:p-4 pt-3">
             <Outlet />
           </main>
         </div>
