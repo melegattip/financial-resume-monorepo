@@ -1,10 +1,10 @@
 import React, { useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
-import { FaPlusCircle, FaMinusCircle, FaFolderOpen, FaBrain, FaFileAlt, FaCog, FaBars, FaTimes, FaHome, FaStar, FaChartPie, FaBullseye, FaRedo, FaTrophy } from 'react-icons/fa';
+import { FaPlusCircle, FaMinusCircle, FaFolderOpen, FaBrain, FaFileAlt, FaCog, FaBars, FaTimes, FaHome, FaStar, FaChartPie, FaBullseye, FaRedo, FaTrophy, FaChevronLeft, FaChevronRight } from 'react-icons/fa';
 import Brand from '../Brand';
 import FeatureProgressIndicator from '../FeatureProgressIndicator';
 
-const Sidebar = () => {
+const Sidebar = ({ isDesktopCollapsed = false, onDesktopToggle }) => {
   const location = useLocation();
   const [isOpen, setIsOpen] = useState(false);
 
@@ -20,15 +20,15 @@ const Sidebar = () => {
   // Grupo 2: Análisis y planificación
   const analysisMenuItems = [
     { path: '/insights', icon: FaBrain, label: 'IA Financiero', hasSparkles: true, feature: 'AI_INSIGHTS' },
-          { path: '/budgets', icon: FaChartPie, label: 'Presupuestos', subtitle: 'Controla tus límites', feature: 'BUDGETS' },
-      { path: '/savings-goals', icon: FaBullseye, label: 'Metas de Ahorro', subtitle: 'Objetivos financieros', feature: 'SAVINGS_GOALS' },
-      { path: '/achievements', icon: FaTrophy, label: 'Logros', subtitle: 'Progreso y gamificación' },
-          { path: '/reports', icon: FaFileAlt, label: 'Reportes' }
+    { path: '/budgets', icon: FaChartPie, label: 'Presupuestos', subtitle: 'Controla tus límites', feature: 'BUDGETS' },
+    { path: '/savings-goals', icon: FaBullseye, label: 'Metas de Ahorro', subtitle: 'Objetivos financieros', feature: 'SAVINGS_GOALS' },
+    { path: '/achievements', icon: FaTrophy, label: 'Logros', subtitle: 'Progreso y gamificación' },
+    { path: '/reports', icon: FaFileAlt, label: 'Reportes' }
   ];
 
   // Grupo 3: Configuración
   const settingsMenuItems = [
-          { path: '/settings', icon: FaCog, label: 'Configuración' }
+    { path: '/settings', icon: FaCog, label: 'Configuración' }
   ];
 
   const toggleSidebar = () => {
@@ -40,16 +40,36 @@ const Sidebar = () => {
   const renderMenuItem = (item) => {
     const Icon = item.icon;
     const active = isActive(item.path);
-    
-    const menuItem = (
+
+    const menuItem = isDesktopCollapsed ? (
+      // Collapsed: icon only, centered
+      <Link
+        key={item.path}
+        to={item.path}
+        title={item.label}
+        onClick={() => setIsOpen(false)}
+        className={`
+          group flex items-center justify-center p-3 rounded-xl transition-all duration-200 hover:bg-gray-50 dark:hover:bg-gray-700
+          ${active
+            ? 'bg-blue-50 dark:bg-blue-900/30 border border-blue-200 dark:border-blue-700 text-blue-700 dark:text-blue-400'
+            : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200'
+          }
+        `}
+      >
+        <Icon className={`w-5 h-5 ${
+          active ? 'text-blue-600 dark:text-blue-400' : 'text-gray-400 dark:text-gray-500 group-hover:text-gray-600 dark:group-hover:text-gray-300'
+        }`} />
+      </Link>
+    ) : (
+      // Expanded: full item with label
       <Link
         key={item.path}
         to={item.path}
         onClick={() => setIsOpen(false)}
         className={`
           group flex flex-col px-4 py-3 rounded-xl transition-all duration-200 hover:bg-gray-50 dark:hover:bg-gray-700
-          ${active 
-            ? 'bg-blue-50 dark:bg-blue-900/30 border border-blue-200 dark:border-blue-700 text-blue-700 dark:text-blue-400' 
+          ${active
+            ? 'bg-blue-50 dark:bg-blue-900/30 border border-blue-200 dark:border-blue-700 text-blue-700 dark:text-blue-400'
             : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200'
           }
         `}
@@ -59,8 +79,8 @@ const Sidebar = () => {
             active ? 'text-blue-600 dark:text-blue-400' : 'text-gray-400 dark:text-gray-500 group-hover:text-gray-600 dark:group-hover:text-gray-300'
           }`} />
           <span className="font-medium">{item.label}</span>
-                          {item.hasSparkles && (
-                  <FaStar className={`w-3 h-3 ${
+          {item.hasSparkles && (
+            <FaStar className={`w-3 h-3 ${
               active ? 'text-blue-500 dark:text-blue-400' : 'text-gray-300 dark:text-gray-600'
             }`} />
           )}
@@ -114,40 +134,61 @@ const Sidebar = () => {
 
       {/* Sidebar */}
       <div className={`
-        fixed lg:fixed inset-y-0 left-0 z-40 w-64 bg-white dark:bg-gray-800 border-r border-gray-200 dark:border-gray-700 transform transition-all duration-300 ease-in-out
+        fixed lg:fixed inset-y-0 left-0 z-40 bg-white dark:bg-gray-800 border-r border-gray-200 dark:border-gray-700 transform transition-all duration-300 ease-in-out
+        ${isDesktopCollapsed ? 'lg:w-16' : 'lg:w-64'}
+        w-64
         ${isOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'}
       `}>
         <div className="flex flex-col h-full">
           {/* Header */}
-          <div className="p-6 border-b border-gray-200 dark:border-gray-700">
-            <Brand size="sm" showTagline={true} />
+          <div className={`flex items-center border-b border-gray-200 dark:border-gray-700 transition-all duration-300 ${isDesktopCollapsed ? 'p-3 justify-center' : 'p-6'}`}>
+            {!isDesktopCollapsed && <Brand size="sm" showTagline={true} />}
+            {isDesktopCollapsed && (
+              <div className="w-8 h-8 rounded-full bg-blue-600 flex items-center justify-center text-white text-xs font-bold">
+                N
+              </div>
+            )}
           </div>
 
           {/* Navigation */}
-          <nav className="flex-1 p-4 overflow-y-auto">
+          <nav className={`flex-1 overflow-y-auto transition-all duration-300 ${isDesktopCollapsed ? 'p-2' : 'p-4'}`}>
             {/* Grupo 1: Transacciones principales */}
-            <div className="space-y-2">
+            <div className="space-y-1">
               {mainMenuItems.map(renderMenuItem)}
             </div>
 
             {renderSeparator()}
 
             {/* Grupo 2: Análisis y planificación */}
-            <div className="space-y-2">
+            <div className="space-y-1">
               {analysisMenuItems.map(renderMenuItem)}
             </div>
 
             {renderSeparator()}
 
             {/* Grupo 3: Configuración */}
-            <div className="space-y-2">
+            <div className="space-y-1">
               {settingsMenuItems.map(renderMenuItem)}
             </div>
           </nav>
+
+          {/* Desktop collapse toggle */}
+          <div className="hidden lg:flex border-t border-gray-200 dark:border-gray-700 p-2 justify-end">
+            <button
+              onClick={onDesktopToggle}
+              title={isDesktopCollapsed ? 'Expandir menú' : 'Colapsar menú'}
+              className="p-2 rounded-lg text-gray-400 dark:text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-700 hover:text-gray-600 dark:hover:text-gray-300 transition-colors"
+            >
+              {isDesktopCollapsed
+                ? <FaChevronRight className="w-4 h-4" />
+                : <FaChevronLeft className="w-4 h-4" />
+              }
+            </button>
+          </div>
         </div>
       </div>
     </>
   );
 };
 
-export default Sidebar; 
+export default Sidebar;
