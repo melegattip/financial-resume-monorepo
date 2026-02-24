@@ -37,7 +37,10 @@
       "Bash(cmd /c \"where npm 2>&1\")",
       "Bash(cd:*)",
       "Bash(test:*)",
-      "Bash(node --version:*)"
+      "Bash(node --version:*)",
+      "Bash(npm run build:*)",
+      "Bash(export:*)",
+      "Bash(npm install:*)"
     ]
   }
 }

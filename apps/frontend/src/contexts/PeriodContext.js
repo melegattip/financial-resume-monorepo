@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useCallback } from 'react';
+import React, { createContext, useContext, useState, useCallback, useRef } from 'react';
 
 // Crear el contexto
 const PeriodContext = createContext();
@@ -20,17 +20,23 @@ export const PeriodProvider = ({ children }) => {
   const [availableMonths, setAvailableMonths] = useState([]);
   const [balancesHidden, setBalancesHidden] = useState(false);
 
-  // Función para actualizar los datos disponibles (solo se ejecuta una vez al cargar)
+  // Ref para garantizar que la auto-selección inicial ocurra solo una vez,
+  // independientemente de cuántas páginas llamen a updateAvailableData.
+  const hasAutoSelected = useRef(false);
+
+  // Función para actualizar los datos disponibles.
+  // Acumula los meses/años por UNION (no reemplaza) para que navegar entre
+  // páginas no achique las opciones del filtro ni resetee la selección activa.
   const updateAvailableData = useCallback((expenses = [], incomes = []) => {
-    const years = new Set();
-    const months = new Set();
+    const newYears = new Set();
+    const newMonths = new Set();
 
     const addDate = (dateStr) => {
       if (!dateStr) return;
       const date = new Date(dateStr);
       if (!isNaN(date.getTime())) {
-        years.add(date.getFullYear().toString());
-        months.add(date.toISOString().slice(0, 7));
+        newYears.add(date.getFullYear().toString());
+        newMonths.add(date.toISOString().slice(0, 7));
       }
     };
 
@@ -39,40 +45,33 @@ export const PeriodProvider = ({ children }) => {
 
     // Incomes: use received_date (business date), fallback to created_at (audit only)
     incomes.forEach(item => addDate(item.received_date || item.created_at));
-    
+
     // Siempre incluir el año y mes actual
     const currentDate = new Date();
-    const currentYear = currentDate.getFullYear().toString();
-    const currentMonth = currentDate.toISOString().slice(0, 7);
-    
-    years.add(currentYear);
-    months.add(currentMonth);
-    
-    // Convertir a arrays ordenados
-    const sortedYears = Array.from(years).sort().reverse();
-    const sortedMonths = Array.from(months).sort().reverse();
-    
-    // SOLO actualizar si realmente hay cambios para evitar loops infinitos
+    newYears.add(currentDate.getFullYear().toString());
+    newMonths.add(currentDate.toISOString().slice(0, 7));
+
+    // Acumular con los valores previos (UNION) para no perder períodos de otras páginas
     setAvailableYears(prevYears => {
-      const yearsChanged = JSON.stringify(prevYears) !== JSON.stringify(sortedYears);
-      return yearsChanged ? sortedYears : prevYears;
+      const merged = Array.from(new Set([...prevYears, ...newYears])).sort().reverse();
+      return JSON.stringify(prevYears) !== JSON.stringify(merged) ? merged : prevYears;
     });
-    
+
     setAvailableMonths(prevMonths => {
-      const monthsChanged = JSON.stringify(prevMonths) !== JSON.stringify(sortedMonths);
-      return monthsChanged ? sortedMonths : prevMonths;
+      const merged = Array.from(new Set([...prevMonths, ...newMonths])).sort().reverse();
+      return JSON.stringify(prevMonths) !== JSON.stringify(merged) ? merged : prevMonths;
     });
-    
-    // Auto-seleccionar el último mes del último año por defecto SOLO si no hay selección previa
-    if (!selectedMonth && sortedMonths.length > 0) {
-      const latestMonth = sortedMonths[0]; // sortedMonths ya está ordenado por fecha más reciente
+
+    // Auto-seleccionar el mes más reciente SOLO la primera vez (carga inicial).
+    // Usar ref en lugar de leer selectedMonth para evitar stale closure.
+    if (!hasAutoSelected.current && newMonths.size > 0) {
+      hasAutoSelected.current = true;
+      const latestMonth = Array.from(newMonths).sort().reverse()[0];
       const [latestYear] = latestMonth.split('-');
-      
-      // Auto-selecting default period
       setSelectedMonth(latestMonth);
       setSelectedYear(latestYear);
     }
-  }, []); // Remover dependencia de selectedMonth para evitar loops
+  }, []); // sin dependencias: usa ref + updater functions para evitar stale closures
 
   // Función para obtener meses disponibles para el año seleccionado
   const getMonthsForSelectedYear = useCallback(() => {

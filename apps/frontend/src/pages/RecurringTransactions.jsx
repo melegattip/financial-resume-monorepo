@@ -314,38 +314,6 @@ const RecurringTransactions = () => {
     }
   };
 
-  const handleExecuteTransaction = async (id) => {
-    try {
-      const response = await recurringTransactionsAPI.execute(id);
-      const result = response.data.data;
-
-      if (result.success) {
-        toast.success(`✅ Transacción ejecutada exitosamente`);
-        if (result.next_execution_date) {
-          toast.info(`📅 Próxima ejecución: ${formatDate(result.next_execution_date)}`);
-        }
-
-        // Recargar datos locales primero
-        await loadData();
-
-        // Invalidar cache inmediatamente
-        dataService.invalidateAfterMutation('recurring_transaction');
-
-        // Forzar actualización adicional con delay para asegurar sincronización
-        setTimeout(() => {
-          console.log('🔄 Forzando actualización adicional después de ejecutar transacción individual');
-          dataService.invalidateAfterMutation('recurring_transaction');
-        }, 1500);
-      } else {
-        toast.error(`❌ Error: ${result.message}`);
-      }
-
-    } catch (error) {
-      console.error('Error executing transaction:', error);
-      toast.error('Error ejecutando transacción');
-    }
-  };
-
   const resetForm = () => {
     setFormData({
       description: '',

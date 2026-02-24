@@ -13,6 +13,72 @@ import { FaTrophy, FaStar, FaBolt, FaChartLine, FaCalendarAlt, FaEye, FaCheckCir
 import { getGamificationAPI } from '../services/gamificationAPI';
 import { useGamificationNotifications } from '../components/GamificationNotification';
 
+const DAY_LABELS = ['L', 'M', 'X', 'J', 'V', 'S', 'D'];
+
+const isStreakAchievement = (achievement) => achievement.type === 'streak_keeper';
+
+const StreakDayTracker = ({ progress, target }) => {
+  if (target <= 7) {
+    return (
+      <div className="mt-3 flex gap-1.5 justify-between">
+        {DAY_LABELS.map((day, i) => {
+          const filled = i < progress;
+          return (
+            <div key={i} className="flex flex-col items-center gap-1 flex-1">
+              <div className={`w-full aspect-square rounded-full flex items-center justify-center text-xs font-bold border-2 transition-all ${
+                filled
+                  ? 'bg-orange-500 border-orange-400 text-white shadow-sm shadow-orange-200 dark:shadow-orange-900'
+                  : 'bg-gray-100 dark:bg-gray-700 border-gray-300 dark:border-gray-600'
+              }`}>
+                {filled ? '✓' : ''}
+              </div>
+              <span className="text-xs text-gray-400 dark:text-gray-500">{day}</span>
+            </div>
+          );
+        })}
+      </div>
+    );
+  }
+
+  // Monthly (30 days): week badges + current week circles
+  const completedWeeks = Math.floor(progress / 7);
+  const currentWeekDays = progress % 7;
+
+  return (
+    <div className="mt-3 space-y-2">
+      {completedWeeks > 0 && (
+        <div className="flex flex-wrap gap-1">
+          {Array.from({ length: completedWeeks }, (_, i) => (
+            <span
+              key={i}
+              className="inline-flex items-center gap-0.5 bg-green-100 dark:bg-green-900/50 border border-green-300 dark:border-green-700 text-green-700 dark:text-green-300 text-xs font-semibold rounded-full px-2 py-0.5"
+            >
+              ✓ S{i + 1}
+            </span>
+          ))}
+        </div>
+      )}
+      <div className="flex gap-1.5 justify-between">
+        {DAY_LABELS.map((day, i) => {
+          const filled = i < currentWeekDays;
+          return (
+            <div key={i} className="flex flex-col items-center gap-1 flex-1">
+              <div className={`w-full aspect-square rounded-full flex items-center justify-center text-xs font-bold border-2 transition-all ${
+                filled
+                  ? 'bg-orange-500 border-orange-400 text-white shadow-sm'
+                  : 'bg-gray-100 dark:bg-gray-700 border-gray-300 dark:border-gray-600'
+              }`}>
+                {filled ? '✓' : ''}
+              </div>
+              <span className="text-xs text-gray-400 dark:text-gray-500">{day}</span>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+};
+
 const Achievements = () => {
   const [loading, setLoading] = useState(true);
   const [gamificationData, setGamificationData] = useState(null);
@@ -311,12 +377,16 @@ const Achievements = () => {
                               {achievement.progress}/{achievement.target}
                             </span>
                           </div>
-                          <div className="h-2 bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden">
-                            <div 
-                              className={`h-full bg-gradient-to-r ${getProgressBarColor(progress)} transition-all duration-300`}
-                              style={{ width: `${progress}%` }}
-                            />
-                          </div>
+                          {isStreakAchievement(achievement) ? (
+                            <StreakDayTracker progress={achievement.progress} target={achievement.target} />
+                          ) : (
+                            <div className="h-2 bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden">
+                              <div
+                                className={`h-full bg-gradient-to-r ${getProgressBarColor(progress)} transition-all duration-300`}
+                                style={{ width: `${progress}%` }}
+                              />
+                            </div>
+                          )}
                         </div>
                       </div>
                     );
@@ -422,12 +492,16 @@ const Achievements = () => {
                                 {achievement.progress}/{achievement.target}
                               </span>
                             </div>
-                            <div className="h-2 bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden">
-                              <div 
-                                className={`h-full bg-gradient-to-r ${getProgressBarColor(progress)} transition-all duration-300`}
-                                style={{ width: `${progress}%` }}
-                              />
-                            </div>
+                            {isStreakAchievement(achievement) ? (
+                              <StreakDayTracker progress={achievement.progress} target={achievement.target} />
+                            ) : (
+                              <div className="h-2 bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden">
+                                <div
+                                  className={`h-full bg-gradient-to-r ${getProgressBarColor(progress)} transition-all duration-300`}
+                                  style={{ width: `${progress}%` }}
+                                />
+                              </div>
+                            )}
                             <div className="flex items-center justify-between">
                               <div className="flex items-center space-x-1">
                                 <FaBolt className="w-3 h-3 text-yellow-500" />
@@ -435,9 +509,11 @@ const Achievements = () => {
                                   +{achievement.points} XP
                                 </span>
                               </div>
-                              <span className="text-xs text-gray-500 dark:text-gray-400">
-                                {Math.round(progress)}% completado
-                              </span>
+                              {!isStreakAchievement(achievement) && (
+                                <span className="text-xs text-gray-500 dark:text-gray-400">
+                                  {Math.round(progress)}% completado
+                                </span>
+                              )}
                             </div>
                           </div>
                         </div>
