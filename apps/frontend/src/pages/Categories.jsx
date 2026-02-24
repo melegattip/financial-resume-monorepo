@@ -21,6 +21,37 @@ import {
 
 const CHART_COLORS = ['#009ee3', '#00a650', '#ff6900', '#e53e3e', '#6b7280', '#8b5cf6', '#f59e0b', '#06b6d4', '#ec4899'];
 
+// Pure helper: group raw expenses + incomes by an arbitrary date key function
+const groupTransactions = (expenses, incomes, catMap, getKey) => {
+  const byKey = {};
+  expenses.forEach((exp) => {
+    const rawDate = exp.transaction_date || exp.due_date || exp.created_at;
+    if (!rawDate) return;
+    // Use noon local time to avoid UTC→local day-shift (e.g. UTC-3: "2026-03-01T00:00:00Z" → Feb 28)
+    const d = new Date(rawDate.split('T')[0] + 'T12:00:00');
+    if (isNaN(d.getTime())) return;
+    const key = getKey(d);
+    const catName = exp.category_name || catMap[exp.category_id] || 'Sin categoría';
+    if (!byKey[key]) byKey[key] = { month: key };
+    byKey[key][catName] = (byKey[key][catName] || 0) + (Number(exp.amount) || 0);
+  });
+  incomes.forEach((inc) => {
+    const rawDate = inc.received_date || inc.transaction_date || inc.created_at;
+    if (!rawDate) return;
+    const d = new Date(rawDate.split('T')[0] + 'T12:00:00');
+    if (isNaN(d.getTime())) return;
+    const key = getKey(d);
+    if (!byKey[key]) byKey[key] = { month: key };
+    byKey[key]['Ingresos'] = (byKey[key]['Ingresos'] || 0) + (Number(inc.amount) || 0);
+  });
+  return Object.keys(byKey).sort().map((k) => byKey[k]);
+};
+
+const monthKey = (d) =>
+  `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+const dayKey = (d) =>
+  `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+
 const Categories = () => {
   const [categories, setCategories] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -39,13 +70,14 @@ const Categories = () => {
   const [spendingByCategory, setSpendingByCategory] = useState([]);
   const [spendingLoading, setSpendingLoading] = useState(false);
 
-  // Monthly chart data
-  const [monthlyChartData, setMonthlyChartData] = useState([]);
+  // Raw chart data (no grouping yet — grouping happens in displayedChartData)
+  const [allExpenses, setAllExpenses] = useState([]);
+  const [allIncomes, setAllIncomes] = useState([]);
   const [chartLoading, setChartLoading] = useState(false);
   const [selectedChartCategories, setSelectedChartCategories] = useState([]);
 
   const { categories: categoriesAPI } = useOptimizedAPI();
-  const { getFilterParams, getPeriodTitle, updateAvailableData } = usePeriod();
+  const { getFilterParams, getPeriodTitle, updateAvailableData, selectedYear, selectedMonth } = usePeriod();
   const { recordAction } = useGamification();
 
   const loadCategories = useCallback(async () => {
@@ -77,10 +109,9 @@ const Categories = () => {
     }
   }, [getFilterParams]);
 
-  const loadMonthlyChart = useCallback(async (cats) => {
+  const loadMonthlyChart = useCallback(async () => {
     setChartLoading(true);
     try {
-      // Fetch all expenses and incomes (no period filter) for full historical evolution
       const [expResponse, incResponse] = await Promise.all([
         expensesAPI.list(),
         incomesAPI.list(),
@@ -89,60 +120,19 @@ const Categories = () => {
       const expenses = expResponse?.data?.expenses || expResponse?.data?.data || expResponse?.data || [];
       const incomes = incResponse?.data?.incomes || incResponse?.data?.data || incResponse?.data || [];
 
+      const safeExp = Array.isArray(expenses) ? expenses : [];
+      const safeInc = Array.isArray(incomes) ? incomes : [];
+
       // Feed period context so the filter dropdown has available years/months
-      updateAvailableData(
-        Array.isArray(expenses) ? expenses : [],
-        Array.isArray(incomes) ? incomes : [],
-      );
+      updateAvailableData(safeExp, safeInc);
 
-      if (!Array.isArray(expenses) || expenses.length === 0) {
-        setMonthlyChartData([]);
-        return;
-      }
-
-      // Build a category id→name lookup from the loaded categories
-      const catMap = {};
-      (cats || []).forEach(c => { catMap[c.id] = c.name; });
-
-      // Group by month: expenses per category + total incomes as "Ingresos"
-      const byMonth = {};
-
-      const addToMonth = (rawDate, key, amount) => {
-        if (!rawDate) return;
-        const d = new Date(rawDate);
-        if (isNaN(d.getTime())) return;
-        const month = d.toLocaleDateString('es-AR', { month: 'short', year: '2-digit' });
-        if (!byMonth[month]) byMonth[month] = { month };
-        byMonth[month][key] = (byMonth[month][key] || 0) + (Number(amount) || 0);
-      };
-
-      expenses.forEach((exp) => {
-        const rawDate = exp.transaction_date || exp.due_date || exp.created_at;
-        const catName = exp.category_name || catMap[exp.category_id] || 'Sin categoría';
-        addToMonth(rawDate, catName, exp.amount);
-      });
-
-      if (Array.isArray(incomes)) {
-        incomes.forEach((inc) => {
-          const rawDate = inc.received_date || inc.transaction_date || inc.created_at;
-          addToMonth(rawDate, 'Ingresos', inc.amount);
-        });
-      }
-
-      // Sort months chronologically
-      const sortedMonths = Object.keys(byMonth).sort((a, b) => {
-        const parse = (s) => {
-          const [mon, yr] = s.split(' ');
-          const monthMap = { ene: 0, feb: 1, mar: 2, abr: 3, may: 4, jun: 5, jul: 6, ago: 7, sep: 8, oct: 9, nov: 10, dic: 11 };
-          return new Date(2000 + parseInt(yr), monthMap[mon.toLowerCase()] ?? 0);
-        };
-        return parse(a) - parse(b);
-      });
-
-      setMonthlyChartData(sortedMonths.map((m) => byMonth[m]));
+      // Store raw data — grouping happens in displayedChartData useMemo
+      setAllExpenses(safeExp);
+      setAllIncomes(safeInc);
     } catch (err) {
-      console.error('Error loading monthly chart:', err);
-      setMonthlyChartData([]);
+      console.error('Error loading chart data:', err);
+      setAllExpenses([]);
+      setAllIncomes([]);
     } finally {
       setChartLoading(false);
     }
@@ -150,14 +140,12 @@ const Categories = () => {
 
   useEffect(() => {
     const init = async () => {
-      // Load categories first so we can pass them to the chart for id→name lookup
       const response = await categoriesAPI.list().catch(() => null);
       const cats = response?.data?.data || response?.data || [];
-      const catsArray = Array.isArray(cats) ? cats : [];
-      setCategories(catsArray);
+      setCategories(Array.isArray(cats) ? cats : []);
       setLoading(false);
       loadSpendingAnalytics();
-      loadMonthlyChart(catsArray);
+      loadMonthlyChart();
     };
     init();
   }, [loadSpendingAnalytics, loadMonthlyChart, categoriesAPI]);
@@ -245,18 +233,42 @@ const Categories = () => {
       )
     : [];
 
-  // All unique series names present in monthly data (expense categories + "Ingresos")
-  const chartCategoryNames = monthlyChartData.length > 0
-    ? [...new Set(monthlyChartData.flatMap(row => Object.keys(row).filter(k => k !== 'month')))]
-    : [];
+  // id→name map built from loaded categories
+  const catMap = useMemo(() => {
+    const map = {};
+    categories.forEach((c) => { map[c.id] = c.name; });
+    return map;
+  }, [categories]);
 
-  // When chart data first loads (or reloads), select all series
+  // Adaptive grouping: daily when a month is selected, monthly otherwise
+  const displayedChartData = useMemo(() => {
+    if (allExpenses.length === 0 && allIncomes.length === 0) return [];
+    if (selectedMonth) {
+      // Daily granularity, filtered to the selected month
+      return groupTransactions(allExpenses, allIncomes, catMap, dayKey)
+        .filter((r) => r.month.startsWith(selectedMonth + '-'));
+    }
+    const monthly = groupTransactions(allExpenses, allIncomes, catMap, monthKey);
+    if (selectedYear) return monthly.filter((r) => r.month.startsWith(selectedYear + '-'));
+    return monthly;
+  }, [allExpenses, allIncomes, catMap, selectedMonth, selectedYear]);
+
+  // All unique series names present in the filtered data (expense categories + "Ingresos")
+  const chartCategoryNames = useMemo(
+    () =>
+      displayedChartData.length > 0
+        ? [...new Set(displayedChartData.flatMap((row) => Object.keys(row).filter((k) => k !== 'month')))]
+        : [],
+    [displayedChartData],
+  );
+
+  // When visible data changes, reset toggles to all-selected
   useEffect(() => {
     if (chartCategoryNames.length > 0) {
       setSelectedChartCategories(chartCategoryNames);
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [monthlyChartData]);
+  }, [displayedChartData]);
 
   if (loading) {
     return (
@@ -406,7 +418,7 @@ const Categories = () => {
         </h3>
         {chartLoading ? (
           <div className="h-48 bg-gray-100 dark:bg-gray-700 rounded animate-pulse" />
-        ) : monthlyChartData.length === 0 ? (
+        ) : displayedChartData.length === 0 ? (
           <p className="text-sm text-fr-gray-500 dark:text-gray-400 py-4 text-center">
             Sin datos suficientes para mostrar la evolución.
           </p>
@@ -440,9 +452,25 @@ const Categories = () => {
             </div>
 
             <ResponsiveContainer width="100%" height={260}>
-              <LineChart data={monthlyChartData} margin={{ top: 4, right: 16, left: 0, bottom: 4 }}>
+              <LineChart data={displayedChartData} margin={{ top: 4, right: 16, left: 0, bottom: 4 }}>
                 <CartesianGrid strokeDasharray="3 3" stroke="rgba(107,114,128,0.2)" />
-                <XAxis dataKey="month" tick={{ fontSize: 11 }} stroke="rgba(107,114,128,0.5)" />
+                <XAxis
+                  dataKey="month"
+                  tick={{ fontSize: 11 }}
+                  stroke="rgba(107,114,128,0.5)"
+                  tickFormatter={(value) => {
+                    const parts = value.split('-');
+                    if (parts.length === 3) {
+                      // YYYY-MM-DD → "15 mar."
+                      const d = new Date(parseInt(parts[0]), parseInt(parts[1]) - 1, parseInt(parts[2]));
+                      return d.toLocaleDateString('es-AR', { day: 'numeric', month: 'short' });
+                    }
+                    // YYYY-MM → "Mar. 26"
+                    const d = new Date(parseInt(parts[0]), parseInt(parts[1]) - 1);
+                    const label = d.toLocaleDateString('es-AR', { month: 'short', year: '2-digit' });
+                    return label.charAt(0).toUpperCase() + label.slice(1);
+                  }}
+                />
                 <YAxis tick={{ fontSize: 11 }} stroke="rgba(107,114,128,0.5)" tickFormatter={(v) => `$${v}`} />
                 <Tooltip
                   formatter={(value, name) => [formatCurrency(value), name]}
@@ -460,6 +488,7 @@ const Categories = () => {
                       strokeDasharray={name === 'Ingresos' ? '6 3' : undefined}
                       dot={{ r: 3 }}
                       activeDot={{ r: 5 }}
+                      connectNulls={true}
                     />
                   ) : null
                 )}

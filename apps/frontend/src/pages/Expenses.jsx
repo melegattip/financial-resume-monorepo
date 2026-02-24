@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { useLocation } from 'react-router-dom';
 import { FaPlus, FaSearch, FaArrowDown, FaCalendar, FaEdit, FaTrash, FaCheckCircle, FaTimesCircle, FaDollarSign } from 'react-icons/fa';
@@ -34,6 +34,8 @@ const Expenses = () => {
   const [editingCell, setEditingCell] = useState(null); // { expenseId, field }
   const [editValues, setEditValues] = useState({});
   const [savingCell, setSavingCell] = useState(null);
+  // Ref to always have the latest editValues — avoids stale closure in onBlur handlers
+  const editValuesRef = useRef({});
 
   // Estados para nuevos filtros de ordenamiento
   const [sortBy, setSortBy] = useState('category_priority');
@@ -291,7 +293,8 @@ const Expenses = () => {
       description: expense.description,
       amount: expense.amount.toString(),
       category_id: expense.category_id || '',
-      due_date: expense.due_date || '',
+      // backend returns transaction_date (RFC3339); due_date is accepted as alias on update
+      due_date: expense.transaction_date ? expense.transaction_date.split('T')[0] : (expense.due_date || ''),
       paid: expense.paid,
     });
     setShowModal(true);
@@ -505,24 +508,26 @@ const Expenses = () => {
   // ===== Funciones para Edición Inline Tipo Excel =====
 
   const startEditing = (expenseId, field, currentValue) => {
+    const key = `${expenseId}-${field}`;
+    editValuesRef.current = { [key]: currentValue };
     setEditingCell({ expenseId, field });
-    setEditValues({
-      ...editValues,
-      [`${expenseId}-${field}`]: currentValue
-    });
+    setEditValues({ [key]: currentValue });
   };
 
   const cancelInlineEdit = () => {
+    editValuesRef.current = {};
     setEditingCell(null);
     setEditValues({});
     setSavingCell(null);
   };
 
-  const saveInlineEdit = async (expenseId, field) => {
+  // explicitValue: when called from onChange (e.g. date picker) pass the value directly
+  // to avoid any blur/closure timing issues
+  const saveInlineEdit = async (expenseId, field, explicitValue) => {
     console.log('🚀 [saveInlineEdit] INICIANDO', { expenseId, field });
 
     const key = `${expenseId}-${field}`;
-    const newValue = editValues[key];
+    const newValue = explicitValue !== undefined ? explicitValue : editValuesRef.current[key];
     const expense = expenses.find(e => e.id === expenseId);
 
     console.log('🔍 [saveInlineEdit] Valores:', {
@@ -540,6 +545,10 @@ const Expenses = () => {
       const currentAmount = parseFloat(expense.amount);
       const newAmount = parseFloat(newValue);
       valueChanged = newAmount !== currentAmount;
+    } else if (field === 'transaction_date') {
+      // Compare YYYY-MM-DD against the stored RFC3339 date
+      const currentDate = expense.transaction_date ? expense.transaction_date.split('T')[0] : '';
+      valueChanged = newValue !== currentDate;
     } else {
       valueChanged = newValue !== expense[field];
     }
@@ -585,9 +594,10 @@ const Expenses = () => {
         }
       } else if (field === 'category_id') {
         updateData.category_id = newValue;
-      } else if (field === 'due_date') {
+      } else if (field === 'transaction_date' || field === 'due_date') {
         // Convert YYYY-MM-DD from date input to RFC3339 for the backend
-        updateData.due_date = newValue ? `${newValue}T00:00:00Z` : '';
+        // Both due_date and transaction_date are accepted by the backend
+        updateData.transaction_date = newValue ? `${newValue}T00:00:00Z` : '';
       } else {
         updateData[field] = newValue;
       }
@@ -664,8 +674,7 @@ const Expenses = () => {
 
       // Filtros de fecha — usar transaction_date (fecha funcional del gasto)
       const txDate = expense.due_date || expense.transaction_date || expense.created_at;
-      const expenseDate = new Date(txDate);
-      const matchesYear = !selectedYear || expenseDate.getFullYear().toString() === selectedYear;
+      const matchesYear = !selectedYear || txDate.slice(0, 4) === selectedYear;
       const matchesMonth = !selectedMonth || txDate.slice(0, 7) === selectedMonth;
 
       return matchesSearch && matchesFilter && matchesYear && matchesMonth;
@@ -698,9 +707,9 @@ const Expenses = () => {
             bValue = (bCat?.name || 'Sin categoría').toLowerCase();
             break;
           }
-          case 'due_date':
-            aValue = a.due_date ? new Date(a.due_date).getTime() : 0;
-            bValue = b.due_date ? new Date(b.due_date).getTime() : 0;
+          case 'transaction_date':
+            aValue = a.transaction_date ? new Date(a.transaction_date).getTime() : 0;
+            bValue = b.transaction_date ? new Date(b.transaction_date).getTime() : 0;
             break;
           case 'created_at':
           default:
@@ -804,7 +813,7 @@ const Expenses = () => {
           >
             <option value="category_priority">Prioridad</option>
             <option value="created_at">Fecha creación</option>
-            <option value="due_date">Vencimiento</option>
+            <option value="transaction_date">Fecha</option>
             <option value="amount">Monto</option>
             <option value="category">Categoría</option>
           </select>
@@ -864,7 +873,7 @@ const Expenses = () => {
                       <input
                         type="text"
                         value={editValues[`${expense.id}-description`] ?? expense.description}
-                        onChange={(e) => setEditValues({ ...editValues, [`${expense.id}-description`]: e.target.value })}
+                        onChange={(e) => { const k = `${expense.id}-description`; editValuesRef.current[k] = e.target.value; setEditValues(prev => ({ ...prev, [k]: e.target.value })); }}
                         onBlur={() => saveInlineEdit(expense.id, 'description')}
                         onKeyDown={(e) => handleInlineKeyDown(e, expense.id, 'description')}
                         className="w-full px-2 py-1 text-sm font-medium bg-white dark:bg-gray-800 border-2 border-blue-400 dark:border-blue-500 rounded focus:outline-none"
@@ -887,8 +896,16 @@ const Expenses = () => {
                     {editingCell?.expenseId === expense.id && editingCell?.field === 'category_id' ? (
                       <select
                         value={editValues[`${expense.id}-category_id`] || expense.category_id}
-                        onChange={(e) => setEditValues({ ...editValues, [`${expense.id}-category_id`]: e.target.value })}
-                        onBlur={() => saveInlineEdit(expense.id, 'category_id')}
+                        onChange={(e) => {
+                          const k = `${expense.id}-category_id`;
+                          const v = e.target.value;
+                          editValuesRef.current[k] = v;
+                          setEditValues(prev => ({ ...prev, [k]: v }));
+                          // Save immediately on change: for native <select>, Chrome can fire blur
+                          // BEFORE change (mousedown on option → blur → change), so onBlur would
+                          // read the old ref value. Passing explicit value here avoids that.
+                          saveInlineEdit(expense.id, 'category_id', v);
+                        }}
                         onKeyDown={(e) => handleInlineKeyDown(e, expense.id, 'category_id')}
                         className="px-2 py-1 text-xs font-medium bg-white dark:bg-gray-800 border-2 border-blue-400 dark:border-blue-500 rounded focus:outline-none"
                         autoFocus
@@ -911,32 +928,38 @@ const Expenses = () => {
                     )}
                   </div>
 
-                  {/* Fecha de vencimiento - Editable inline */}
+                  {/* Fecha de transacción - Editable inline */}
                   <div className="flex-shrink-0 hidden md:block text-xs text-gray-500 dark:text-gray-400 text-center whitespace-nowrap">
-                    {editingCell?.expenseId === expense.id && editingCell?.field === 'due_date' ? (
+                    {editingCell?.expenseId === expense.id && editingCell?.field === 'transaction_date' ? (
                       <input
                         type="date"
-                        value={editValues[`${expense.id}-due_date`] || expense.due_date || ''}
-                        onChange={(e) => setEditValues({ ...editValues, [`${expense.id}-due_date`]: e.target.value })}
-                        onBlur={() => saveInlineEdit(expense.id, 'due_date')}
-                        onKeyDown={(e) => handleInlineKeyDown(e, expense.id, 'due_date')}
+                        value={editValues[`${expense.id}-transaction_date`] || (expense.transaction_date ? expense.transaction_date.split('T')[0] : '')}
+                        onChange={(e) => {
+                          const k = `${expense.id}-transaction_date`;
+                          const v = e.target.value;
+                          editValuesRef.current[k] = v;
+                          setEditValues(prev => ({ ...prev, [k]: v }));
+                          // Don't save immediately here: autoFocus can trigger a spurious onChange
+                          // with the current value before the user picks, which would immediately
+                          // close the editor (valueChanged=false → cancelInlineEdit). Let onBlur handle it.
+                        }}
+                        onBlur={() => saveInlineEdit(expense.id, 'transaction_date')}
+                        onKeyDown={(e) => handleInlineKeyDown(e, expense.id, 'transaction_date')}
                         className="px-2 py-1 text-xs bg-white dark:bg-gray-800 border-2 border-blue-400 dark:border-blue-500 rounded focus:outline-none"
                         autoFocus
-                        disabled={savingCell?.expenseId === expense.id && savingCell?.field === 'due_date'}
+                        disabled={savingCell?.expenseId === expense.id && savingCell?.field === 'transaction_date'}
                       />
                     ) : (
-                      expense.due_date && (
-                        <span
-                          className="cursor-pointer hover:text-blue-600 dark:hover:text-blue-400 transition-colors"
-                          onClick={() => startEditing(expense.id, 'due_date', expense.due_date)}
-                          title="Click para editar"
-                        >
-                          Vto: {new Date(expense.due_date).toLocaleDateString('es-AR', {
-                            day: 'numeric',
-                            month: 'numeric'
-                          })}
-                        </span>
-                      )
+                      <span
+                        className="cursor-pointer hover:text-blue-600 dark:hover:text-blue-400 transition-colors"
+                        onClick={() => startEditing(expense.id, 'transaction_date', expense.transaction_date ? expense.transaction_date.split('T')[0] : '')}
+                        title="Click para editar fecha"
+                      >
+                        {expense.transaction_date
+                          ? new Date(expense.transaction_date.split('T')[0] + 'T12:00:00').toLocaleDateString('es-AR', { day: 'numeric', month: 'short' })
+                          : <span className="opacity-40">—</span>
+                        }
+                      </span>
                     )}
                   </div>
 
@@ -952,7 +975,7 @@ const Expenses = () => {
                         type="number"
                         step="0.01"
                         value={editValues[`${expense.id}-amount`] || expense.amount}
-                        onChange={(e) => setEditValues({ ...editValues, [`${expense.id}-amount`]: e.target.value })}
+                        onChange={(e) => { const k = `${expense.id}-amount`; editValuesRef.current[k] = e.target.value; setEditValues(prev => ({ ...prev, [k]: e.target.value })); }}
                         onBlur={() => saveInlineEdit(expense.id, 'amount')}
                         onKeyDown={(e) => handleInlineKeyDown(e, expense.id, 'amount')}
                         className="w-full px-2 py-1 text-sm font-semibold bg-white dark:bg-gray-800 border-2 border-blue-400 dark:border-blue-500 rounded focus:outline-none text-right"

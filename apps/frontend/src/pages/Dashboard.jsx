@@ -57,13 +57,14 @@ const Resumen = () => {
     description: '',
     amount: '',
     category_id: '',
-    due_date: '',
+    transaction_date: '',
     paid: false,
   });
   const [incomeFormData, setIncomeFormData] = useState({
     description: '',
     amount: '',
     category_id: '',
+    received_date: '',
   });
   const [expenseFormErrors, setExpenseFormErrors] = useState({});
   const [incomeFormErrors, setIncomeFormErrors] = useState({});
@@ -413,8 +414,10 @@ const Resumen = () => {
     switch (sortType) {
       case 'fecha':
         return sorted.sort((a, b) => {
-          const dateA = new Date(a.created_at);
-          const dateB = new Date(b.created_at);
+          const rawA = a.transaction_date || a.received_date || a.created_at;
+          const rawB = b.transaction_date || b.received_date || b.created_at;
+          const dateA = new Date(rawA);
+          const dateB = new Date(rawB);
 
           // Manejar fechas inválidas - ponerlas al final
           if (isNaN(dateA.getTime()) && isNaN(dateB.getTime())) return 0;
@@ -585,7 +588,7 @@ const Resumen = () => {
       description: expense.description,
       amount: expense.amount.toString(),
       category_id: expense.category_id || '',
-      due_date: expense.due_date || '',
+      transaction_date: expense.transaction_date ? expense.transaction_date.split('T')[0] : '',
       paid: expense.paid || false,
     });
     setShowExpenseEditModal(true);
@@ -597,6 +600,7 @@ const Resumen = () => {
       description: income.description,
       amount: income.amount.toString(),
       category_id: income.category_id || '',
+      received_date: income.received_date ? income.received_date.split('T')[0] : '',
     });
     setShowIncomeEditModal(true);
   };
@@ -667,8 +671,7 @@ const Resumen = () => {
         description: '',
         amount: '',
         category_id: '',
-        due_date: '',
-        transaction_date: new Date().toISOString().split('T')[0],
+        transaction_date: '',
         paid: false,
       });
       setExpenseFormErrors({});
@@ -704,6 +707,7 @@ const Resumen = () => {
         description: '',
         amount: '',
         category_id: '',
+        received_date: '',
       });
       setIncomeFormErrors({});
 
@@ -722,8 +726,7 @@ const Resumen = () => {
       description: '',
       amount: '',
       category_id: '',
-      due_date: '',
-      transaction_date: new Date().toISOString().split('T')[0],
+      transaction_date: '',
       paid: false,
     });
     setExpenseFormErrors({});
@@ -736,6 +739,7 @@ const Resumen = () => {
       description: '',
       amount: '',
       category_id: '',
+      received_date: '',
     });
     setIncomeFormErrors({});
   };
@@ -1162,13 +1166,13 @@ const Resumen = () => {
                             )}
                           </div>
 
-                          {/* Fecha de vencimiento */}
+                          {/* Fecha de transacción */}
                           <div className="flex-shrink-0 hidden md:block text-xs text-gray-500 dark:text-gray-400 text-center whitespace-nowrap">
-                            {expense.due_date && (
+                            {expense.transaction_date && (
                               <span>
-                                Vto: {new Date(expense.due_date).toLocaleDateString('es-AR', {
+                                {new Date(expense.transaction_date.split('T')[0] + 'T12:00:00').toLocaleDateString('es-AR', {
                                   day: 'numeric',
-                                  month: 'numeric'
+                                  month: 'short',
                                 })}
                               </span>
                             )}
@@ -1259,8 +1263,16 @@ const Resumen = () => {
                             )}
                           </div>
 
-                          {/* Espacio para fecha (vacío para ingresos) */}
-                          <div className="flex-shrink-0 hidden md:block min-w-[100px]">
+                          {/* Fecha de recepción */}
+                          <div className="flex-shrink-0 hidden md:block text-xs text-gray-500 dark:text-gray-400 text-center whitespace-nowrap">
+                            {income.received_date && (
+                              <span>
+                                {new Date(income.received_date.split('T')[0] + 'T12:00:00').toLocaleDateString('es-AR', {
+                                  day: 'numeric',
+                                  month: 'short',
+                                })}
+                              </span>
+                            )}
                           </div>
 
                           {/* Porcentaje y monto */}
@@ -1764,12 +1776,12 @@ const Resumen = () => {
 
               <div>
                 <label className="block text-sm font-medium text-fr-gray-700 dark:text-gray-300 mb-2">
-                  Fecha de vencimiento
+                  Fecha de transacción
                 </label>
                 <input
                   type="date"
-                  value={expenseFormData.due_date}
-                  onChange={(e) => setExpenseFormData({ ...expenseFormData, due_date: e.target.value })}
+                  value={expenseFormData.transaction_date}
+                  onChange={(e) => setExpenseFormData({ ...expenseFormData, transaction_date: e.target.value })}
                   className="input"
                 />
               </div>
@@ -1864,6 +1876,18 @@ const Resumen = () => {
                     </option>
                   ))}
                 </select>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-fr-gray-700 dark:text-gray-300 mb-2">
+                  Fecha de recepción
+                </label>
+                <input
+                  type="date"
+                  value={incomeFormData.received_date}
+                  onChange={(e) => setIncomeFormData({ ...incomeFormData, received_date: e.target.value })}
+                  className="input"
+                />
               </div>
 
               <div className="flex space-x-4 pt-4">
