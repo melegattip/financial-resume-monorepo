@@ -21,14 +21,14 @@ const isStreakAchievement = (achievement) =>
 const StreakDayTracker = ({ progress, target }) => {
   if (target <= 7) {
     return (
-      <div className="mt-3 flex gap-1.5 justify-between">
+      <div className="mt-3 flex gap-2 justify-start">
         {DAY_LABELS.map((day, i) => {
           const filled = i < progress;
           return (
-            <div key={i} className="flex flex-col items-center gap-1 flex-1">
-              <div className={`w-full aspect-square rounded-full flex items-center justify-center text-xs font-bold border-2 transition-all ${
+            <div key={i} className="flex flex-col items-center gap-1">
+              <div className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold border-2 transition-all ${
                 filled
-                  ? 'bg-orange-500 border-orange-400 text-white shadow-sm shadow-orange-200 dark:shadow-orange-900'
+                  ? 'bg-orange-500 border-orange-400 text-white'
                   : 'bg-gray-100 dark:bg-gray-700 border-gray-300 dark:border-gray-600'
               }`}>
                 {filled ? '✓' : ''}
@@ -59,14 +59,14 @@ const StreakDayTracker = ({ progress, target }) => {
           ))}
         </div>
       )}
-      <div className="flex gap-1.5 justify-between">
+      <div className="flex gap-2 justify-start">
         {DAY_LABELS.map((day, i) => {
           const filled = i < currentWeekDays;
           return (
-            <div key={i} className="flex flex-col items-center gap-1 flex-1">
-              <div className={`w-full aspect-square rounded-full flex items-center justify-center text-xs font-bold border-2 transition-all ${
+            <div key={i} className="flex flex-col items-center gap-1">
+              <div className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold border-2 transition-all ${
                 filled
-                  ? 'bg-orange-500 border-orange-400 text-white shadow-sm'
+                  ? 'bg-orange-500 border-orange-400 text-white'
                   : 'bg-gray-100 dark:bg-gray-700 border-gray-300 dark:border-gray-600'
               }`}>
                 {filled ? '✓' : ''}
@@ -98,7 +98,11 @@ const Achievements = () => {
     try {
       setLoading(true);
       const api = getGamificationAPI();
-      
+
+      // Record daily login first so streak and achievement progress are
+      // up-to-date before we fetch. The backend is idempotent for the same day.
+      await api.recordDailyLogin().catch(() => {});
+
       const [profile, achievementsData, statsData] = await Promise.all([
         api.getUserProfile(),
         api.getUserAchievements(),
