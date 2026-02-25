@@ -35,6 +35,9 @@ coverage/
 
 # Docker
 docker-compose.override.yml
+.dockerignore
+docker-compose.yml
+apps/monolith/Dockerfile
 
 # OS
 Thumbs.db
@@ -49,3 +52,5 @@ go.work.sum
 
 # Specs
 specs/
+
+.claude/settings.local.json
