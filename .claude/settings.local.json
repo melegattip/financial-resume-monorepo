@@ -40,7 +40,9 @@
       "Bash(node --version:*)",
       "Bash(npm run build:*)",
       "Bash(export:*)",
-      "Bash(npm install:*)"
+      "Bash(npm install:*)",
+      "Bash(docker compose build:*)",
+      "Bash(docker compose:*)"
     ]
   }
 }

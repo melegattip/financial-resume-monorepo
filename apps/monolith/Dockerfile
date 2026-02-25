@@ -7,6 +7,7 @@ WORKDIR /app
 
 # Copy go workspace files
 COPY go.work go.work
+COPY go.work.sum go.work.sum
 COPY apps/monolith/go.mod apps/monolith/go.sum apps/monolith/
 
 # Download dependencies
