@@ -263,7 +263,7 @@ func (h *ExpenseHandler) Update(c *gin.Context) {
 	// --- Handle paid-only update (e.g. toggle paid, partial payment) ---
 	// If the request only contains payment fields (no amount/description), skip Update() and
 	// go straight to ApplyPayment so we don't require amount/description in the payload.
-	hasCoreFields := req.Amount != nil || req.Description != ""
+	hasCoreFields := req.Amount != nil || req.Description != "" || req.CategoryID != "" || req.TransactionDate != "" || req.DueDate != ""
 	hasPaymentFields := req.Paid != nil || req.AmountPaid != nil || req.PaymentAmount != nil
 
 	if hasCoreFields {
