@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { FaBuilding, FaUsers, FaEnvelope, FaExclamationTriangle, FaCopy, FaCheck, FaTrash, FaUserCog, FaPlus } from 'react-icons/fa';
+import { FaBuilding, FaUsers, FaEnvelope, FaExclamationTriangle, FaCopy, FaCheck, FaTrash, FaUserCog, FaPlus, FaKey, FaSignInAlt } from 'react-icons/fa';
 import { useTenant } from '../contexts/TenantContext';
 import RoleGuard from '../components/RoleGuard';
 import tenantService from '../services/tenantService';
@@ -397,6 +397,71 @@ function DangerZoneTab({ tenantName }) {
   );
 }
 
+// ─── Join Tenant Section ──────────────────────────────────────────────────────
+
+function JoinTenantSection() {
+  const [code, setCode] = useState('');
+  const [joining, setJoining] = useState(false);
+  const [joined, setJoined] = useState(false);
+
+  const handleJoin = async (e) => {
+    e.preventDefault();
+    if (!code.trim()) return;
+    try {
+      setJoining(true);
+      const result = await tenantService.joinTenant(code.trim());
+      setJoined(true);
+      setCode('');
+      toast.success(`Te uniste al espacio "${result.tenant?.name || ''}". Vuelve a iniciar sesión para activarlo.`);
+    } catch (err) {
+      toast.error(err.response?.data?.error || 'Código inválido o expirado');
+    } finally {
+      setJoining(false);
+    }
+  };
+
+  return (
+    <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-6">
+      <div className="flex items-start gap-3 mb-4">
+        <div className="p-2 bg-green-50 dark:bg-green-900/30 rounded-lg flex-shrink-0">
+          <FaKey className="w-4 h-4 text-green-600 dark:text-green-400" />
+        </div>
+        <div>
+          <h3 className="text-base font-semibold text-gray-900 dark:text-gray-100">Unirse a otro espacio</h3>
+          <p className="text-sm text-gray-500 dark:text-gray-400 mt-0.5">
+            Si tienes un código de invitación, ingrésalo para unirte al espacio de otra persona.
+          </p>
+        </div>
+      </div>
+
+      {joined ? (
+        <div className="flex items-center gap-2 text-sm text-green-600 dark:text-green-400 bg-green-50 dark:bg-green-900/20 px-4 py-3 rounded-lg">
+          <FaSignInAlt className="w-4 h-4 flex-shrink-0" />
+          <span>¡Te uniste! Cerrá sesión y volvé a entrar para cambiar al nuevo espacio.</span>
+        </div>
+      ) : (
+        <form onSubmit={handleJoin} className="flex gap-3">
+          <input
+            type="text"
+            value={code}
+            onChange={(e) => setCode(e.target.value)}
+            placeholder="Código de invitación"
+            className="flex-1 px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 font-mono text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+          />
+          <button
+            type="submit"
+            disabled={joining || !code.trim()}
+            className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white text-sm rounded-lg hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+          >
+            <FaSignInAlt className="w-3.5 h-3.5" />
+            {joining ? 'Uniéndose…' : 'Unirse'}
+          </button>
+        </form>
+      )}
+    </div>
+  );
+}
+
 // ─── Main Page ────────────────────────────────────────────────────────────────
 
 const TABS = [
@@ -488,6 +553,9 @@ const TenantSettings = () => {
           </RoleGuard>
         )}
       </div>
+
+      {/* Join another tenant */}
+      <JoinTenantSection />
     </div>
   );
 };
