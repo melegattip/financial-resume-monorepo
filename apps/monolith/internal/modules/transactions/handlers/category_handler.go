@@ -68,13 +68,9 @@ func toCategoryResponse(c *domain.Category) CategoryResponse {
 
 // List handles GET /api/v1/categories
 func (h *CategoryHandler) List(c *gin.Context) {
-	userID, exists := c.Get("user_id")
-	if !exists {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
-		return
-	}
+	tenantID := c.GetString("tenant_id")
 
-	categories, err := h.repo.FindByUserID(c.Request.Context(), userID.(string))
+	categories, err := h.repo.FindByTenantID(c.Request.Context(), tenantID)
 	if err != nil {
 		h.logger.Error().Err(err).Msg("failed to list categories")
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to list categories"})
@@ -99,6 +95,7 @@ func (h *CategoryHandler) Create(c *gin.Context) {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
 		return
 	}
+	tenantID := c.GetString("tenant_id")
 
 	var req CreateCategoryRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -111,6 +108,7 @@ func (h *CategoryHandler) Create(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
+	category.TenantID = tenantID
 
 	if err := h.repo.Create(c.Request.Context(), category); err != nil {
 		h.logger.Error().Err(err).Msg("failed to create category")
@@ -123,11 +121,7 @@ func (h *CategoryHandler) Create(c *gin.Context) {
 
 // Update handles PATCH /api/v1/categories/:id
 func (h *CategoryHandler) Update(c *gin.Context) {
-	userID, exists := c.Get("user_id")
-	if !exists {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
-		return
-	}
+	tenantID := c.GetString("tenant_id")
 
 	id := c.Param("id")
 	category, err := h.repo.FindByID(c.Request.Context(), id)
@@ -142,7 +136,7 @@ func (h *CategoryHandler) Update(c *gin.Context) {
 		return
 	}
 
-	if category.UserID != userID.(string) {
+	if category.TenantID != tenantID {
 		c.JSON(http.StatusForbidden, gin.H{"error": "forbidden"})
 		return
 	}
@@ -191,11 +185,7 @@ func (h *CategoryHandler) Update(c *gin.Context) {
 
 // Delete handles DELETE /api/v1/categories/:id
 func (h *CategoryHandler) Delete(c *gin.Context) {
-	userID, exists := c.Get("user_id")
-	if !exists {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
-		return
-	}
+	tenantID := c.GetString("tenant_id")
 
 	id := c.Param("id")
 	category, err := h.repo.FindByID(c.Request.Context(), id)
@@ -210,7 +200,7 @@ func (h *CategoryHandler) Delete(c *gin.Context) {
 		return
 	}
 
-	if category.UserID != userID.(string) {
+	if category.TenantID != tenantID {
 		c.JSON(http.StatusForbidden, gin.H{"error": "forbidden"})
 		return
 	}

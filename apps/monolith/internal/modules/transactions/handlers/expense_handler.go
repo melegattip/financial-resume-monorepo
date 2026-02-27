@@ -101,12 +101,13 @@ func (h *ExpenseHandler) Create(c *gin.Context) {
 		return
 	}
 
-	// Get user_id from JWT (set by auth middleware)
+	// Get user_id and tenant_id from JWT (set by auth middleware)
 	userID, exists := c.Get("user_id")
 	if !exists {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
 		return
 	}
+	tenantID := c.GetString("tenant_id")
 
 	// Resolve transaction date: prefer transaction_date, fall back to due_date, then now.
 	rawDate := req.TransactionDate
@@ -140,6 +141,7 @@ func (h *ExpenseHandler) Create(c *gin.Context) {
 	}
 
 	expense.Notes = req.Notes
+	expense.TenantID = tenantID
 
 	// Save to repository
 	if err := h.repo.Create(c.Request.Context(), expense); err != nil {
@@ -167,17 +169,13 @@ func (h *ExpenseHandler) Create(c *gin.Context) {
 
 // List handles GET /api/v1/expenses
 func (h *ExpenseHandler) List(c *gin.Context) {
-	userID, exists := c.Get("user_id")
-	if !exists {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
-		return
-	}
+	tenantID := c.GetString("tenant_id")
 
 	// Pagination
 	limit, _ := strconv.Atoi(c.DefaultQuery("limit", "50"))
 	offset, _ := strconv.Atoi(c.DefaultQuery("offset", "0"))
 
-	expenses, err := h.repo.FindByUserID(c.Request.Context(), userID.(string), limit, offset)
+	expenses, err := h.repo.FindByTenantID(c.Request.Context(), tenantID, limit, offset)
 	if err != nil {
 		h.logger.Error().Err(err).Msg("failed to list expenses")
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to list expenses"})
@@ -199,11 +197,7 @@ func (h *ExpenseHandler) List(c *gin.Context) {
 
 // GetByID handles GET /api/v1/expenses/:id
 func (h *ExpenseHandler) GetByID(c *gin.Context) {
-	userID, exists := c.Get("user_id")
-	if !exists {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
-		return
-	}
+	tenantID := c.GetString("tenant_id")
 
 	id := c.Param("id")
 	expense, err := h.repo.FindByID(c.Request.Context(), id)
@@ -218,8 +212,8 @@ func (h *ExpenseHandler) GetByID(c *gin.Context) {
 		return
 	}
 
-	// Verify ownership
-	if expense.UserID != userID.(string) {
+	// Verify tenant membership
+	if expense.TenantID != tenantID {
 		c.JSON(http.StatusForbidden, gin.H{"error": "forbidden"})
 		return
 	}
@@ -229,11 +223,7 @@ func (h *ExpenseHandler) GetByID(c *gin.Context) {
 
 // Update handles PUT /api/v1/expenses/:id
 func (h *ExpenseHandler) Update(c *gin.Context) {
-	userID, exists := c.Get("user_id")
-	if !exists {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
-		return
-	}
+	tenantID := c.GetString("tenant_id")
 
 	id := c.Param("id")
 	expense, err := h.repo.FindByID(c.Request.Context(), id)
@@ -248,8 +238,8 @@ func (h *ExpenseHandler) Update(c *gin.Context) {
 		return
 	}
 
-	// Verify ownership
-	if expense.UserID != userID.(string) {
+	// Verify tenant membership
+	if expense.TenantID != tenantID {
 		c.JSON(http.StatusForbidden, gin.H{"error": "forbidden"})
 		return
 	}
@@ -354,11 +344,7 @@ func (h *ExpenseHandler) Update(c *gin.Context) {
 
 // Delete handles DELETE /api/v1/expenses/:id
 func (h *ExpenseHandler) Delete(c *gin.Context) {
-	userID, exists := c.Get("user_id")
-	if !exists {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
-		return
-	}
+	tenantID := c.GetString("tenant_id")
 
 	id := c.Param("id")
 	expense, err := h.repo.FindByID(c.Request.Context(), id)
@@ -373,8 +359,8 @@ func (h *ExpenseHandler) Delete(c *gin.Context) {
 		return
 	}
 
-	// Verify ownership
-	if expense.UserID != userID.(string) {
+	// Verify tenant membership
+	if expense.TenantID != tenantID {
 		c.JSON(http.StatusForbidden, gin.H{"error": "forbidden"})
 		return
 	}

@@ -15,6 +15,7 @@ import (
 type IncomeModel struct {
 	ID           string     `gorm:"column:id;type:varchar(255);primaryKey"`
 	UserID       string     `gorm:"column:user_id;type:varchar(255);not null;index"`
+	TenantID     string     `gorm:"column:tenant_id;type:varchar(50);index"`
 	Amount       float64    `gorm:"column:amount;not null"`
 	Source       string     `gorm:"column:source"`
 	Description  string     `gorm:"column:description"`
@@ -33,6 +34,7 @@ func (m *IncomeModel) ToIncome() *domain.Income {
 	return &domain.Income{
 		ID:           m.ID,
 		UserID:       m.UserID,
+		TenantID:     m.TenantID,
 		Amount:       m.Amount,
 		Source:       m.Source,
 		Description:  m.Description,
@@ -48,6 +50,7 @@ func FromIncome(i *domain.Income) *IncomeModel {
 	return &IncomeModel{
 		ID:           i.ID,
 		UserID:       i.UserID,
+		TenantID:     i.TenantID,
 		Amount:       i.Amount,
 		Source:       i.Source,
 		Description:  i.Description,
@@ -98,10 +101,10 @@ func (r *IncomeRepo) FindByID(ctx context.Context, id string) (*domain.Income, e
 	return model.ToIncome(), nil
 }
 
-func (r *IncomeRepo) FindByUserID(ctx context.Context, userID string, limit, offset int) ([]*domain.Income, error) {
+func (r *IncomeRepo) FindByTenantID(ctx context.Context, tenantID string, limit, offset int) ([]*domain.Income, error) {
 	var models []IncomeModel
 	query := r.db.WithContext(ctx).
-		Where("user_id = ? AND deleted_at IS NULL", userID).
+		Where("tenant_id = ? AND deleted_at IS NULL", tenantID).
 		Order("received_date DESC, created_at DESC")
 
 	if limit > 0 {
@@ -138,11 +141,11 @@ func (r *IncomeRepo) Delete(ctx context.Context, id string) error {
 		Update("deleted_at", time.Now().UTC()).Error
 }
 
-func (r *IncomeRepo) Count(ctx context.Context, userID string) (int64, error) {
+func (r *IncomeRepo) Count(ctx context.Context, tenantID string) (int64, error) {
 	var count int64
 	err := r.db.WithContext(ctx).
 		Model(&IncomeModel{}).
-		Where("user_id = ? AND deleted_at IS NULL", userID).
+		Where("tenant_id = ? AND deleted_at IS NULL", tenantID).
 		Count(&count).Error
 	return count, err
 }

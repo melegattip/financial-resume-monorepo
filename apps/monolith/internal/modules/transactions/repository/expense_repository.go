@@ -15,6 +15,7 @@ import (
 type ExpenseModel struct {
 	ID              string     `gorm:"column:id;type:varchar(255);primaryKey"`
 	UserID          string     `gorm:"column:user_id;type:varchar(255);not null;index"`
+	TenantID        string     `gorm:"column:tenant_id;type:varchar(50);index"`
 	CategoryID      string     `gorm:"column:category_id;type:varchar(255);not null"`
 	Amount          float64    `gorm:"column:amount;not null"`
 	Description     string     `gorm:"column:description;not null"`
@@ -38,6 +39,7 @@ func (m *ExpenseModel) ToExpense() *domain.Expense {
 	return &domain.Expense{
 		ID:              m.ID,
 		UserID:          m.UserID,
+		TenantID:        m.TenantID,
 		CategoryID:      m.CategoryID,
 		Amount:          m.Amount,
 		Description:     m.Description,
@@ -58,6 +60,7 @@ func FromExpense(e *domain.Expense) *ExpenseModel {
 	return &ExpenseModel{
 		ID:              e.ID,
 		UserID:          e.UserID,
+		TenantID:        e.TenantID,
 		CategoryID:      e.CategoryID,
 		Amount:          e.Amount,
 		Description:     e.Description,
@@ -113,10 +116,10 @@ func (r *ExpenseRepo) FindByID(ctx context.Context, id string) (*domain.Expense,
 	return model.ToExpense(), nil
 }
 
-func (r *ExpenseRepo) FindByUserID(ctx context.Context, userID string, limit, offset int) ([]*domain.Expense, error) {
+func (r *ExpenseRepo) FindByTenantID(ctx context.Context, tenantID string, limit, offset int) ([]*domain.Expense, error) {
 	var models []ExpenseModel
 	query := r.db.WithContext(ctx).
-		Where("user_id = ? AND deleted_at IS NULL", userID).
+		Where("tenant_id = ? AND deleted_at IS NULL", tenantID).
 		Order("transaction_date DESC, created_at DESC")
 
 	if limit > 0 {
@@ -153,11 +156,11 @@ func (r *ExpenseRepo) Delete(ctx context.Context, id string) error {
 		Update("deleted_at", time.Now().UTC()).Error
 }
 
-func (r *ExpenseRepo) Count(ctx context.Context, userID string) (int64, error) {
+func (r *ExpenseRepo) Count(ctx context.Context, tenantID string) (int64, error) {
 	var count int64
 	err := r.db.WithContext(ctx).
 		Model(&ExpenseModel{}).
-		Where("user_id = ? AND deleted_at IS NULL", userID).
+		Where("tenant_id = ? AND deleted_at IS NULL", tenantID).
 		Count(&count).Error
 	return count, err
 }

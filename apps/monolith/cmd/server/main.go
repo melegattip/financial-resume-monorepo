@@ -16,15 +16,18 @@ import (
 	apphttp "github.com/melegattip/financial-resume-monorepo/apps/monolith/internal/infrastructure/http"
 	"github.com/melegattip/financial-resume-monorepo/apps/monolith/internal/infrastructure/http/handlers"
 	"github.com/melegattip/financial-resume-monorepo/apps/monolith/internal/infrastructure/logging"
+	"github.com/melegattip/financial-resume-monorepo/apps/monolith/internal/infrastructure/middleware"
 	"github.com/melegattip/financial-resume-monorepo/apps/monolith/internal/modules/ai"
 	"github.com/melegattip/financial-resume-monorepo/apps/monolith/internal/modules/analytics"
 	"github.com/melegattip/financial-resume-monorepo/apps/monolith/internal/modules/auth"
+	"github.com/melegattip/financial-resume-monorepo/apps/monolith/internal/modules/tenants"
 	authdomain "github.com/melegattip/financial-resume-monorepo/apps/monolith/internal/modules/auth/domain"
 	"github.com/melegattip/financial-resume-monorepo/apps/monolith/internal/modules/budgets"
 	budgetsrepo "github.com/melegattip/financial-resume-monorepo/apps/monolith/internal/modules/budgets/repository"
 	"github.com/melegattip/financial-resume-monorepo/apps/monolith/internal/modules/gamification"
 	"github.com/melegattip/financial-resume-monorepo/apps/monolith/internal/modules/recurring"
 	recurringrepo "github.com/melegattip/financial-resume-monorepo/apps/monolith/internal/modules/recurring/repository"
+	tenantsrepo "github.com/melegattip/financial-resume-monorepo/apps/monolith/internal/modules/tenants/repository"
 	"github.com/melegattip/financial-resume-monorepo/apps/monolith/internal/modules/savings"
 	savingsrepo "github.com/melegattip/financial-resume-monorepo/apps/monolith/internal/modules/savings/repository"
 	"github.com/melegattip/financial-resume-monorepo/apps/monolith/internal/modules/transactions"
@@ -66,6 +69,9 @@ func main() {
 	eventBus := events.NewInMemoryEventBus(logger)
 	logger.Info().Msg("event bus initialized")
 
+	// Tenants repository — initialized before auth module to provide TenantCreator and TenantMemberFinder
+	tenantsRepo := tenantsrepo.NewGormRepository(db)
+
 	// Setup HTTP
 	healthHandler := handlers.NewHealthHandler(db)
 	router := apphttp.NewRouter(logger, cfg.CORSAllowOrigins, healthHandler)
@@ -73,7 +79,7 @@ func main() {
 	// Register modules
 	apiV1 := router.Group("/api/v1")
 
-	authModule := auth.New(db, logger, cfg, eventBus)
+	authModule := auth.New(db, logger, cfg, eventBus, tenantsRepo, tenantsRepo)
 	authModule.RegisterRoutes(apiV1)
 	authModule.RegisterSubscribers(eventBus)
 	logger.Info().Msg("auth module registered")
@@ -81,38 +87,47 @@ func main() {
 	// Auth middleware — created once and shared across all protected modules.
 	authMW := authModule.AuthMiddleware()
 
+	// Permission middleware — used by tenants module and future modules (Phase D)
+	permMW := middleware.NewPermissionMiddleware(tenantsRepo, logger)
+
+	// Tenants module
+	tenantsModule := tenants.New(db, logger, cfg, eventBus, authMW, permMW)
+	tenantsModule.RegisterRoutes(apiV1)
+	tenantsModule.RegisterSubscribers(eventBus)
+	logger.Info().Msg("tenants module registered")
+
 	// Transactions module
-	txModule := transactions.New(db, logger, cfg, eventBus, authMW)
+	txModule := transactions.New(db, logger, cfg, eventBus, authMW, permMW)
 	txModule.RegisterRoutes(apiV1)
 	txModule.RegisterSubscribers(eventBus)
 	logger.Info().Msg("transactions module registered")
 
 	// Savings module
-	savingsModule := savings.New(db, logger, eventBus, authMW)
+	savingsModule := savings.New(db, logger, eventBus, authMW, permMW)
 	savingsModule.RegisterRoutes(apiV1)
 	savingsModule.RegisterSubscribers(eventBus)
 	logger.Info().Msg("savings module registered")
 
 	// Gamification module
-	gamModule := gamification.New(db, logger, cfg, eventBus, authMW)
+	gamModule := gamification.New(db, logger, cfg, eventBus, authMW, permMW)
 	gamModule.RegisterRoutes(apiV1)
 	gamModule.RegisterSubscribers(eventBus)
 	logger.Info().Msg("gamification module registered")
 
 	// Recurring transactions module
-	recurringModule := recurring.New(db, logger, cfg, eventBus, authMW)
+	recurringModule := recurring.New(db, logger, cfg, eventBus, authMW, permMW)
 	recurringModule.RegisterRoutes(apiV1)
 	recurringModule.RegisterSubscribers(eventBus)
 	logger.Info().Msg("recurring module registered")
 
 	// Budgets module
-	budgetsModule := budgets.New(db, logger, cfg, eventBus, authMW)
+	budgetsModule := budgets.New(db, logger, cfg, eventBus, authMW, permMW)
 	budgetsModule.RegisterRoutes(apiV1)
 	budgetsModule.RegisterSubscribers(eventBus)
 	logger.Info().Msg("budgets module registered")
 
 	// Analytics module
-	analyticsModule := analytics.New(db, logger, cfg, eventBus, authMW)
+	analyticsModule := analytics.New(db, logger, cfg, eventBus, authMW, permMW)
 	analyticsModule.RegisterRoutes(apiV1)
 	logger.Info().Msg("analytics module registered")
 
@@ -195,6 +210,13 @@ func runMigrations(db *gorm.DB, logger zerolog.Logger) {
 		{"savings_transactions", &savingsrepo.SavingsTransactionModel{}},
 		// Recurring transactions
 		{"recurring_transactions", &recurringrepo.RecurringTransactionModel{}},
+		// Tenants (multi-tenant)
+		{"tenants",             &tenantsrepo.TenantModel{}},
+		{"tenant_members",      &tenantsrepo.TenantMemberModel{}},
+		{"permissions",         &tenantsrepo.PermissionModel{}},
+		{"role_permissions",    &tenantsrepo.RolePermissionModel{}},
+		{"tenant_invitations",  &tenantsrepo.TenantInvitationModel{}},
+		{"audit_logs",          &tenantsrepo.AuditLogModel{}},
 	}
 
 	for _, m := range models {
@@ -204,4 +226,13 @@ func runMigrations(db *gorm.DB, logger zerolog.Logger) {
 			logger.Info().Str("table", m.name).Msg("table ready")
 		}
 	}
+
+	// Add tenant_id column to existing tables (idempotent)
+	database.MigrateTenantColumns(db, logger)
+
+	// Create personal tenants for existing users and backfill tenant_id (idempotent)
+	database.MigrateExistingDataToTenants(db, logger)
+
+	// Enable PostgreSQL Row-Level Security policies on all tenant-scoped tables (idempotent)
+	database.MigrateRLSPolicies(db, logger)
 }

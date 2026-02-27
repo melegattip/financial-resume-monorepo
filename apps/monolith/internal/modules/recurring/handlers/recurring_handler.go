@@ -161,6 +161,7 @@ func toRecurringResponse(rt *domain.RecurringTransaction) RecurringResponse {
 type expenseModel struct {
 	ID              string     `gorm:"column:id;primaryKey"`
 	UserID          string     `gorm:"column:user_id"`
+	TenantID        string     `gorm:"column:tenant_id"`
 	CategoryID      string     `gorm:"column:category_id"`
 	Amount          float64    `gorm:"column:amount"`
 	Description     string     `gorm:"column:description"`
@@ -179,6 +180,7 @@ func (expenseModel) TableName() string { return "expenses" }
 type incomeModel struct {
 	ID           string     `gorm:"column:id;primaryKey"`
 	UserID       string     `gorm:"column:user_id"`
+	TenantID     string     `gorm:"column:tenant_id"`
 	Amount       float64    `gorm:"column:amount"`
 	Source       string     `gorm:"column:source"`
 	Description  string     `gorm:"column:description"`
@@ -193,15 +195,11 @@ func (incomeModel) TableName() string { return "incomes" }
 // --- Handlers ---
 
 // GetDashboard handles GET /recurring-transactions/dashboard
-// Returns a summary of active recurring transactions for the current user.
+// Returns a summary of active recurring transactions for the current tenant.
 func (h *RecurringHandler) GetDashboard(c *gin.Context) {
-	userID, exists := c.Get("user_id")
-	if !exists {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
-		return
-	}
+	tenantID := c.GetString("tenant_id")
 
-	items, err := h.repo.ListActive(c.Request.Context(), userID.(string))
+	items, err := h.repo.ListActive(c.Request.Context(), tenantID)
 	if err != nil {
 		h.logger.Error().Err(err).Msg("failed to get recurring transactions dashboard")
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to get recurring transactions dashboard"})
@@ -214,7 +212,7 @@ func (h *RecurringHandler) GetDashboard(c *gin.Context) {
 	upcoming := make([]RecurringResponse, 0)
 
 	// Count inactive recurring transactions too
-	allItems, err := h.repo.List(c.Request.Context(), userID.(string))
+	allItems, err := h.repo.List(c.Request.Context(), tenantID)
 	if err != nil {
 		allItems = items
 	}
@@ -252,6 +250,7 @@ func (h *RecurringHandler) Create(c *gin.Context) {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
 		return
 	}
+	tenantID := c.GetString("tenant_id")
 
 	var req CreateRecurringRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -297,6 +296,7 @@ func (h *RecurringHandler) Create(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
+	rt.TenantID = tenantID
 
 	if err := h.repo.Create(c.Request.Context(), rt); err != nil {
 		h.logger.Error().Err(err).Msg("failed to create recurring transaction")
@@ -323,21 +323,16 @@ func (h *RecurringHandler) Create(c *gin.Context) {
 // List handles GET /recurring
 // Query params: type (income|expense), frequency (daily|weekly|monthly|yearly), active_only (true|false)
 func (h *RecurringHandler) List(c *gin.Context) {
-	userID, exists := c.Get("user_id")
-	if !exists {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
-		return
-	}
-
+	tenantID := c.GetString("tenant_id")
 	activeOnly := c.Query("active_only") == "true"
 
 	var items []*domain.RecurringTransaction
 	var err error
 
 	if activeOnly {
-		items, err = h.repo.ListActive(c.Request.Context(), userID.(string))
+		items, err = h.repo.ListActive(c.Request.Context(), tenantID)
 	} else {
-		items, err = h.repo.List(c.Request.Context(), userID.(string))
+		items, err = h.repo.List(c.Request.Context(), tenantID)
 	}
 
 	if err != nil {
@@ -377,11 +372,6 @@ func (h *RecurringHandler) List(c *gin.Context) {
 // ListDue handles GET /recurring/due
 // Returns all active recurring transactions that are due for execution (NextDate <= now)
 func (h *RecurringHandler) ListDue(c *gin.Context) {
-	_, exists := c.Get("user_id")
-	if !exists {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
-		return
-	}
 
 	items, err := h.repo.ListDue(c.Request.Context(), time.Now().UTC())
 	if err != nil {
@@ -403,14 +393,10 @@ func (h *RecurringHandler) ListDue(c *gin.Context) {
 
 // GetByID handles GET /recurring/:id
 func (h *RecurringHandler) GetByID(c *gin.Context) {
-	userID, exists := c.Get("user_id")
-	if !exists {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
-		return
-	}
+	tenantID := c.GetString("tenant_id")
 
 	id := c.Param("id")
-	rt, err := h.repo.GetByID(c.Request.Context(), userID.(string), id)
+	rt, err := h.repo.GetByID(c.Request.Context(), tenantID, id)
 	if err != nil {
 		h.logger.Error().Err(err).Str("id", id).Msg("failed to get recurring transaction")
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to get recurring transaction"})
@@ -427,14 +413,10 @@ func (h *RecurringHandler) GetByID(c *gin.Context) {
 
 // Update handles PUT /recurring/:id
 func (h *RecurringHandler) Update(c *gin.Context) {
-	userID, exists := c.Get("user_id")
-	if !exists {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
-		return
-	}
+	tenantID := c.GetString("tenant_id")
 
 	id := c.Param("id")
-	rt, err := h.repo.GetByID(c.Request.Context(), userID.(string), id)
+	rt, err := h.repo.GetByID(c.Request.Context(), tenantID, id)
 	if err != nil {
 		h.logger.Error().Err(err).Str("id", id).Msg("failed to get recurring transaction")
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to get recurring transaction"})
@@ -517,14 +499,10 @@ func (h *RecurringHandler) Update(c *gin.Context) {
 
 // Delete handles DELETE /recurring/:id
 func (h *RecurringHandler) Delete(c *gin.Context) {
-	userID, exists := c.Get("user_id")
-	if !exists {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
-		return
-	}
+	tenantID := c.GetString("tenant_id")
 
 	id := c.Param("id")
-	rt, err := h.repo.GetByID(c.Request.Context(), userID.(string), id)
+	rt, err := h.repo.GetByID(c.Request.Context(), tenantID, id)
 	if err != nil {
 		h.logger.Error().Err(err).Str("id", id).Msg("failed to get recurring transaction")
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to get recurring transaction"})
@@ -536,7 +514,7 @@ func (h *RecurringHandler) Delete(c *gin.Context) {
 		return
 	}
 
-	if err := h.repo.Delete(c.Request.Context(), userID.(string), id); err != nil {
+	if err := h.repo.Delete(c.Request.Context(), tenantID, id); err != nil {
 		h.logger.Error().Err(err).Msg("failed to delete recurring transaction")
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to delete recurring transaction"})
 		return
@@ -556,14 +534,10 @@ func (h *RecurringHandler) Delete(c *gin.Context) {
 
 // Pause handles POST /recurring/:id/pause
 func (h *RecurringHandler) Pause(c *gin.Context) {
-	userID, exists := c.Get("user_id")
-	if !exists {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
-		return
-	}
+	tenantID := c.GetString("tenant_id")
 
 	id := c.Param("id")
-	rt, err := h.repo.GetByID(c.Request.Context(), userID.(string), id)
+	rt, err := h.repo.GetByID(c.Request.Context(), tenantID, id)
 	if err != nil {
 		h.logger.Error().Err(err).Str("id", id).Msg("failed to get recurring transaction")
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to get recurring transaction"})
@@ -602,14 +576,10 @@ func (h *RecurringHandler) Pause(c *gin.Context) {
 
 // Resume handles POST /recurring/:id/resume
 func (h *RecurringHandler) Resume(c *gin.Context) {
-	userID, exists := c.Get("user_id")
-	if !exists {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
-		return
-	}
+	tenantID := c.GetString("tenant_id")
 
 	id := c.Param("id")
-	rt, err := h.repo.GetByID(c.Request.Context(), userID.(string), id)
+	rt, err := h.repo.GetByID(c.Request.Context(), tenantID, id)
 	if err != nil {
 		h.logger.Error().Err(err).Str("id", id).Msg("failed to get recurring transaction")
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to get recurring transaction"})
@@ -649,14 +619,10 @@ func (h *RecurringHandler) Resume(c *gin.Context) {
 // ManualExecute handles POST /recurring/:id/execute
 // It creates the corresponding expense or income record and advances the recurring transaction
 func (h *RecurringHandler) ManualExecute(c *gin.Context) {
-	userID, exists := c.Get("user_id")
-	if !exists {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
-		return
-	}
+	tenantID := c.GetString("tenant_id")
 
 	id := c.Param("id")
-	rt, err := h.repo.GetByID(c.Request.Context(), userID.(string), id)
+	rt, err := h.repo.GetByID(c.Request.Context(), tenantID, id)
 	if err != nil {
 		h.logger.Error().Err(err).Str("id", id).Msg("failed to get recurring transaction")
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to get recurring transaction"})
@@ -704,6 +670,7 @@ func (h *RecurringHandler) ManualExecute(c *gin.Context) {
 			record := &expenseModel{
 				ID:              transactionID,
 				UserID:          rt.UserID,
+				TenantID:        rt.TenantID,
 				CategoryID:      categoryID,
 				Amount:          rt.Amount,
 				Description:     rt.Description,
@@ -721,6 +688,7 @@ func (h *RecurringHandler) ManualExecute(c *gin.Context) {
 			record := &incomeModel{
 				ID:           transactionID,
 				UserID:       rt.UserID,
+				TenantID:     rt.TenantID,
 				Amount:       rt.Amount,
 				Source:       "recurring",
 				Description:  rt.Description,
@@ -747,7 +715,7 @@ func (h *RecurringHandler) ManualExecute(c *gin.Context) {
 
 		rt.UpdatedAt = time.Now().UTC()
 		return tx.Table("recurring_transactions").
-			Where("id = ? AND user_id = ? AND deleted_at IS NULL", rt.ID, rt.UserID).
+			Where("id = ? AND tenant_id = ? AND deleted_at IS NULL", rt.ID, rt.TenantID).
 			Updates(map[string]interface{}{
 				"next_date":       rt.NextDate,
 				"last_executed":   rt.LastExecuted,
@@ -793,11 +761,7 @@ func (h *RecurringHandler) ManualExecute(c *gin.Context) {
 // GetProjection handles GET /recurring-transactions/projection?months=N
 // Returns a cash flow projection for the next N months based on active recurring transactions.
 func (h *RecurringHandler) GetProjection(c *gin.Context) {
-	userID, exists := c.Get("user_id")
-	if !exists {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
-		return
-	}
+	tenantID := c.GetString("tenant_id")
 
 	months := 6
 	if m := c.Query("months"); m != "" {
@@ -806,7 +770,7 @@ func (h *RecurringHandler) GetProjection(c *gin.Context) {
 		}
 	}
 
-	items, err := h.repo.ListActive(c.Request.Context(), userID.(string))
+	items, err := h.repo.ListActive(c.Request.Context(), tenantID)
 	if err != nil {
 		h.logger.Error().Err(err).Msg("failed to list active recurring transactions for projection")
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to compute projection"})
@@ -874,6 +838,7 @@ func (h *RecurringHandler) executeRecurringTransaction(ctx context.Context, rt *
 			record := &expenseModel{
 				ID:              transactionID,
 				UserID:          rt.UserID,
+				TenantID:        rt.TenantID,
 				CategoryID:      categoryID,
 				Amount:          rt.Amount,
 				Description:     rt.Description,
@@ -890,6 +855,7 @@ func (h *RecurringHandler) executeRecurringTransaction(ctx context.Context, rt *
 			record := &incomeModel{
 				ID:           transactionID,
 				UserID:       rt.UserID,
+				TenantID:     rt.TenantID,
 				Amount:       rt.Amount,
 				Source:       "recurring",
 				Description:  rt.Description,
@@ -907,7 +873,7 @@ func (h *RecurringHandler) executeRecurringTransaction(ctx context.Context, rt *
 		rt.Execute()
 		rt.UpdatedAt = time.Now().UTC()
 		return tx.Table("recurring_transactions").
-			Where("id = ? AND user_id = ? AND deleted_at IS NULL", rt.ID, rt.UserID).
+			Where("id = ? AND tenant_id = ? AND deleted_at IS NULL", rt.ID, rt.TenantID).
 			Updates(map[string]interface{}{
 				"next_date":       rt.NextDate,
 				"last_executed":   rt.LastExecuted,
@@ -921,13 +887,9 @@ func (h *RecurringHandler) executeRecurringTransaction(ctx context.Context, rt *
 }
 
 // ProcessPending handles POST /recurring-transactions/batch/process
-// Processes all due recurring transactions for the authenticated user.
+// Processes all due recurring transactions for the authenticated tenant.
 func (h *RecurringHandler) ProcessPending(c *gin.Context) {
-	userID, exists := c.Get("user_id")
-	if !exists {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
-		return
-	}
+	tenantID := c.GetString("tenant_id")
 
 	dueItems, err := h.repo.ListDue(c.Request.Context(), time.Now().UTC())
 	if err != nil {
@@ -938,7 +900,7 @@ func (h *RecurringHandler) ProcessPending(c *gin.Context) {
 
 	var successCount, failureCount int
 	for _, rt := range dueItems {
-		if rt.UserID != userID.(string) || !rt.IsActive {
+		if rt.TenantID != tenantID || !rt.IsActive {
 			continue
 		}
 
@@ -972,12 +934,6 @@ func (h *RecurringHandler) ProcessPending(c *gin.Context) {
 // SendNotifications handles POST /recurring-transactions/batch/notify
 // Stub: notification service is not implemented yet.
 func (h *RecurringHandler) SendNotifications(c *gin.Context) {
-	_, exists := c.Get("user_id")
-	if !exists {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
-		return
-	}
-
 	c.JSON(http.StatusOK, gin.H{
 		"sent_count": 0,
 		"message":    "notification service not implemented",

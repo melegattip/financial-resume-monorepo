@@ -15,6 +15,7 @@ import (
 type CategoryModel struct {
 	ID        string     `gorm:"column:id;type:varchar(255);primaryKey"`
 	UserID    string     `gorm:"column:user_id;type:varchar(255);not null;index"`
+	TenantID  string     `gorm:"column:tenant_id;type:varchar(50);index"`
 	Name      string     `gorm:"column:name;not null"`
 	Color     string     `gorm:"column:color"`
 	Icon      string     `gorm:"column:icon"`
@@ -33,6 +34,7 @@ func (m *CategoryModel) ToCategory() *domain.Category {
 	return &domain.Category{
 		ID:        m.ID,
 		UserID:    m.UserID,
+		TenantID:  m.TenantID,
 		Name:      m.Name,
 		Color:     m.Color,
 		Icon:      m.Icon,
@@ -48,6 +50,7 @@ func FromCategory(c *domain.Category) *CategoryModel {
 	return &CategoryModel{
 		ID:        c.ID,
 		UserID:    c.UserID,
+		TenantID:  c.TenantID,
 		Name:      c.Name,
 		Color:     c.Color,
 		Icon:      c.Icon,
@@ -98,10 +101,10 @@ func (r *CategoryRepo) FindByID(ctx context.Context, id string) (*domain.Categor
 	return model.ToCategory(), nil
 }
 
-func (r *CategoryRepo) FindByUserID(ctx context.Context, userID string) ([]*domain.Category, error) {
+func (r *CategoryRepo) FindByTenantID(ctx context.Context, tenantID string) ([]*domain.Category, error) {
 	var models []CategoryModel
 	err := r.db.WithContext(ctx).
-		Where("user_id = ? AND deleted_at IS NULL", userID).
+		Where("tenant_id = ? AND deleted_at IS NULL", tenantID).
 		Order("CASE WHEN priority = 0 THEN 1 ELSE 0 END ASC, priority ASC, name ASC").
 		Find(&models).Error
 

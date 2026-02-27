@@ -28,13 +28,13 @@ func NewJWTService(secretKey string, accessExpiry, refreshExpiry time.Duration, 
 	}
 }
 
-func (j *jwtService) GenerateTokens(userID string, email string) (*domain.TokenPair, error) {
-	accessToken, accessExpiry, err := j.generateToken(userID, email, "access", j.accessExpiry)
+func (j *jwtService) GenerateTokens(userID string, email string, tenantID string, role string) (*domain.TokenPair, error) {
+	accessToken, accessExpiry, err := j.generateToken(userID, email, tenantID, role, "access", j.accessExpiry)
 	if err != nil {
 		return nil, fmt.Errorf("failed to generate access token: %w", err)
 	}
 
-	refreshToken, _, err := j.generateToken(userID, email, "refresh", j.refreshExpiry)
+	refreshToken, _, err := j.generateToken(userID, email, tenantID, role, "refresh", j.refreshExpiry)
 	if err != nil {
 		return nil, fmt.Errorf("failed to generate refresh token: %w", err)
 	}
@@ -56,12 +56,12 @@ func (j *jwtService) ValidateRefreshToken(tokenString string) (*domain.Claims, e
 }
 
 func (j *jwtService) GenerateEmailVerificationToken(userID string, email string) (string, error) {
-	token, _, err := j.generateToken(userID, email, "email_verification", 24*time.Hour)
+	token, _, err := j.generateToken(userID, email, "", "", "email_verification", 24*time.Hour)
 	return token, err
 }
 
 func (j *jwtService) GeneratePasswordResetToken(userID string, email string) (string, error) {
-	token, _, err := j.generateToken(userID, email, "password_reset", 1*time.Hour)
+	token, _, err := j.generateToken(userID, email, "", "", "password_reset", 1*time.Hour)
 	return token, err
 }
 
@@ -73,12 +73,14 @@ func (j *jwtService) ValidatePasswordResetToken(tokenString string) (*domain.Cla
 	return j.validateToken(tokenString, "password_reset")
 }
 
-func (j *jwtService) generateToken(userID string, email, tokenType string, expiry time.Duration) (string, time.Time, error) {
+func (j *jwtService) generateToken(userID string, email, tenantID, role, tokenType string, expiry time.Duration) (string, time.Time, error) {
 	expiresAt := time.Now().Add(expiry)
 
 	claims := domain.Claims{
 		UserID:    userID,
 		Email:     email,
+		TenantID:  tenantID,
+		Role:      role,
 		TokenType: tokenType,
 		RegisteredClaims: jwt.RegisteredClaims{
 			ID:        uuid.New().String(),

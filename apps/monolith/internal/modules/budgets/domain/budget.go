@@ -39,6 +39,7 @@ const (
 type Budget struct {
 	ID          string       `json:"id"`
 	UserID      string       `json:"user_id"`
+	TenantID    string       `json:"tenant_id"`
 	CategoryID  string       `json:"category_id"`
 	Amount      float64      `json:"amount"`       // Budget limit
 	SpentAmount float64      `json:"spent_amount"` // Current spent amount

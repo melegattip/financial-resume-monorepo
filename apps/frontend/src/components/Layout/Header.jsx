@@ -1,14 +1,16 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
+import { useTenant } from '../../contexts/TenantContext';
 import PeriodFilter from './PeriodFilter';
 import ThemeToggle from '../ThemeToggle';
 import GamificationWidget from '../GamificationWidget';
-import { FaUser, FaSignOutAlt, FaHome, FaBrain, FaPlusCircle, FaMinusCircle, FaFolderOpen, FaFileAlt, FaCog, FaChartPie, FaBullseye, FaRedo, FaTrophy, FaBell, FaLock, FaChevronDown } from 'react-icons/fa';
+import { FaUser, FaSignOutAlt, FaHome, FaBrain, FaPlusCircle, FaMinusCircle, FaFolderOpen, FaFileAlt, FaCog, FaChartPie, FaBullseye, FaRedo, FaTrophy, FaBell, FaLock, FaChevronDown, FaUserCog, FaHistory } from 'react-icons/fa';
 import { getAvatarUrl } from '../../utils/avatarUtils';
 
 const Header = () => {
   const { user, logout } = useAuth();
+  const { currentTenant, myRole, hasPermission } = useTenant();
   const location = useLocation();
   const navigate = useNavigate();
   const [showUserMenu, setShowUserMenu] = useState(false);
@@ -73,9 +75,17 @@ const Header = () => {
         title: 'Logros y Progreso', 
         icon: FaTrophy
       },
-      '/settings': { 
-        title: 'Configuración', 
+      '/settings': {
+        title: 'Configuración',
         icon: FaCog
+      },
+      '/tenant-settings': {
+        title: 'Configuración del espacio',
+        icon: FaUserCog
+      },
+      '/audit-logs': {
+        title: 'Registro de actividad',
+        icon: FaHistory
       },
     };
     return routes[pathname] || { 
@@ -172,8 +182,8 @@ const Header = () => {
                 <p className="text-sm font-medium text-gray-900 dark:text-gray-100 truncate max-w-24 lg:max-w-32">
                   {user?.name || user?.email || 'Usuario'}
                 </p>
-                <p className="text-xs text-gray-500 dark:text-gray-400">
-                  {user?.role || 'Miembro'}
+                <p className="text-xs text-gray-500 dark:text-gray-400 truncate max-w-24 lg:max-w-32">
+                  {currentTenant ? `${currentTenant.name} · ${myRole || 'miembro'}` : (myRole || 'Miembro')}
                 </p>
               </div>
               
@@ -224,7 +234,7 @@ const Header = () => {
                         <FaUser className="w-4 h-4 mr-3" />
                         Perfil
                       </button>
-                      
+
                       <button
                         onClick={() => handleMenuClick('security')}
                         className="flex items-center w-full px-4 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
@@ -232,7 +242,25 @@ const Header = () => {
                         <FaLock className="w-4 h-4 mr-3" />
                         Seguridad
                       </button>
-                      
+
+                      <button
+                        onClick={() => { setShowUserMenu(false); navigate('/tenant-settings'); }}
+                        className="flex items-center w-full px-4 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+                      >
+                        <FaUserCog className="w-4 h-4 mr-3" />
+                        Espacio
+                      </button>
+
+                      {hasPermission('view_audit_logs') && (
+                        <button
+                          onClick={() => { setShowUserMenu(false); navigate('/audit-logs'); }}
+                          className="flex items-center w-full px-4 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+                        >
+                          <FaHistory className="w-4 h-4 mr-3" />
+                          Actividad
+                        </button>
+                      )}
+
                       <button
                         disabled
                         className="flex items-center w-full px-4 py-2 text-sm text-gray-400 dark:text-gray-500 cursor-not-allowed opacity-50"

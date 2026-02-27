@@ -12,6 +12,7 @@ import (
 type RecurringTransaction struct {
 	ID             string
 	UserID         string
+	TenantID       string
 	Amount         float64
 	Description    string
 	CategoryID     *string

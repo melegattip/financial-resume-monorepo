@@ -24,15 +24,17 @@ var (
 
 // AuthService implements the core authentication business logic.
 type AuthService struct {
-	userRepo       ports.UserRepository
-	prefsRepo      ports.PreferencesRepository
-	notifsRepo     ports.NotificationSettingsRepository
-	twoFARepo      ports.TwoFARepository
-	jwtService     ports.JWTService
+	userRepo        ports.UserRepository
+	prefsRepo       ports.PreferencesRepository
+	notifsRepo      ports.NotificationSettingsRepository
+	twoFARepo       ports.TwoFARepository
+	jwtService      ports.JWTService
 	passwordService ports.PasswordService
-	twoFAService   ports.TwoFAService
-	eventBus       sharedports.EventBus
-	logger         zerolog.Logger
+	twoFAService    ports.TwoFAService
+	tenantCreator   ports.TenantCreator
+	tenantFinder    ports.TenantMemberFinder
+	eventBus        sharedports.EventBus
+	logger          zerolog.Logger
 
 	maxLoginAttempts int
 	lockoutDuration  time.Duration
@@ -47,6 +49,8 @@ func NewAuthService(
 	jwtSvc ports.JWTService,
 	pwSvc ports.PasswordService,
 	twoFASvc ports.TwoFAService,
+	tenantCreator ports.TenantCreator,
+	tenantFinder ports.TenantMemberFinder,
 	eventBus sharedports.EventBus,
 	logger zerolog.Logger,
 	maxLoginAttempts int,
@@ -60,6 +64,8 @@ func NewAuthService(
 		jwtService:       jwtSvc,
 		passwordService:  pwSvc,
 		twoFAService:     twoFASvc,
+		tenantCreator:    tenantCreator,
+		tenantFinder:     tenantFinder,
 		eventBus:         eventBus,
 		logger:           logger,
 		maxLoginAttempts: maxLoginAttempts,
@@ -156,8 +162,15 @@ func (s *AuthService) Register(ctx context.Context, req *domain.RegisterRequest)
 		return nil, fmt.Errorf("failed to save email verification token: %w", err)
 	}
 
+	// Create personal tenant for the new user
+	tenantID, tenantErr := s.tenantCreator.CreatePersonalTenant(ctx, user.ID, user.Email)
+	if tenantErr != nil {
+		s.logger.Error().Err(tenantErr).Str("user_id", user.ID).Msg("failed to create personal tenant")
+		return nil, fmt.Errorf("failed to initialize tenant: %w", tenantErr)
+	}
+
 	// Generate JWT token pair.
-	tokens, err := s.jwtService.GenerateTokens(user.ID, user.Email)
+	tokens, err := s.jwtService.GenerateTokens(user.ID, user.Email, tenantID, "owner")
 	if err != nil {
 		s.logger.Error().
 			Str("component", "auth").
@@ -301,8 +314,15 @@ func (s *AuthService) Login(ctx context.Context, req *domain.LoginRequest) (*dom
 		return nil, fmt.Errorf("failed to update user: %w", err)
 	}
 
+	// Load tenant context for the authenticated user
+	tenantID, role, tenantErr := s.tenantFinder.FindTenantByUserID(ctx, user.ID)
+	if tenantErr != nil {
+		s.logger.Error().Err(tenantErr).Str("user_id", user.ID).Msg("failed to load tenant context")
+		return nil, fmt.Errorf("failed to load tenant context: %w", tenantErr)
+	}
+
 	// Generate JWT token pair.
-	tokens, err := s.jwtService.GenerateTokens(user.ID, user.Email)
+	tokens, err := s.jwtService.GenerateTokens(user.ID, user.Email, tenantID, role)
 	if err != nil {
 		s.logger.Error().
 			Str("component", "auth").
@@ -764,7 +784,7 @@ func (s *AuthService) RefreshToken(ctx context.Context, refreshToken string) (*d
 		return nil, ErrAccountDeactivated
 	}
 
-	tokens, err := s.jwtService.GenerateTokens(user.ID, user.Email)
+	tokens, err := s.jwtService.GenerateTokens(claims.UserID, claims.Email, claims.TenantID, claims.Role)
 	if err != nil {
 		s.logger.Error().
 			Str("component", "auth").

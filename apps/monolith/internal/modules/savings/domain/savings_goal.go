@@ -61,6 +61,7 @@ const (
 type SavingsGoal struct {
 	ID                string
 	UserID            string
+	TenantID          string
 	Name              string
 	Description       string
 	TargetAmount      float64

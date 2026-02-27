@@ -129,6 +129,7 @@ func (h *BudgetHandler) Create(c *gin.Context) {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
 		return
 	}
+	tenantID := c.GetString("tenant_id")
 
 	var req CreateBudgetRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -164,11 +165,12 @@ func (h *BudgetHandler) Create(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
+	budget.TenantID = tenantID
 
 	// Calculate current spent amount from existing expenses for the period
 	spentAmount, err := h.repo.GetExpensesForPeriod(
 		c.Request.Context(),
-		userID.(string),
+		tenantID,
 		req.CategoryID,
 		budget.PeriodStart,
 		budget.PeriodEnd,
@@ -193,11 +195,7 @@ func (h *BudgetHandler) Create(c *gin.Context) {
 // List handles GET /budgets
 // Supported query params: period, category_id, status, active_only
 func (h *BudgetHandler) List(c *gin.Context) {
-	userID, exists := c.Get("user_id")
-	if !exists {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
-		return
-	}
+	tenantID := c.GetString("tenant_id")
 
 	activeOnlyStr := c.Query("active_only")
 	activeOnly := false
@@ -214,9 +212,9 @@ func (h *BudgetHandler) List(c *gin.Context) {
 	var err error
 
 	if activeOnly {
-		budgets, err = h.repo.ListActive(c.Request.Context(), userID.(string))
+		budgets, err = h.repo.ListActive(c.Request.Context(), tenantID)
 	} else {
-		budgets, err = h.repo.List(c.Request.Context(), userID.(string))
+		budgets, err = h.repo.List(c.Request.Context(), tenantID)
 	}
 
 	if err != nil {
@@ -257,13 +255,9 @@ func (h *BudgetHandler) List(c *gin.Context) {
 
 // GetStatus handles GET /budgets/status
 func (h *BudgetHandler) GetStatus(c *gin.Context) {
-	userID, exists := c.Get("user_id")
-	if !exists {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
-		return
-	}
+	tenantID := c.GetString("tenant_id")
 
-	budgets, err := h.repo.List(c.Request.Context(), userID.(string))
+	budgets, err := h.repo.List(c.Request.Context(), tenantID)
 	if err != nil {
 		h.logger.Error().Err(err).Msg("failed to get budget status")
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to get budget status"})
@@ -288,14 +282,10 @@ func (h *BudgetHandler) GetDashboard(c *gin.Context) {
 
 // GetByID handles GET /budgets/:id
 func (h *BudgetHandler) GetByID(c *gin.Context) {
-	userID, exists := c.Get("user_id")
-	if !exists {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
-		return
-	}
+	tenantID := c.GetString("tenant_id")
 
 	id := c.Param("id")
-	budget, err := h.repo.GetByID(c.Request.Context(), userID.(string), id)
+	budget, err := h.repo.GetByID(c.Request.Context(), tenantID, id)
 	if err != nil {
 		h.logger.Error().Err(err).Str("id", id).Msg("failed to get budget")
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to get budget"})
@@ -312,14 +302,10 @@ func (h *BudgetHandler) GetByID(c *gin.Context) {
 
 // Update handles PUT /budgets/:id
 func (h *BudgetHandler) Update(c *gin.Context) {
-	userID, exists := c.Get("user_id")
-	if !exists {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
-		return
-	}
+	tenantID := c.GetString("tenant_id")
 
 	id := c.Param("id")
-	budget, err := h.repo.GetByID(c.Request.Context(), userID.(string), id)
+	budget, err := h.repo.GetByID(c.Request.Context(), tenantID, id)
 	if err != nil {
 		h.logger.Error().Err(err).Str("id", id).Msg("failed to get budget")
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to get budget"})
@@ -377,14 +363,10 @@ func (h *BudgetHandler) Update(c *gin.Context) {
 
 // Delete handles DELETE /budgets/:id
 func (h *BudgetHandler) Delete(c *gin.Context) {
-	userID, exists := c.Get("user_id")
-	if !exists {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
-		return
-	}
+	tenantID := c.GetString("tenant_id")
 
 	id := c.Param("id")
-	budget, err := h.repo.GetByID(c.Request.Context(), userID.(string), id)
+	budget, err := h.repo.GetByID(c.Request.Context(), tenantID, id)
 	if err != nil {
 		h.logger.Error().Err(err).Str("id", id).Msg("failed to get budget")
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to get budget"})
@@ -396,7 +378,7 @@ func (h *BudgetHandler) Delete(c *gin.Context) {
 		return
 	}
 
-	if err := h.repo.Delete(c.Request.Context(), userID.(string), id); err != nil {
+	if err := h.repo.Delete(c.Request.Context(), tenantID, id); err != nil {
 		h.logger.Error().Err(err).Msg("failed to delete budget")
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to delete budget"})
 		return

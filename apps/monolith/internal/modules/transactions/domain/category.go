@@ -9,6 +9,7 @@ import (
 type Category struct {
 	ID        string
 	UserID    string
+	TenantID  string
 	Name      string
 	Color     string
 	Icon      string

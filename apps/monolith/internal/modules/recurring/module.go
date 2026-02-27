@@ -17,12 +17,13 @@ type Module struct {
 	recurringHandler *handlers.RecurringHandler
 	logger           zerolog.Logger
 	authMW           *middleware.AuthMiddleware
+	permMW           *middleware.PermissionMiddleware
 }
 
 // New creates and wires up the recurring transactions module.
 // db is passed to the handler so that ManualExecute can create
 // records in the existing expenses/incomes tables.
-func New(db *gorm.DB, logger zerolog.Logger, cfg *config.AppConfig, eventBus sharedports.EventBus, authMW *middleware.AuthMiddleware) *Module {
+func New(db *gorm.DB, logger zerolog.Logger, cfg *config.AppConfig, eventBus sharedports.EventBus, authMW *middleware.AuthMiddleware, permMW *middleware.PermissionMiddleware) *Module {
 	recurringRepo := repository.NewRecurringRepository(db)
 	recurringHandler := handlers.NewRecurringHandler(recurringRepo, db, eventBus, logger)
 
@@ -30,6 +31,7 @@ func New(db *gorm.DB, logger zerolog.Logger, cfg *config.AppConfig, eventBus sha
 		recurringHandler: recurringHandler,
 		logger:           logger,
 		authMW:           authMW,
+		permMW:           permMW,
 	}
 }
 
@@ -39,19 +41,19 @@ func (m *Module) RegisterRoutes(r *gin.RouterGroup) {
 	recurring := r.Group("/recurring-transactions")
 	recurring.Use(m.authMW.RequireAuth())
 	{
-		recurring.POST("", m.recurringHandler.Create)
-		recurring.GET("", m.recurringHandler.List)
-		recurring.GET("/dashboard", m.recurringHandler.GetDashboard)
-		recurring.GET("/due", m.recurringHandler.ListDue)
-		recurring.GET("/projection", m.recurringHandler.GetProjection)
-		recurring.POST("/batch/process", m.recurringHandler.ProcessPending)
-		recurring.POST("/batch/notify", m.recurringHandler.SendNotifications)
-		recurring.GET("/:id", m.recurringHandler.GetByID)
-		recurring.PUT("/:id", m.recurringHandler.Update)
-		recurring.DELETE("/:id", m.recurringHandler.Delete)
-		recurring.POST("/:id/pause", m.recurringHandler.Pause)
-		recurring.POST("/:id/resume", m.recurringHandler.Resume)
-		recurring.POST("/:id/execute", m.recurringHandler.ManualExecute)
+		recurring.POST("", m.permMW.Require("manage_recurring"), m.recurringHandler.Create)
+		recurring.GET("", m.permMW.Require("view_data"), m.recurringHandler.List)
+		recurring.GET("/dashboard", m.permMW.Require("view_data"), m.recurringHandler.GetDashboard)
+		recurring.GET("/due", m.permMW.Require("view_data"), m.recurringHandler.ListDue)
+		recurring.GET("/projection", m.permMW.Require("view_data"), m.recurringHandler.GetProjection)
+		recurring.POST("/batch/process", m.permMW.Require("manage_recurring"), m.recurringHandler.ProcessPending)
+		recurring.POST("/batch/notify", m.permMW.Require("manage_recurring"), m.recurringHandler.SendNotifications)
+		recurring.GET("/:id", m.permMW.Require("view_data"), m.recurringHandler.GetByID)
+		recurring.PUT("/:id", m.permMW.Require("manage_recurring"), m.recurringHandler.Update)
+		recurring.DELETE("/:id", m.permMW.Require("manage_recurring"), m.recurringHandler.Delete)
+		recurring.POST("/:id/pause", m.permMW.Require("manage_recurring"), m.recurringHandler.Pause)
+		recurring.POST("/:id/resume", m.permMW.Require("manage_recurring"), m.recurringHandler.Resume)
+		recurring.POST("/:id/execute", m.permMW.Require("manage_recurring"), m.recurringHandler.ManualExecute)
 	}
 
 	m.logger.Info().Msg("recurring module routes registered")

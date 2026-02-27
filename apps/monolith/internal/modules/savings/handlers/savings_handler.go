@@ -167,6 +167,7 @@ func (h *SavingsHandler) CreateGoal(c *gin.Context) {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
 		return
 	}
+	tenantID := c.GetString("tenant_id")
 
 	var req CreateGoalRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -209,6 +210,7 @@ func (h *SavingsHandler) CreateGoal(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
+	goal.TenantID = tenantID
 
 	if err := h.repo.Create(c.Request.Context(), goal); err != nil {
 		h.logger.Error().Err(err).Msg("failed to create savings goal")
@@ -222,11 +224,7 @@ func (h *SavingsHandler) CreateGoal(c *gin.Context) {
 
 // ListGoals handles GET /savings
 func (h *SavingsHandler) ListGoals(c *gin.Context) {
-	userID, ok := getUserID(c)
-	if !ok {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
-		return
-	}
+	tenantID := c.GetString("tenant_id")
 
 	statusFilter := c.Query("status")
 
@@ -236,9 +234,9 @@ func (h *SavingsHandler) ListGoals(c *gin.Context) {
 	)
 
 	if statusFilter != "" {
-		goals, err = h.repo.ListByStatus(c.Request.Context(), userID, domain.SavingsGoalStatus(statusFilter))
+		goals, err = h.repo.ListByStatus(c.Request.Context(), tenantID, domain.SavingsGoalStatus(statusFilter))
 	} else {
-		goals, err = h.repo.List(c.Request.Context(), userID)
+		goals, err = h.repo.List(c.Request.Context(), tenantID)
 	}
 
 	if err != nil {
@@ -271,13 +269,9 @@ func (h *SavingsHandler) ListGoals(c *gin.Context) {
 
 // GetSummary handles GET /savings/summary
 func (h *SavingsHandler) GetSummary(c *gin.Context) {
-	userID, ok := getUserID(c)
-	if !ok {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
-		return
-	}
+	tenantID := c.GetString("tenant_id")
 
-	goals, err := h.repo.List(c.Request.Context(), userID)
+	goals, err := h.repo.List(c.Request.Context(), tenantID)
 	if err != nil {
 		h.logger.Error().Err(err).Msg("failed to fetch savings goals for summary")
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to fetch savings summary"})
@@ -323,14 +317,10 @@ func (h *SavingsHandler) GetSummary(c *gin.Context) {
 
 // GetGoal handles GET /savings/:id
 func (h *SavingsHandler) GetGoal(c *gin.Context) {
-	userID, ok := getUserID(c)
-	if !ok {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
-		return
-	}
+	tenantID := c.GetString("tenant_id")
 
 	goalID := c.Param("id")
-	goal, err := h.repo.GetByID(c.Request.Context(), userID, goalID)
+	goal, err := h.repo.GetByID(c.Request.Context(), tenantID, goalID)
 	if err != nil {
 		h.logger.Error().Err(err).Str("goal_id", goalID).Msg("failed to get savings goal")
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to get savings goal"})
@@ -347,14 +337,10 @@ func (h *SavingsHandler) GetGoal(c *gin.Context) {
 
 // UpdateGoal handles PUT /savings/:id
 func (h *SavingsHandler) UpdateGoal(c *gin.Context) {
-	userID, ok := getUserID(c)
-	if !ok {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
-		return
-	}
+	tenantID := c.GetString("tenant_id")
 
 	goalID := c.Param("id")
-	goal, err := h.repo.GetByID(c.Request.Context(), userID, goalID)
+	goal, err := h.repo.GetByID(c.Request.Context(), tenantID, goalID)
 	if err != nil {
 		h.logger.Error().Err(err).Str("goal_id", goalID).Msg("failed to get savings goal")
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to get savings goal"})
@@ -410,14 +396,10 @@ func (h *SavingsHandler) UpdateGoal(c *gin.Context) {
 
 // DeleteGoal handles DELETE /savings/:id
 func (h *SavingsHandler) DeleteGoal(c *gin.Context) {
-	userID, ok := getUserID(c)
-	if !ok {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
-		return
-	}
+	tenantID := c.GetString("tenant_id")
 
 	goalID := c.Param("id")
-	goal, err := h.repo.GetByID(c.Request.Context(), userID, goalID)
+	goal, err := h.repo.GetByID(c.Request.Context(), tenantID, goalID)
 	if err != nil {
 		h.logger.Error().Err(err).Str("goal_id", goalID).Msg("failed to get savings goal")
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to get savings goal"})
@@ -428,7 +410,7 @@ func (h *SavingsHandler) DeleteGoal(c *gin.Context) {
 		return
 	}
 
-	if err := h.repo.Delete(c.Request.Context(), userID, goalID); err != nil {
+	if err := h.repo.Delete(c.Request.Context(), tenantID, goalID); err != nil {
 		h.logger.Error().Err(err).Msg("failed to delete savings goal")
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to delete savings goal"})
 		return
@@ -444,9 +426,10 @@ func (h *SavingsHandler) AddSavings(c *gin.Context) {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
 		return
 	}
+	tenantID := c.GetString("tenant_id")
 
 	goalID := c.Param("id")
-	goal, err := h.repo.GetByID(c.Request.Context(), userID, goalID)
+	goal, err := h.repo.GetByID(c.Request.Context(), tenantID, goalID)
 	if err != nil {
 		h.logger.Error().Err(err).Str("goal_id", goalID).Msg("failed to get savings goal")
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to get savings goal"})
@@ -497,9 +480,10 @@ func (h *SavingsHandler) WithdrawSavings(c *gin.Context) {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
 		return
 	}
+	tenantID := c.GetString("tenant_id")
 
 	goalID := c.Param("id")
-	goal, err := h.repo.GetByID(c.Request.Context(), userID, goalID)
+	goal, err := h.repo.GetByID(c.Request.Context(), tenantID, goalID)
 	if err != nil {
 		h.logger.Error().Err(err).Str("goal_id", goalID).Msg("failed to get savings goal")
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to get savings goal"})
@@ -545,14 +529,10 @@ func (h *SavingsHandler) WithdrawSavings(c *gin.Context) {
 
 // PauseGoal handles POST /savings/:id/pause
 func (h *SavingsHandler) PauseGoal(c *gin.Context) {
-	userID, ok := getUserID(c)
-	if !ok {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
-		return
-	}
+	tenantID := c.GetString("tenant_id")
 
 	goalID := c.Param("id")
-	goal, err := h.repo.GetByID(c.Request.Context(), userID, goalID)
+	goal, err := h.repo.GetByID(c.Request.Context(), tenantID, goalID)
 	if err != nil {
 		h.logger.Error().Err(err).Str("goal_id", goalID).Msg("failed to get savings goal")
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to get savings goal"})
@@ -580,14 +560,10 @@ func (h *SavingsHandler) PauseGoal(c *gin.Context) {
 
 // ResumeGoal handles POST /savings/:id/resume
 func (h *SavingsHandler) ResumeGoal(c *gin.Context) {
-	userID, ok := getUserID(c)
-	if !ok {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
-		return
-	}
+	tenantID := c.GetString("tenant_id")
 
 	goalID := c.Param("id")
-	goal, err := h.repo.GetByID(c.Request.Context(), userID, goalID)
+	goal, err := h.repo.GetByID(c.Request.Context(), tenantID, goalID)
 	if err != nil {
 		h.logger.Error().Err(err).Str("goal_id", goalID).Msg("failed to get savings goal")
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to get savings goal"})
@@ -615,14 +591,10 @@ func (h *SavingsHandler) ResumeGoal(c *gin.Context) {
 
 // CancelGoal handles POST /savings/:id/cancel
 func (h *SavingsHandler) CancelGoal(c *gin.Context) {
-	userID, ok := getUserID(c)
-	if !ok {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
-		return
-	}
+	tenantID := c.GetString("tenant_id")
 
 	goalID := c.Param("id")
-	goal, err := h.repo.GetByID(c.Request.Context(), userID, goalID)
+	goal, err := h.repo.GetByID(c.Request.Context(), tenantID, goalID)
 	if err != nil {
 		h.logger.Error().Err(err).Str("goal_id", goalID).Msg("failed to get savings goal")
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to get savings goal"})
@@ -650,16 +622,12 @@ func (h *SavingsHandler) CancelGoal(c *gin.Context) {
 
 // ListTransactions handles GET /savings/:id/transactions
 func (h *SavingsHandler) ListTransactions(c *gin.Context) {
-	userID, ok := getUserID(c)
-	if !ok {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
-		return
-	}
+	tenantID := c.GetString("tenant_id")
 
 	goalID := c.Param("id")
 
-	// Verify ownership
-	goal, err := h.repo.GetByID(c.Request.Context(), userID, goalID)
+	// Verify tenant membership
+	goal, err := h.repo.GetByID(c.Request.Context(), tenantID, goalID)
 	if err != nil {
 		h.logger.Error().Err(err).Str("goal_id", goalID).Msg("failed to get savings goal")
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to get savings goal"})

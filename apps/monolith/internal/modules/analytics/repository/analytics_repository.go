@@ -35,8 +35,8 @@ type monthlyRow struct {
 	Count  int     `gorm:"column:cnt"`
 }
 
-// GetExpenseSummary returns a summary of expenses for the given user within [from, to].
-func (r *AnalyticsRepo) GetExpenseSummary(ctx context.Context, userID string, from, to time.Time, periodLabel string) (*domain.ExpenseSummary, error) {
+// GetExpenseSummary returns a summary of expenses for the given tenant within [from, to].
+func (r *AnalyticsRepo) GetExpenseSummary(ctx context.Context, tenantID string, from, to time.Time, periodLabel string) (*domain.ExpenseSummary, error) {
 	// --- Top-level totals ---
 	type totalsRow struct {
 		Total float64 `gorm:"column:total"`
@@ -46,17 +46,17 @@ func (r *AnalyticsRepo) GetExpenseSummary(ctx context.Context, userID string, fr
 	err := r.db.WithContext(ctx).Raw(`
 		SELECT COALESCE(SUM(amount), 0) AS total, COUNT(*) AS cnt
 		FROM expenses
-		WHERE user_id = ?
+		WHERE tenant_id = ?
 		  AND transaction_date >= ?
 		  AND transaction_date <= ?
 		  AND deleted_at IS NULL
-	`, userID, from, to).Scan(&totals).Error
+	`, tenantID, from, to).Scan(&totals).Error
 	if err != nil {
 		return nil, err
 	}
 
 	// --- By category ---
-	byCategory, err := r.GetExpensesByCategory(ctx, userID, from, to)
+	byCategory, err := r.GetExpensesByCategory(ctx, tenantID, from, to)
 	if err != nil {
 		return nil, err
 	}
@@ -69,13 +69,13 @@ func (r *AnalyticsRepo) GetExpenseSummary(ctx context.Context, userID string, fr
 		       COALESCE(SUM(amount), 0)                  AS amount,
 		       COUNT(*)                                   AS cnt
 		FROM expenses
-		WHERE user_id = ?
+		WHERE tenant_id = ?
 		  AND transaction_date >= ?
 		  AND transaction_date <= ?
 		  AND deleted_at IS NULL
 		GROUP BY yr, mo
 		ORDER BY yr ASC, mo ASC
-	`, userID, from, to).Scan(&monthlyRows).Error
+	`, tenantID, from, to).Scan(&monthlyRows).Error
 	if err != nil {
 		return nil, err
 	}
@@ -100,8 +100,8 @@ func (r *AnalyticsRepo) GetExpenseSummary(ctx context.Context, userID string, fr
 	}, nil
 }
 
-// GetIncomeSummary returns a summary of incomes for the given user within [from, to].
-func (r *AnalyticsRepo) GetIncomeSummary(ctx context.Context, userID string, from, to time.Time, periodLabel string) (*domain.IncomeSummary, error) {
+// GetIncomeSummary returns a summary of incomes for the given tenant within [from, to].
+func (r *AnalyticsRepo) GetIncomeSummary(ctx context.Context, tenantID string, from, to time.Time, periodLabel string) (*domain.IncomeSummary, error) {
 	// --- Top-level totals ---
 	type totalsRow struct {
 		Total float64 `gorm:"column:total"`
@@ -111,11 +111,11 @@ func (r *AnalyticsRepo) GetIncomeSummary(ctx context.Context, userID string, fro
 	err := r.db.WithContext(ctx).Raw(`
 		SELECT COALESCE(SUM(amount), 0) AS total, COUNT(*) AS cnt
 		FROM incomes
-		WHERE user_id = ?
+		WHERE tenant_id = ?
 		  AND received_date >= ?
 		  AND received_date <= ?
 		  AND deleted_at IS NULL
-	`, userID, from, to).Scan(&totals).Error
+	`, tenantID, from, to).Scan(&totals).Error
 	if err != nil {
 		return nil, err
 	}
@@ -128,13 +128,13 @@ func (r *AnalyticsRepo) GetIncomeSummary(ctx context.Context, userID string, fro
 		       COALESCE(SUM(amount), 0)               AS amount,
 		       COUNT(*)                                AS cnt
 		FROM incomes
-		WHERE user_id = ?
+		WHERE tenant_id = ?
 		  AND received_date >= ?
 		  AND received_date <= ?
 		  AND deleted_at IS NULL
 		GROUP BY yr, mo
 		ORDER BY yr ASC, mo ASC
-	`, userID, from, to).Scan(&monthlyRows).Error
+	`, tenantID, from, to).Scan(&monthlyRows).Error
 	if err != nil {
 		return nil, err
 	}
@@ -159,7 +159,7 @@ func (r *AnalyticsRepo) GetIncomeSummary(ctx context.Context, userID string, fro
 }
 
 // GetDashboardSummary returns the aggregated dashboard data for the current month and all-time totals.
-func (r *AnalyticsRepo) GetDashboardSummary(ctx context.Context, userID string) (*domain.DashboardSummary, error) {
+func (r *AnalyticsRepo) GetDashboardSummary(ctx context.Context, tenantID string) (*domain.DashboardSummary, error) {
 	now := time.Now().UTC()
 	monthStart := time.Date(now.Year(), now.Month(), 1, 0, 0, 0, 0, time.UTC)
 
@@ -173,10 +173,10 @@ func (r *AnalyticsRepo) GetDashboardSummary(ctx context.Context, userID string) 
 	err := r.db.WithContext(ctx).Raw(`
 		SELECT
 		  COALESCE((SELECT SUM(amount) FROM expenses
-		            WHERE user_id = ? AND transaction_date >= ? AND deleted_at IS NULL), 0) AS expenses,
+		            WHERE tenant_id = ? AND transaction_date >= ? AND deleted_at IS NULL), 0) AS expenses,
 		  COALESCE((SELECT SUM(amount) FROM incomes
-		            WHERE user_id = ? AND received_date >= ? AND deleted_at IS NULL), 0) AS incomes
-	`, userID, monthStart, userID, monthStart).Scan(&mt).Error
+		            WHERE tenant_id = ? AND received_date >= ? AND deleted_at IS NULL), 0) AS incomes
+	`, tenantID, monthStart, tenantID, monthStart).Scan(&mt).Error
 	if err != nil {
 		return nil, err
 	}
@@ -189,15 +189,15 @@ func (r *AnalyticsRepo) GetDashboardSummary(ctx context.Context, userID string) 
 	var att allTimeTotals
 	err = r.db.WithContext(ctx).Raw(`
 		SELECT
-		  COALESCE((SELECT SUM(amount) FROM expenses WHERE user_id = ? AND deleted_at IS NULL), 0) AS total_expenses,
-		  COALESCE((SELECT SUM(amount) FROM incomes  WHERE user_id = ? AND deleted_at IS NULL), 0) AS total_incomes
-	`, userID, userID).Scan(&att).Error
+		  COALESCE((SELECT SUM(amount) FROM expenses WHERE tenant_id = ? AND deleted_at IS NULL), 0) AS total_expenses,
+		  COALESCE((SELECT SUM(amount) FROM incomes  WHERE tenant_id = ? AND deleted_at IS NULL), 0) AS total_incomes
+	`, tenantID, tenantID).Scan(&att).Error
 	if err != nil {
 		return nil, err
 	}
 
 	// --- Top categories (current month, top 5) ---
-	topCategories, err := r.GetExpensesByCategory(ctx, userID, monthStart, now)
+	topCategories, err := r.GetExpensesByCategory(ctx, tenantID, monthStart, now)
 	if err != nil {
 		return nil, err
 	}
@@ -218,10 +218,10 @@ func (r *AnalyticsRepo) GetDashboardSummary(ctx context.Context, userID string) 
 		SELECT e.id, e.amount, e.description, COALESCE(c.name, '') AS category_name, e.transaction_date
 		FROM expenses e
 		LEFT JOIN categories c ON c.id = e.category_id AND c.deleted_at IS NULL
-		WHERE e.user_id = ? AND e.deleted_at IS NULL
+		WHERE e.tenant_id = ? AND e.deleted_at IS NULL
 		ORDER BY e.transaction_date DESC, e.created_at DESC
 		LIMIT 5
-	`, userID).Scan(&recentExpRows).Error
+	`, tenantID).Scan(&recentExpRows).Error
 	if err != nil {
 		return nil, err
 	}
@@ -248,10 +248,10 @@ func (r *AnalyticsRepo) GetDashboardSummary(ctx context.Context, userID string) 
 	err = r.db.WithContext(ctx).Raw(`
 		SELECT id, amount, description, received_date
 		FROM incomes
-		WHERE user_id = ? AND deleted_at IS NULL
+		WHERE tenant_id = ? AND deleted_at IS NULL
 		ORDER BY received_date DESC, created_at DESC
 		LIMIT 5
-	`, userID).Scan(&recentIncRows).Error
+	`, tenantID).Scan(&recentIncRows).Error
 	if err != nil {
 		return nil, err
 	}
@@ -287,7 +287,7 @@ func (r *AnalyticsRepo) GetDashboardSummary(ctx context.Context, userID string) 
 }
 
 // GetMonthlyExpenses returns expense totals grouped by month for the last N months.
-func (r *AnalyticsRepo) GetMonthlyExpenses(ctx context.Context, userID string, months int) ([]domain.MonthlySummary, error) {
+func (r *AnalyticsRepo) GetMonthlyExpenses(ctx context.Context, tenantID string, months int) ([]domain.MonthlySummary, error) {
 	from := time.Now().UTC().AddDate(0, -months, 0)
 
 	var rows []monthlyRow
@@ -297,12 +297,12 @@ func (r *AnalyticsRepo) GetMonthlyExpenses(ctx context.Context, userID string, m
 		       COALESCE(SUM(amount), 0)                  AS amount,
 		       COUNT(*)                                   AS cnt
 		FROM expenses
-		WHERE user_id = ?
+		WHERE tenant_id = ?
 		  AND transaction_date >= ?
 		  AND deleted_at IS NULL
 		GROUP BY yr, mo
 		ORDER BY yr ASC, mo ASC
-	`, userID, from).Scan(&rows).Error
+	`, tenantID, from).Scan(&rows).Error
 	if err != nil {
 		return nil, err
 	}
@@ -315,7 +315,7 @@ func (r *AnalyticsRepo) GetMonthlyExpenses(ctx context.Context, userID string, m
 }
 
 // GetMonthlyIncomes returns income totals grouped by month for the last N months.
-func (r *AnalyticsRepo) GetMonthlyIncomes(ctx context.Context, userID string, months int) ([]domain.MonthlySummary, error) {
+func (r *AnalyticsRepo) GetMonthlyIncomes(ctx context.Context, tenantID string, months int) ([]domain.MonthlySummary, error) {
 	from := time.Now().UTC().AddDate(0, -months, 0)
 
 	var rows []monthlyRow
@@ -325,12 +325,12 @@ func (r *AnalyticsRepo) GetMonthlyIncomes(ctx context.Context, userID string, mo
 		       COALESCE(SUM(amount), 0)               AS amount,
 		       COUNT(*)                                AS cnt
 		FROM incomes
-		WHERE user_id = ?
+		WHERE tenant_id = ?
 		  AND received_date >= ?
 		  AND deleted_at IS NULL
 		GROUP BY yr, mo
 		ORDER BY yr ASC, mo ASC
-	`, userID, from).Scan(&rows).Error
+	`, tenantID, from).Scan(&rows).Error
 	if err != nil {
 		return nil, err
 	}
@@ -344,7 +344,7 @@ func (r *AnalyticsRepo) GetMonthlyIncomes(ctx context.Context, userID string, mo
 
 // GetTransactionsForReport returns a lightweight list of expenses and incomes for [from, to],
 // containing only the fields needed for report generation (id, category_id, type, amount).
-func (r *AnalyticsRepo) GetTransactionsForReport(ctx context.Context, userID string, from, to time.Time) ([]domain.ReportTransaction, error) {
+func (r *AnalyticsRepo) GetTransactionsForReport(ctx context.Context, tenantID string, from, to time.Time) ([]domain.ReportTransaction, error) {
 	type row struct {
 		ID         string  `gorm:"column:id"`
 		CategoryID string  `gorm:"column:category_id"`
@@ -356,18 +356,18 @@ func (r *AnalyticsRepo) GetTransactionsForReport(ctx context.Context, userID str
 	err := r.db.WithContext(ctx).Raw(`
 		SELECT id, COALESCE(category_id, '') AS category_id, 'expense' AS tx_type, amount
 		FROM expenses
-		WHERE user_id = ?
+		WHERE tenant_id = ?
 		  AND transaction_date >= ?
 		  AND transaction_date <= ?
 		  AND deleted_at IS NULL
 		UNION ALL
 		SELECT id, '' AS category_id, 'income' AS tx_type, amount
 		FROM incomes
-		WHERE user_id = ?
+		WHERE tenant_id = ?
 		  AND received_date >= ?
 		  AND received_date <= ?
 		  AND deleted_at IS NULL
-	`, userID, from, to, userID, from, to).Scan(&rows).Error
+	`, tenantID, from, to, tenantID, from, to).Scan(&rows).Error
 	if err != nil {
 		return nil, err
 	}
@@ -386,7 +386,7 @@ func (r *AnalyticsRepo) GetTransactionsForReport(ctx context.Context, userID str
 
 // GetExpensesByCategory returns expense totals grouped by category for [from, to].
 // The results are sorted by amount descending and include percentage of total.
-func (r *AnalyticsRepo) GetExpensesByCategory(ctx context.Context, userID string, from, to time.Time) ([]domain.CategorySummary, error) {
+func (r *AnalyticsRepo) GetExpensesByCategory(ctx context.Context, tenantID string, from, to time.Time) ([]domain.CategorySummary, error) {
 	var rows []categoryRow
 	err := r.db.WithContext(ctx).Raw(`
 		SELECT e.category_id,
@@ -395,13 +395,13 @@ func (r *AnalyticsRepo) GetExpensesByCategory(ctx context.Context, userID string
 		       COUNT(*)                    AS cnt
 		FROM expenses e
 		LEFT JOIN categories c ON c.id = e.category_id AND c.deleted_at IS NULL
-		WHERE e.user_id = ?
+		WHERE e.tenant_id = ?
 		  AND e.transaction_date >= ?
 		  AND e.transaction_date <= ?
 		  AND e.deleted_at IS NULL
 		GROUP BY e.category_id, c.name
 		ORDER BY amount DESC
-	`, userID, from, to).Scan(&rows).Error
+	`, tenantID, from, to).Scan(&rows).Error
 	if err != nil {
 		return nil, err
 	}

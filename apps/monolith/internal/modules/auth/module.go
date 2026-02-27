@@ -9,6 +9,7 @@ import (
 	"github.com/melegattip/financial-resume-monorepo/apps/monolith/internal/infrastructure/middleware"
 	"github.com/melegattip/financial-resume-monorepo/apps/monolith/internal/modules/auth/domain"
 	"github.com/melegattip/financial-resume-monorepo/apps/monolith/internal/modules/auth/handlers"
+	authports "github.com/melegattip/financial-resume-monorepo/apps/monolith/internal/modules/auth/ports"
 	"github.com/melegattip/financial-resume-monorepo/apps/monolith/internal/modules/auth/repository"
 	"github.com/melegattip/financial-resume-monorepo/apps/monolith/internal/modules/auth/services"
 	"github.com/melegattip/financial-resume-monorepo/apps/monolith/internal/shared/ports"
@@ -28,7 +29,8 @@ type Module struct {
 }
 
 // New creates and initializes the auth module with all dependencies.
-func New(db *gorm.DB, logger zerolog.Logger, cfg *config.AppConfig, eventBus ports.EventBus) *Module {
+func New(db *gorm.DB, logger zerolog.Logger, cfg *config.AppConfig, eventBus ports.EventBus,
+	tenantCreator authports.TenantCreator, tenantFinder authports.TenantMemberFinder) *Module {
 	repo := repository.New(db)
 
 	jwtSvc := services.NewJWTService(cfg.JWT.Secret, cfg.JWT.AccessExpiry, cfg.JWT.RefreshExpiry, cfg.JWT.Issuer)
@@ -38,6 +40,7 @@ func New(db *gorm.DB, logger zerolog.Logger, cfg *config.AppConfig, eventBus por
 	authSvc := services.NewAuthService(
 		repo, repo, repo, repo,
 		jwtSvc, pwSvc, twoFASvc,
+		tenantCreator, tenantFinder,
 		eventBus, logger,
 		cfg.Security.MaxLoginAttempts,
 		cfg.Security.LockoutDuration,

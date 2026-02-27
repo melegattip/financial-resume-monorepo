@@ -14,6 +14,7 @@ import (
 type BudgetModel struct {
 	ID          string     `gorm:"column:id;type:varchar(255);primaryKey"`
 	UserID      string     `gorm:"column:user_id;type:varchar(255);not null;index"`
+	TenantID    string     `gorm:"column:tenant_id;type:varchar(50);index"`
 	CategoryID  string     `gorm:"column:category_id;type:varchar(255);not null;index"`
 	Amount      float64    `gorm:"column:amount;not null"`
 	SpentAmount float64    `gorm:"column:spent_amount;not null;default:0"`
@@ -38,6 +39,7 @@ func (m *BudgetModel) ToBudget() *domain.Budget {
 	return &domain.Budget{
 		ID:          m.ID,
 		UserID:      m.UserID,
+		TenantID:    m.TenantID,
 		CategoryID:  m.CategoryID,
 		Amount:      m.Amount,
 		SpentAmount: m.SpentAmount,
@@ -57,6 +59,7 @@ func FromBudget(b *domain.Budget) *BudgetModel {
 	return &BudgetModel{
 		ID:          b.ID,
 		UserID:      b.UserID,
+		TenantID:    b.TenantID,
 		CategoryID:  b.CategoryID,
 		Amount:      b.Amount,
 		SpentAmount: b.SpentAmount,
@@ -90,11 +93,11 @@ func (r *BudgetRepo) Create(ctx context.Context, budget *domain.Budget) error {
 	return nil
 }
 
-// GetByID retrieves a budget by ID, scoped to the given user.
-func (r *BudgetRepo) GetByID(ctx context.Context, userID, budgetID string) (*domain.Budget, error) {
+// GetByID retrieves a budget by ID, scoped to the given tenant.
+func (r *BudgetRepo) GetByID(ctx context.Context, tenantID, budgetID string) (*domain.Budget, error) {
 	var model BudgetModel
 	err := r.db.WithContext(ctx).
-		Where("id = ? AND user_id = ? AND deleted_at IS NULL", budgetID, userID).
+		Where("id = ? AND tenant_id = ? AND deleted_at IS NULL", budgetID, tenantID).
 		First(&model).Error
 
 	if err != nil {
@@ -107,11 +110,11 @@ func (r *BudgetRepo) GetByID(ctx context.Context, userID, budgetID string) (*dom
 	return model.ToBudget(), nil
 }
 
-// GetByCategory retrieves the budget for a given user, category, and period.
-func (r *BudgetRepo) GetByCategory(ctx context.Context, userID, categoryID string, period domain.BudgetPeriod) (*domain.Budget, error) {
+// GetByCategory retrieves the budget for a given tenant, category, and period.
+func (r *BudgetRepo) GetByCategory(ctx context.Context, tenantID, categoryID string, period domain.BudgetPeriod) (*domain.Budget, error) {
 	var model BudgetModel
 	err := r.db.WithContext(ctx).
-		Where("user_id = ? AND category_id = ? AND period = ? AND deleted_at IS NULL", userID, categoryID, string(period)).
+		Where("tenant_id = ? AND category_id = ? AND period = ? AND deleted_at IS NULL", tenantID, categoryID, string(period)).
 		First(&model).Error
 
 	if err != nil {
@@ -124,11 +127,11 @@ func (r *BudgetRepo) GetByCategory(ctx context.Context, userID, categoryID strin
 	return model.ToBudget(), nil
 }
 
-// List returns all non-deleted budgets for a user, ordered by creation date descending.
-func (r *BudgetRepo) List(ctx context.Context, userID string) ([]*domain.Budget, error) {
+// List returns all non-deleted budgets for a tenant, ordered by creation date descending.
+func (r *BudgetRepo) List(ctx context.Context, tenantID string) ([]*domain.Budget, error) {
 	var models []BudgetModel
 	if err := r.db.WithContext(ctx).
-		Where("user_id = ? AND deleted_at IS NULL", userID).
+		Where("tenant_id = ? AND deleted_at IS NULL", tenantID).
 		Order("created_at DESC").
 		Find(&models).Error; err != nil {
 		return nil, err
@@ -141,11 +144,11 @@ func (r *BudgetRepo) List(ctx context.Context, userID string) ([]*domain.Budget,
 	return budgets, nil
 }
 
-// ListActive returns all active, non-deleted budgets for a user.
-func (r *BudgetRepo) ListActive(ctx context.Context, userID string) ([]*domain.Budget, error) {
+// ListActive returns all active, non-deleted budgets for a tenant.
+func (r *BudgetRepo) ListActive(ctx context.Context, tenantID string) ([]*domain.Budget, error) {
 	var models []BudgetModel
 	if err := r.db.WithContext(ctx).
-		Where("user_id = ? AND is_active = true AND deleted_at IS NULL", userID).
+		Where("tenant_id = ? AND is_active = true AND deleted_at IS NULL", tenantID).
 		Order("created_at DESC").
 		Find(&models).Error; err != nil {
 		return nil, err
@@ -163,7 +166,7 @@ func (r *BudgetRepo) Update(ctx context.Context, budget *domain.Budget) error {
 	model := FromBudget(budget)
 	return r.db.WithContext(ctx).
 		Model(&BudgetModel{}).
-		Where("id = ? AND user_id = ? AND deleted_at IS NULL", budget.ID, budget.UserID).
+		Where("id = ? AND tenant_id = ? AND deleted_at IS NULL", budget.ID, budget.TenantID).
 		Updates(map[string]interface{}{
 			"amount":       model.Amount,
 			"spent_amount": model.SpentAmount,
@@ -176,23 +179,23 @@ func (r *BudgetRepo) Update(ctx context.Context, budget *domain.Budget) error {
 		}).Error
 }
 
-// Delete soft-deletes the budget identified by budgetID, scoped to the given user.
-func (r *BudgetRepo) Delete(ctx context.Context, userID, budgetID string) error {
+// Delete soft-deletes the budget identified by budgetID, scoped to the given tenant.
+func (r *BudgetRepo) Delete(ctx context.Context, tenantID, budgetID string) error {
 	return r.db.WithContext(ctx).
 		Model(&BudgetModel{}).
-		Where("id = ? AND user_id = ? AND deleted_at IS NULL", budgetID, userID).
+		Where("id = ? AND tenant_id = ? AND deleted_at IS NULL", budgetID, tenantID).
 		Update("deleted_at", time.Now().UTC()).Error
 }
 
-// GetExpensesForPeriod returns the total expense amount for a user's category
+// GetExpensesForPeriod returns the total expense amount for a tenant's category
 // within the given date range. It queries the expenses table directly.
-func (r *BudgetRepo) GetExpensesForPeriod(ctx context.Context, userID, categoryID string, startDate, endDate time.Time) (float64, error) {
+func (r *BudgetRepo) GetExpensesForPeriod(ctx context.Context, tenantID, categoryID string, startDate, endDate time.Time) (float64, error) {
 	var total float64
 	err := r.db.WithContext(ctx).
 		Table("expenses").
 		Select("COALESCE(SUM(amount), 0)").
-		Where("user_id = ? AND category_id = ? AND transaction_date BETWEEN ? AND ? AND deleted_at IS NULL",
-			userID, categoryID, startDate, endDate).
+		Where("tenant_id = ? AND category_id = ? AND transaction_date BETWEEN ? AND ? AND deleted_at IS NULL",
+			tenantID, categoryID, startDate, endDate).
 		Scan(&total).Error
 
 	if err != nil {

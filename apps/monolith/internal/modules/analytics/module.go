@@ -17,10 +17,11 @@ type Module struct {
 	analyticsHandler *handlers.AnalyticsHandler
 	logger           zerolog.Logger
 	authMW           *middleware.AuthMiddleware
+	permMW           *middleware.PermissionMiddleware
 }
 
 // New creates and wires all dependencies for the analytics module.
-func New(db *gorm.DB, logger zerolog.Logger, cfg *config.AppConfig, eventBus sharedports.EventBus, authMW *middleware.AuthMiddleware) *Module {
+func New(db *gorm.DB, logger zerolog.Logger, cfg *config.AppConfig, eventBus sharedports.EventBus, authMW *middleware.AuthMiddleware, permMW *middleware.PermissionMiddleware) *Module {
 	analyticsRepo := repository.NewAnalyticsRepository(db)
 	analyticsHandler := handlers.NewAnalyticsHandler(analyticsRepo, logger)
 
@@ -28,6 +29,7 @@ func New(db *gorm.DB, logger zerolog.Logger, cfg *config.AppConfig, eventBus sha
 		analyticsHandler: analyticsHandler,
 		logger:           logger,
 		authMW:           authMW,
+		permMW:           permMW,
 	}
 }
 
@@ -38,31 +40,31 @@ func (m *Module) RegisterRoutes(r *gin.RouterGroup) {
 	dashboard := r.Group("/dashboard")
 	dashboard.Use(m.authMW.RequireAuth())
 	{
-		dashboard.GET("", m.analyticsHandler.GetDashboard)
+		dashboard.GET("", m.permMW.Require("view_data"), m.analyticsHandler.GetDashboard)
 	}
 
 	// Analytics sub-routes.
 	analytics := r.Group("/analytics")
 	analytics.Use(m.authMW.RequireAuth())
 	{
-		analytics.GET("/expenses", m.analyticsHandler.GetExpenseSummary)
-		analytics.GET("/incomes", m.analyticsHandler.GetIncomeSummary)
-		analytics.GET("/categories", m.analyticsHandler.GetCategoryAnalysis)
-		analytics.GET("/monthly", m.analyticsHandler.GetMonthlyTrends)
+		analytics.GET("/expenses", m.permMW.Require("view_data"), m.analyticsHandler.GetExpenseSummary)
+		analytics.GET("/incomes", m.permMW.Require("view_data"), m.analyticsHandler.GetIncomeSummary)
+		analytics.GET("/categories", m.permMW.Require("view_data"), m.analyticsHandler.GetCategoryAnalysis)
+		analytics.GET("/monthly", m.permMW.Require("view_data"), m.analyticsHandler.GetMonthlyTrends)
 	}
 
 	// Insights sub-routes.
 	insights := r.Group("/insights")
 	insights.Use(m.authMW.RequireAuth())
 	{
-		insights.GET("/financial-health", m.analyticsHandler.GetFinancialHealth)
+		insights.GET("/financial-health", m.permMW.Require("view_data"), m.analyticsHandler.GetFinancialHealth)
 	}
 
 	// Reports route.
 	reports := r.Group("/reports")
 	reports.Use(m.authMW.RequireAuth())
 	{
-		reports.GET("", m.analyticsHandler.GetReport)
+		reports.GET("", m.permMW.Require("view_data"), m.analyticsHandler.GetReport)
 	}
 
 	m.logger.Info().Msg("analytics module routes registered")

@@ -83,6 +83,7 @@ func (h *IncomeHandler) Create(c *gin.Context) {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
 		return
 	}
+	tenantID := c.GetString("tenant_id")
 
 	// Default source to description when not provided.
 	source := req.Source
@@ -109,6 +110,8 @@ func (h *IncomeHandler) Create(c *gin.Context) {
 		return
 	}
 
+	income.TenantID = tenantID
+
 	if err := h.repo.Create(c.Request.Context(), income); err != nil {
 		h.logger.Error().Err(err).Msg("failed to create income")
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to create income"})
@@ -133,16 +136,12 @@ func (h *IncomeHandler) Create(c *gin.Context) {
 
 // List handles GET /api/v1/incomes
 func (h *IncomeHandler) List(c *gin.Context) {
-	userID, exists := c.Get("user_id")
-	if !exists {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
-		return
-	}
+	tenantID := c.GetString("tenant_id")
 
 	limit, _ := strconv.Atoi(c.DefaultQuery("limit", "50"))
 	offset, _ := strconv.Atoi(c.DefaultQuery("offset", "0"))
 
-	incomes, err := h.repo.FindByUserID(c.Request.Context(), userID.(string), limit, offset)
+	incomes, err := h.repo.FindByTenantID(c.Request.Context(), tenantID, limit, offset)
 	if err != nil {
 		h.logger.Error().Err(err).Msg("failed to list incomes")
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to list incomes"})
@@ -164,11 +163,7 @@ func (h *IncomeHandler) List(c *gin.Context) {
 
 // GetByID handles GET /api/v1/incomes/:id
 func (h *IncomeHandler) GetByID(c *gin.Context) {
-	userID, exists := c.Get("user_id")
-	if !exists {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
-		return
-	}
+	tenantID := c.GetString("tenant_id")
 
 	id := c.Param("id")
 	income, err := h.repo.FindByID(c.Request.Context(), id)
@@ -183,7 +178,7 @@ func (h *IncomeHandler) GetByID(c *gin.Context) {
 		return
 	}
 
-	if income.UserID != userID.(string) {
+	if income.TenantID != tenantID {
 		c.JSON(http.StatusForbidden, gin.H{"error": "forbidden"})
 		return
 	}
@@ -193,11 +188,7 @@ func (h *IncomeHandler) GetByID(c *gin.Context) {
 
 // Update handles PUT /api/v1/incomes/:id
 func (h *IncomeHandler) Update(c *gin.Context) {
-	userID, exists := c.Get("user_id")
-	if !exists {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
-		return
-	}
+	tenantID := c.GetString("tenant_id")
 
 	id := c.Param("id")
 	income, err := h.repo.FindByID(c.Request.Context(), id)
@@ -212,7 +203,7 @@ func (h *IncomeHandler) Update(c *gin.Context) {
 		return
 	}
 
-	if income.UserID != userID.(string) {
+	if income.TenantID != tenantID {
 		c.JSON(http.StatusForbidden, gin.H{"error": "forbidden"})
 		return
 	}
@@ -265,11 +256,7 @@ func (h *IncomeHandler) Update(c *gin.Context) {
 
 // Delete handles DELETE /api/v1/incomes/:id
 func (h *IncomeHandler) Delete(c *gin.Context) {
-	userID, exists := c.Get("user_id")
-	if !exists {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
-		return
-	}
+	tenantID := c.GetString("tenant_id")
 
 	id := c.Param("id")
 	income, err := h.repo.FindByID(c.Request.Context(), id)
@@ -284,7 +271,7 @@ func (h *IncomeHandler) Delete(c *gin.Context) {
 		return
 	}
 
-	if income.UserID != userID.(string) {
+	if income.TenantID != tenantID {
 		c.JSON(http.StatusForbidden, gin.H{"error": "forbidden"})
 		return
 	}

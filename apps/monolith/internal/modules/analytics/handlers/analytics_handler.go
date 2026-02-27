@@ -15,13 +15,13 @@ import (
 
 // AnalyticsRepository defines the data-access operations required by the handler.
 type AnalyticsRepository interface {
-	GetExpenseSummary(ctx context.Context, userID string, from, to time.Time, periodLabel string) (*domain.ExpenseSummary, error)
-	GetIncomeSummary(ctx context.Context, userID string, from, to time.Time, periodLabel string) (*domain.IncomeSummary, error)
-	GetDashboardSummary(ctx context.Context, userID string) (*domain.DashboardSummary, error)
-	GetMonthlyExpenses(ctx context.Context, userID string, months int) ([]domain.MonthlySummary, error)
-	GetMonthlyIncomes(ctx context.Context, userID string, months int) ([]domain.MonthlySummary, error)
-	GetExpensesByCategory(ctx context.Context, userID string, from, to time.Time) ([]domain.CategorySummary, error)
-	GetTransactionsForReport(ctx context.Context, userID string, from, to time.Time) ([]domain.ReportTransaction, error)
+	GetExpenseSummary(ctx context.Context, tenantID string, from, to time.Time, periodLabel string) (*domain.ExpenseSummary, error)
+	GetIncomeSummary(ctx context.Context, tenantID string, from, to time.Time, periodLabel string) (*domain.IncomeSummary, error)
+	GetDashboardSummary(ctx context.Context, tenantID string) (*domain.DashboardSummary, error)
+	GetMonthlyExpenses(ctx context.Context, tenantID string, months int) ([]domain.MonthlySummary, error)
+	GetMonthlyIncomes(ctx context.Context, tenantID string, months int) ([]domain.MonthlySummary, error)
+	GetExpensesByCategory(ctx context.Context, tenantID string, from, to time.Time) ([]domain.CategorySummary, error)
+	GetTransactionsForReport(ctx context.Context, tenantID string, from, to time.Time) ([]domain.ReportTransaction, error)
 }
 
 // AnalyticsHandler handles all analytics and dashboard HTTP requests.
@@ -105,11 +105,7 @@ func parsePeriod(c *gin.Context) (from, to time.Time, label string, err error) {
 // GetExpenseSummary handles GET /analytics/expenses
 // Query params: period, from, to
 func (h *AnalyticsHandler) GetExpenseSummary(c *gin.Context) {
-	userID, exists := c.Get("user_id")
-	if !exists {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
-		return
-	}
+	tenantID := c.GetString("tenant_id")
 
 	from, to, label, err := parsePeriod(c)
 	if err != nil {
@@ -117,7 +113,7 @@ func (h *AnalyticsHandler) GetExpenseSummary(c *gin.Context) {
 		return
 	}
 
-	summary, err := h.repo.GetExpenseSummary(c.Request.Context(), userID.(string), from, to, label)
+	summary, err := h.repo.GetExpenseSummary(c.Request.Context(), tenantID, from, to, label)
 	if err != nil {
 		h.logger.Error().Err(err).Msg("failed to get expense summary")
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to get expense summary"})
@@ -130,11 +126,7 @@ func (h *AnalyticsHandler) GetExpenseSummary(c *gin.Context) {
 // GetIncomeSummary handles GET /analytics/incomes
 // Query params: period, from, to
 func (h *AnalyticsHandler) GetIncomeSummary(c *gin.Context) {
-	userID, exists := c.Get("user_id")
-	if !exists {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
-		return
-	}
+	tenantID := c.GetString("tenant_id")
 
 	from, to, label, err := parsePeriod(c)
 	if err != nil {
@@ -142,7 +134,7 @@ func (h *AnalyticsHandler) GetIncomeSummary(c *gin.Context) {
 		return
 	}
 
-	summary, err := h.repo.GetIncomeSummary(c.Request.Context(), userID.(string), from, to, label)
+	summary, err := h.repo.GetIncomeSummary(c.Request.Context(), tenantID, from, to, label)
 	if err != nil {
 		h.logger.Error().Err(err).Msg("failed to get income summary")
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to get income summary"})
@@ -155,11 +147,7 @@ func (h *AnalyticsHandler) GetIncomeSummary(c *gin.Context) {
 // GetCategoryAnalysis handles GET /analytics/categories
 // Query params: period, from, to, type (expenses|incomes — currently only expenses are categorized)
 func (h *AnalyticsHandler) GetCategoryAnalysis(c *gin.Context) {
-	userID, exists := c.Get("user_id")
-	if !exists {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
-		return
-	}
+	tenantID := c.GetString("tenant_id")
 
 	from, to, _, err := parsePeriod(c)
 	if err != nil {
@@ -167,7 +155,7 @@ func (h *AnalyticsHandler) GetCategoryAnalysis(c *gin.Context) {
 		return
 	}
 
-	categories, err := h.repo.GetExpensesByCategory(c.Request.Context(), userID.(string), from, to)
+	categories, err := h.repo.GetExpensesByCategory(c.Request.Context(), tenantID, from, to)
 	if err != nil {
 		h.logger.Error().Err(err).Msg("failed to get category analysis")
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to get category analysis"})
@@ -183,11 +171,7 @@ func (h *AnalyticsHandler) GetCategoryAnalysis(c *gin.Context) {
 // GetMonthlyTrends handles GET /analytics/monthly
 // Query params: months (default 12)
 func (h *AnalyticsHandler) GetMonthlyTrends(c *gin.Context) {
-	userID, exists := c.Get("user_id")
-	if !exists {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
-		return
-	}
+	tenantID := c.GetString("tenant_id")
 
 	months, err := strconv.Atoi(c.DefaultQuery("months", "12"))
 	if err != nil || months < 1 || months > 60 {
@@ -195,14 +179,14 @@ func (h *AnalyticsHandler) GetMonthlyTrends(c *gin.Context) {
 		return
 	}
 
-	expenses, err := h.repo.GetMonthlyExpenses(c.Request.Context(), userID.(string), months)
+	expenses, err := h.repo.GetMonthlyExpenses(c.Request.Context(), tenantID, months)
 	if err != nil {
 		h.logger.Error().Err(err).Msg("failed to get monthly expenses")
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to get monthly trends"})
 		return
 	}
 
-	incomes, err := h.repo.GetMonthlyIncomes(c.Request.Context(), userID.(string), months)
+	incomes, err := h.repo.GetMonthlyIncomes(c.Request.Context(), tenantID, months)
 	if err != nil {
 		h.logger.Error().Err(err).Msg("failed to get monthly incomes")
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to get monthly trends"})
@@ -242,16 +226,10 @@ func isProductiveCategory(name string) bool {
 // productive expenses (investments, savings, insurance, assets). Only consumption
 // expenses are used in the ratio, so capital allocation does not penalise the score.
 func (h *AnalyticsHandler) GetFinancialHealth(c *gin.Context) {
-	userID, exists := c.Get("user_id")
-	if !exists {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
-		return
-	}
-
+	tenantID := c.GetString("tenant_id")
 	ctx := c.Request.Context()
-	uid := userID.(string)
 
-	summary, err := h.repo.GetDashboardSummary(ctx, uid)
+	summary, err := h.repo.GetDashboardSummary(ctx, tenantID)
 	if err != nil {
 		h.logger.Error().Err(err).Msg("failed to get financial health")
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to get financial health"})
@@ -261,7 +239,7 @@ func (h *AnalyticsHandler) GetFinancialHealth(c *gin.Context) {
 	// Split expenses into consumption vs productive using category keyword matching.
 	now := time.Now().UTC()
 	monthStart := time.Date(now.Year(), now.Month(), 1, 0, 0, 0, 0, time.UTC)
-	categories, _ := h.repo.GetExpensesByCategory(ctx, uid, monthStart, now)
+	categories, _ := h.repo.GetExpensesByCategory(ctx, tenantID, monthStart, now)
 
 	productiveExpenses := 0.0
 	for _, cat := range categories {
@@ -332,11 +310,7 @@ func (h *AnalyticsHandler) GetFinancialHealth(c *gin.Context) {
 // Query params: start_date, end_date (YYYY-MM-DD).
 // Returns total_income, total_expenses, transactions array, and category_summary.
 func (h *AnalyticsHandler) GetReport(c *gin.Context) {
-	userID, exists := c.Get("user_id")
-	if !exists {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
-		return
-	}
+	tenantID := c.GetString("tenant_id")
 
 	parseDate := func(s string, fallback time.Time) (time.Time, error) {
 		if s == "" {
@@ -364,23 +338,22 @@ func (h *AnalyticsHandler) GetReport(c *gin.Context) {
 	to := time.Date(toRaw.Year(), toRaw.Month(), toRaw.Day(), 23, 59, 59, 0, time.UTC)
 
 	ctx := c.Request.Context()
-	uid := userID.(string)
 
-	expenseSummary, err := h.repo.GetExpenseSummary(ctx, uid, from, to, "custom")
+	expenseSummary, err := h.repo.GetExpenseSummary(ctx, tenantID, from, to, "custom")
 	if err != nil {
 		h.logger.Error().Err(err).Msg("failed to get expense summary for report")
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to generate report"})
 		return
 	}
 
-	incomeSummary, err := h.repo.GetIncomeSummary(ctx, uid, from, to, "custom")
+	incomeSummary, err := h.repo.GetIncomeSummary(ctx, tenantID, from, to, "custom")
 	if err != nil {
 		h.logger.Error().Err(err).Msg("failed to get income summary for report")
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to generate report"})
 		return
 	}
 
-	transactions, err := h.repo.GetTransactionsForReport(ctx, uid, from, to)
+	transactions, err := h.repo.GetTransactionsForReport(ctx, tenantID, from, to)
 	if err != nil {
 		h.logger.Error().Err(err).Msg("failed to get transactions for report")
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to generate report"})
@@ -414,13 +387,9 @@ func (h *AnalyticsHandler) GetReport(c *gin.Context) {
 
 // GetDashboard handles GET /dashboard
 func (h *AnalyticsHandler) GetDashboard(c *gin.Context) {
-	userID, exists := c.Get("user_id")
-	if !exists {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
-		return
-	}
+	tenantID := c.GetString("tenant_id")
 
-	summary, err := h.repo.GetDashboardSummary(c.Request.Context(), userID.(string))
+	summary, err := h.repo.GetDashboardSummary(c.Request.Context(), tenantID)
 	if err != nil {
 		h.logger.Error().Err(err).Msg("failed to get dashboard summary")
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to get dashboard"})

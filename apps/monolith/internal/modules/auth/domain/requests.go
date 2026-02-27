@@ -98,6 +98,8 @@ type TokenPair struct {
 type Claims struct {
 	UserID    string `json:"user_id"`
 	Email     string `json:"email"`
+	TenantID  string `json:"tenant_id"`
+	Role      string `json:"role"`
 	TokenType string `json:"token_type"`
 	jwt.RegisteredClaims
 }

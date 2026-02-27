@@ -16,10 +16,11 @@ type Module struct {
 	savingsHandler *handlers.SavingsHandler
 	logger         zerolog.Logger
 	authMW         *middleware.AuthMiddleware
+	permMW         *middleware.PermissionMiddleware
 }
 
 // New creates a new savings module
-func New(db *gorm.DB, logger zerolog.Logger, eventBus sharedports.EventBus, authMW *middleware.AuthMiddleware) *Module {
+func New(db *gorm.DB, logger zerolog.Logger, eventBus sharedports.EventBus, authMW *middleware.AuthMiddleware, permMW *middleware.PermissionMiddleware) *Module {
 	savingsRepo := repository.NewSavingsRepository(db)
 	savingsHandler := handlers.NewSavingsHandler(savingsRepo, logger)
 
@@ -27,6 +28,7 @@ func New(db *gorm.DB, logger zerolog.Logger, eventBus sharedports.EventBus, auth
 		savingsHandler: savingsHandler,
 		logger:         logger,
 		authMW:         authMW,
+		permMW:         permMW,
 	}
 }
 
@@ -36,19 +38,19 @@ func (m *Module) RegisterRoutes(r *gin.RouterGroup) {
 	savings := r.Group("/savings-goals")
 	savings.Use(m.authMW.RequireAuth())
 	{
-		savings.POST("", m.savingsHandler.CreateGoal)
-		savings.GET("", m.savingsHandler.ListGoals)
-		savings.GET("/dashboard", m.savingsHandler.GetSummary)
-		savings.GET("/summary", m.savingsHandler.GetSummary)
-		savings.GET("/:id", m.savingsHandler.GetGoal)
-		savings.PUT("/:id", m.savingsHandler.UpdateGoal)
-		savings.DELETE("/:id", m.savingsHandler.DeleteGoal)
-		savings.POST("/:id/deposit", m.savingsHandler.AddSavings)
-		savings.POST("/:id/withdraw", m.savingsHandler.WithdrawSavings)
-		savings.POST("/:id/pause", m.savingsHandler.PauseGoal)
-		savings.POST("/:id/resume", m.savingsHandler.ResumeGoal)
-		savings.POST("/:id/cancel", m.savingsHandler.CancelGoal)
-		savings.GET("/:id/transactions", m.savingsHandler.ListTransactions)
+		savings.POST("", m.permMW.Require("manage_savings"), m.savingsHandler.CreateGoal)
+		savings.GET("", m.permMW.Require("view_data"), m.savingsHandler.ListGoals)
+		savings.GET("/dashboard", m.permMW.Require("view_data"), m.savingsHandler.GetSummary)
+		savings.GET("/summary", m.permMW.Require("view_data"), m.savingsHandler.GetSummary)
+		savings.GET("/:id", m.permMW.Require("view_data"), m.savingsHandler.GetGoal)
+		savings.PUT("/:id", m.permMW.Require("manage_savings"), m.savingsHandler.UpdateGoal)
+		savings.DELETE("/:id", m.permMW.Require("manage_savings"), m.savingsHandler.DeleteGoal)
+		savings.POST("/:id/deposit", m.permMW.Require("manage_savings"), m.savingsHandler.AddSavings)
+		savings.POST("/:id/withdraw", m.permMW.Require("manage_savings"), m.savingsHandler.WithdrawSavings)
+		savings.POST("/:id/pause", m.permMW.Require("manage_savings"), m.savingsHandler.PauseGoal)
+		savings.POST("/:id/resume", m.permMW.Require("manage_savings"), m.savingsHandler.ResumeGoal)
+		savings.POST("/:id/cancel", m.permMW.Require("manage_savings"), m.savingsHandler.CancelGoal)
+		savings.GET("/:id/transactions", m.permMW.Require("view_data"), m.savingsHandler.ListTransactions)
 	}
 
 	m.logger.Info().Msg("savings module routes registered")

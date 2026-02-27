@@ -9,6 +9,7 @@ import (
 type Expense struct {
 	ID              string
 	UserID          string
+	TenantID        string
 	CategoryID      string
 	Amount          float64
 	Description     string

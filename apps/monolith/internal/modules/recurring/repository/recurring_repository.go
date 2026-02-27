@@ -15,6 +15,7 @@ import (
 type RecurringTransactionModel struct {
 	ID             string     `gorm:"column:id;type:varchar(255);primaryKey"`
 	UserID         string     `gorm:"column:user_id;type:varchar(255);not null;index"`
+	TenantID       string     `gorm:"column:tenant_id;type:varchar(50);index"`
 	Amount         float64    `gorm:"column:amount;not null"`
 	Description    string     `gorm:"column:description;not null"`
 	CategoryID     *string    `gorm:"column:category_id;type:varchar(255);index"`
@@ -43,6 +44,7 @@ func (m *RecurringTransactionModel) toDomain() *domain.RecurringTransaction {
 	return &domain.RecurringTransaction{
 		ID:             m.ID,
 		UserID:         m.UserID,
+		TenantID:       m.TenantID,
 		Amount:         m.Amount,
 		Description:    m.Description,
 		CategoryID:     m.CategoryID,
@@ -67,6 +69,7 @@ func fromDomain(rt *domain.RecurringTransaction) *RecurringTransactionModel {
 	return &RecurringTransactionModel{
 		ID:             rt.ID,
 		UserID:         rt.UserID,
+		TenantID:       rt.TenantID,
 		Amount:         rt.Amount,
 		Description:    rt.Description,
 		CategoryID:     rt.CategoryID,
@@ -114,12 +117,12 @@ func (r *RecurringRepo) Create(ctx context.Context, rt *domain.RecurringTransact
 	return r.db.WithContext(ctx).Create(model).Error
 }
 
-// GetByID returns a recurring transaction by ID scoped to the user.
+// GetByID returns a recurring transaction by ID scoped to the tenant.
 // Returns nil, nil when not found.
-func (r *RecurringRepo) GetByID(ctx context.Context, userID, id string) (*domain.RecurringTransaction, error) {
+func (r *RecurringRepo) GetByID(ctx context.Context, tenantID, id string) (*domain.RecurringTransaction, error) {
 	var model RecurringTransactionModel
 	err := r.db.WithContext(ctx).
-		Where("id = ? AND user_id = ? AND deleted_at IS NULL", id, userID).
+		Where("id = ? AND tenant_id = ? AND deleted_at IS NULL", id, tenantID).
 		First(&model).Error
 
 	if err != nil {
@@ -132,11 +135,11 @@ func (r *RecurringRepo) GetByID(ctx context.Context, userID, id string) (*domain
 	return model.toDomain(), nil
 }
 
-// List returns all non-deleted recurring transactions for a user
-func (r *RecurringRepo) List(ctx context.Context, userID string) ([]*domain.RecurringTransaction, error) {
+// List returns all non-deleted recurring transactions for a tenant
+func (r *RecurringRepo) List(ctx context.Context, tenantID string) ([]*domain.RecurringTransaction, error) {
 	var models []RecurringTransactionModel
 	err := r.db.WithContext(ctx).
-		Where("user_id = ? AND deleted_at IS NULL", userID).
+		Where("tenant_id = ? AND deleted_at IS NULL", tenantID).
 		Order("created_at DESC").
 		Find(&models).Error
 
@@ -151,11 +154,11 @@ func (r *RecurringRepo) List(ctx context.Context, userID string) ([]*domain.Recu
 	return result, nil
 }
 
-// ListActive returns only active non-deleted recurring transactions for a user
-func (r *RecurringRepo) ListActive(ctx context.Context, userID string) ([]*domain.RecurringTransaction, error) {
+// ListActive returns only active non-deleted recurring transactions for a tenant
+func (r *RecurringRepo) ListActive(ctx context.Context, tenantID string) ([]*domain.RecurringTransaction, error) {
 	var models []RecurringTransactionModel
 	err := r.db.WithContext(ctx).
-		Where("user_id = ? AND is_active = true AND deleted_at IS NULL", userID).
+		Where("tenant_id = ? AND is_active = true AND deleted_at IS NULL", tenantID).
 		Order("next_date ASC").
 		Find(&models).Error
 
@@ -196,14 +199,14 @@ func (r *RecurringRepo) Update(ctx context.Context, rt *domain.RecurringTransact
 	model := fromDomain(rt)
 	return r.db.WithContext(ctx).
 		Model(&RecurringTransactionModel{}).
-		Where("id = ? AND user_id = ? AND deleted_at IS NULL", rt.ID, rt.UserID).
+		Where("id = ? AND tenant_id = ? AND deleted_at IS NULL", rt.ID, rt.TenantID).
 		Updates(model).Error
 }
 
-// Delete soft-deletes a recurring transaction scoped to the given user
-func (r *RecurringRepo) Delete(ctx context.Context, userID, id string) error {
+// Delete soft-deletes a recurring transaction scoped to the given tenant
+func (r *RecurringRepo) Delete(ctx context.Context, tenantID, id string) error {
 	return r.db.WithContext(ctx).
 		Model(&RecurringTransactionModel{}).
-		Where("id = ? AND user_id = ?", id, userID).
+		Where("id = ? AND tenant_id = ?", id, tenantID).
 		Update("deleted_at", time.Now().UTC()).Error
 }

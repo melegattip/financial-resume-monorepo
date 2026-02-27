@@ -22,11 +22,12 @@ type Module struct {
 	svc     *service.GamificationService
 	logger  zerolog.Logger
 	authMW  *middleware.AuthMiddleware
+	permMW  *middleware.PermissionMiddleware
 }
 
 // New creates and wires all dependencies for the gamification module.
 // AutoMigrate is run here so the tables exist before any request is served.
-func New(db *gorm.DB, logger zerolog.Logger, cfg *config.AppConfig, eventBus sharedports.EventBus, authMW *middleware.AuthMiddleware) *Module {
+func New(db *gorm.DB, logger zerolog.Logger, cfg *config.AppConfig, eventBus sharedports.EventBus, authMW *middleware.AuthMiddleware, permMW *middleware.PermissionMiddleware) *Module {
 	if err := db.AutoMigrate(
 		&repository.UserGamificationModel{},
 		&repository.AchievementModel{},
@@ -46,6 +47,7 @@ func New(db *gorm.DB, logger zerolog.Logger, cfg *config.AppConfig, eventBus sha
 		svc:     svc,
 		logger:  logger,
 		authMW:  authMW,
+		permMW:  permMW,
 	}
 }
 
@@ -55,15 +57,15 @@ func (m *Module) RegisterRoutes(r *gin.RouterGroup) {
 	gamification := r.Group("/gamification")
 	gamification.Use(m.authMW.RequireAuth())
 	{
-		gamification.GET("/profile", m.handler.GetProfile)
-		gamification.GET("/stats", m.handler.GetStats)
-		gamification.GET("/achievements", m.handler.GetAchievements)
-		gamification.GET("/features", m.handler.GetFeatures)
-		gamification.GET("/features/:featureKey/access", m.handler.CheckFeatureAccess)
-		gamification.GET("/challenges/daily", m.handler.GetDailyChallenges)
-		gamification.GET("/challenges/weekly", m.handler.GetWeeklyChallenges)
-		gamification.POST("/challenges/progress", m.handler.ProcessChallengeProgress)
-		gamification.POST("/actions", m.handler.RecordAction)
+		gamification.GET("/profile", m.permMW.Require("view_data"), m.handler.GetProfile)
+		gamification.GET("/stats", m.permMW.Require("view_data"), m.handler.GetStats)
+		gamification.GET("/achievements", m.permMW.Require("view_data"), m.handler.GetAchievements)
+		gamification.GET("/features", m.permMW.Require("view_data"), m.handler.GetFeatures)
+		gamification.GET("/features/:featureKey/access", m.permMW.Require("view_data"), m.handler.CheckFeatureAccess)
+		gamification.GET("/challenges/daily", m.permMW.Require("view_data"), m.handler.GetDailyChallenges)
+		gamification.GET("/challenges/weekly", m.permMW.Require("view_data"), m.handler.GetWeeklyChallenges)
+		gamification.POST("/challenges/progress", m.permMW.Require("view_data"), m.handler.ProcessChallengeProgress)
+		gamification.POST("/actions", m.permMW.Require("view_data"), m.handler.RecordAction)
 	}
 	m.logger.Info().Msg("gamification module routes registered")
 }

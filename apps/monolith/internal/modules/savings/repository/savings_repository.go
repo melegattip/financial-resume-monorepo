@@ -15,6 +15,7 @@ import (
 type SavingsGoalModel struct {
 	ID                string     `gorm:"column:id;type:varchar(255);primaryKey"`
 	UserID            string     `gorm:"column:user_id;type:varchar(255);not null;index"`
+	TenantID          string     `gorm:"column:tenant_id;type:varchar(50);index"`
 	Name              string     `gorm:"column:name;type:varchar(255);not null"`
 	Description       string     `gorm:"column:description;type:text"`
 	TargetAmount      float64    `gorm:"column:target_amount;not null"`
@@ -48,6 +49,7 @@ func (m *SavingsGoalModel) ToSavingsGoal() *domain.SavingsGoal {
 	goal := &domain.SavingsGoal{
 		ID:                m.ID,
 		UserID:            m.UserID,
+		TenantID:          m.TenantID,
 		Name:              m.Name,
 		Description:       m.Description,
 		TargetAmount:      m.TargetAmount,
@@ -79,6 +81,7 @@ func fromSavingsGoal(g *domain.SavingsGoal) *SavingsGoalModel {
 	return &SavingsGoalModel{
 		ID:                g.ID,
 		UserID:            g.UserID,
+		TenantID:          g.TenantID,
 		Name:              g.Name,
 		Description:       g.Description,
 		TargetAmount:      g.TargetAmount,
@@ -167,11 +170,11 @@ func (r *SavingsRepo) Create(ctx context.Context, goal *domain.SavingsGoal) erro
 	return r.db.WithContext(ctx).Create(model).Error
 }
 
-// GetByID retrieves a savings goal by its ID, scoped to a user
-func (r *SavingsRepo) GetByID(ctx context.Context, userID, goalID string) (*domain.SavingsGoal, error) {
+// GetByID retrieves a savings goal by its ID, scoped to a tenant
+func (r *SavingsRepo) GetByID(ctx context.Context, tenantID, goalID string) (*domain.SavingsGoal, error) {
 	var model SavingsGoalModel
 	err := r.db.WithContext(ctx).
-		Where("id = ? AND user_id = ? AND deleted_at IS NULL", goalID, userID).
+		Where("id = ? AND tenant_id = ? AND deleted_at IS NULL", goalID, tenantID).
 		First(&model).Error
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
@@ -182,11 +185,11 @@ func (r *SavingsRepo) GetByID(ctx context.Context, userID, goalID string) (*doma
 	return model.ToSavingsGoal(), nil
 }
 
-// List retrieves all savings goals for a user
-func (r *SavingsRepo) List(ctx context.Context, userID string) ([]*domain.SavingsGoal, error) {
+// List retrieves all savings goals for a tenant
+func (r *SavingsRepo) List(ctx context.Context, tenantID string) ([]*domain.SavingsGoal, error) {
 	var models []SavingsGoalModel
 	err := r.db.WithContext(ctx).
-		Where("user_id = ? AND deleted_at IS NULL", userID).
+		Where("tenant_id = ? AND deleted_at IS NULL", tenantID).
 		Order("created_at DESC").
 		Find(&models).Error
 	if err != nil {
@@ -201,11 +204,11 @@ func (r *SavingsRepo) List(ctx context.Context, userID string) ([]*domain.Saving
 	return goals, nil
 }
 
-// ListByStatus retrieves savings goals for a user filtered by status
-func (r *SavingsRepo) ListByStatus(ctx context.Context, userID string, status domain.SavingsGoalStatus) ([]*domain.SavingsGoal, error) {
+// ListByStatus retrieves savings goals for a tenant filtered by status
+func (r *SavingsRepo) ListByStatus(ctx context.Context, tenantID string, status domain.SavingsGoalStatus) ([]*domain.SavingsGoal, error) {
 	var models []SavingsGoalModel
 	err := r.db.WithContext(ctx).
-		Where("user_id = ? AND status = ? AND deleted_at IS NULL", userID, string(status)).
+		Where("tenant_id = ? AND status = ? AND deleted_at IS NULL", tenantID, string(status)).
 		Order("created_at DESC").
 		Find(&models).Error
 	if err != nil {
@@ -225,15 +228,15 @@ func (r *SavingsRepo) Update(ctx context.Context, goal *domain.SavingsGoal) erro
 	model := fromSavingsGoal(goal)
 	return r.db.WithContext(ctx).
 		Model(&SavingsGoalModel{}).
-		Where("id = ? AND user_id = ? AND deleted_at IS NULL", goal.ID, goal.UserID).
+		Where("id = ? AND tenant_id = ? AND deleted_at IS NULL", goal.ID, goal.TenantID).
 		Updates(model).Error
 }
 
 // Delete soft-deletes a savings goal
-func (r *SavingsRepo) Delete(ctx context.Context, userID, goalID string) error {
+func (r *SavingsRepo) Delete(ctx context.Context, tenantID, goalID string) error {
 	return r.db.WithContext(ctx).
 		Model(&SavingsGoalModel{}).
-		Where("id = ? AND user_id = ? AND deleted_at IS NULL", goalID, userID).
+		Where("id = ? AND tenant_id = ? AND deleted_at IS NULL", goalID, tenantID).
 		Update("deleted_at", time.Now().UTC()).Error
 }
 

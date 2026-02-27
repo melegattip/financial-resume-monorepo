@@ -11,8 +11,10 @@ import (
 const testSecret = "test-secret-key-for-jwt-tests-2024"
 
 var (
-	testUserID1 = "00000000-0000-0000-0000-000000000001"
-	testUserID2 = "00000000-0000-0000-0000-000000000042"
+	testUserID1  = "00000000-0000-0000-0000-000000000001"
+	testUserID2  = "00000000-0000-0000-0000-000000000042"
+	testTenantID = "tnt_test01"
+	testRole     = "owner"
 )
 
 func newTestJWTService() *jwtService {
@@ -22,7 +24,7 @@ func newTestJWTService() *jwtService {
 func TestGenerateTokens(t *testing.T) {
 	svc := newTestJWTService()
 
-	pair, err := svc.GenerateTokens(testUserID1, "user@example.com")
+	pair, err := svc.GenerateTokens(testUserID1, "user@example.com", testTenantID, testRole)
 	require.NoError(t, err)
 	assert.NotEmpty(t, pair.AccessToken)
 	assert.NotEmpty(t, pair.RefreshToken)
@@ -33,32 +35,36 @@ func TestGenerateTokens(t *testing.T) {
 func TestValidateAccessToken(t *testing.T) {
 	svc := newTestJWTService()
 
-	pair, err := svc.GenerateTokens(testUserID2, "test@example.com")
+	pair, err := svc.GenerateTokens(testUserID2, "test@example.com", testTenantID, testRole)
 	require.NoError(t, err)
 
 	claims, err := svc.ValidateAccessToken(pair.AccessToken)
 	require.NoError(t, err)
 	assert.Equal(t, testUserID2, claims.UserID)
 	assert.Equal(t, "test@example.com", claims.Email)
+	assert.Equal(t, testTenantID, claims.TenantID)
+	assert.Equal(t, testRole, claims.Role)
 	assert.Equal(t, "access", claims.TokenType)
 }
 
 func TestValidateRefreshToken(t *testing.T) {
 	svc := newTestJWTService()
 
-	pair, err := svc.GenerateTokens(testUserID2, "test@example.com")
+	pair, err := svc.GenerateTokens(testUserID2, "test@example.com", testTenantID, "member")
 	require.NoError(t, err)
 
 	claims, err := svc.ValidateRefreshToken(pair.RefreshToken)
 	require.NoError(t, err)
 	assert.Equal(t, testUserID2, claims.UserID)
+	assert.Equal(t, testTenantID, claims.TenantID)
+	assert.Equal(t, "member", claims.Role)
 	assert.Equal(t, "refresh", claims.TokenType)
 }
 
 func TestValidateAccessToken_WrongType(t *testing.T) {
 	svc := newTestJWTService()
 
-	pair, err := svc.GenerateTokens(testUserID1, "user@example.com")
+	pair, err := svc.GenerateTokens(testUserID1, "user@example.com", testTenantID, testRole)
 	require.NoError(t, err)
 
 	// Try to validate refresh token as access token
@@ -70,7 +76,7 @@ func TestValidateAccessToken_WrongType(t *testing.T) {
 func TestValidateRefreshToken_WrongType(t *testing.T) {
 	svc := newTestJWTService()
 
-	pair, err := svc.GenerateTokens(testUserID1, "user@example.com")
+	pair, err := svc.GenerateTokens(testUserID1, "user@example.com", testTenantID, testRole)
 	require.NoError(t, err)
 
 	// Try to validate access token as refresh token
@@ -83,7 +89,7 @@ func TestValidateAccessToken_InvalidSignature(t *testing.T) {
 	svc := newTestJWTService()
 	otherSvc := NewJWTService("different-secret", 1*time.Hour, 7*24*time.Hour, "test-issuer")
 
-	pair, err := otherSvc.GenerateTokens(testUserID1, "user@example.com")
+	pair, err := otherSvc.GenerateTokens(testUserID1, "user@example.com", testTenantID, testRole)
 	require.NoError(t, err)
 
 	_, err = svc.ValidateAccessToken(pair.AccessToken)
@@ -94,7 +100,7 @@ func TestValidateAccessToken_Expired(t *testing.T) {
 	// Create service with very short expiry
 	svc := NewJWTService(testSecret, -1*time.Second, 7*24*time.Hour, "test-issuer")
 
-	pair, err := svc.GenerateTokens(testUserID1, "user@example.com")
+	pair, err := svc.GenerateTokens(testUserID1, "user@example.com", testTenantID, testRole)
 	require.NoError(t, err)
 
 	_, err = svc.ValidateAccessToken(pair.AccessToken)
@@ -148,10 +154,29 @@ func TestValidateEmailVerificationToken_WrongType(t *testing.T) {
 func TestClaimsContainIssuer(t *testing.T) {
 	svc := newTestJWTService()
 
-	pair, err := svc.GenerateTokens(testUserID1, "user@example.com")
+	pair, err := svc.GenerateTokens(testUserID1, "user@example.com", testTenantID, testRole)
 	require.NoError(t, err)
 
 	claims, err := svc.ValidateAccessToken(pair.AccessToken)
 	require.NoError(t, err)
 	assert.Equal(t, "test-issuer", claims.Issuer)
+}
+
+func TestTokensContainTenantContext(t *testing.T) {
+	svc := newTestJWTService()
+
+	pair, err := svc.GenerateTokens(testUserID1, "user@example.com", "tnt_abc123", "admin")
+	require.NoError(t, err)
+
+	// Access token preserves tenant context
+	accessClaims, err := svc.ValidateAccessToken(pair.AccessToken)
+	require.NoError(t, err)
+	assert.Equal(t, "tnt_abc123", accessClaims.TenantID)
+	assert.Equal(t, "admin", accessClaims.Role)
+
+	// Refresh token also preserves tenant context
+	refreshClaims, err := svc.ValidateRefreshToken(pair.RefreshToken)
+	require.NoError(t, err)
+	assert.Equal(t, "tnt_abc123", refreshClaims.TenantID)
+	assert.Equal(t, "admin", refreshClaims.Role)
 }

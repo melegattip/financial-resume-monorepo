@@ -9,6 +9,7 @@ import (
 type Income struct {
 	ID           string
 	UserID       string
+	TenantID     string
 	Amount       float64
 	Source       string
 	Description  string

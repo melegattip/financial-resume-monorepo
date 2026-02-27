@@ -1,12 +1,14 @@
 package ports
 
 import (
+	"context"
+
 	"github.com/melegattip/financial-resume-monorepo/apps/monolith/internal/modules/auth/domain"
 )
 
 // JWTService handles JWT token generation and validation.
 type JWTService interface {
-	GenerateTokens(userID string, email string) (*domain.TokenPair, error)
+	GenerateTokens(userID string, email string, tenantID string, role string) (*domain.TokenPair, error)
 	ValidateAccessToken(tokenString string) (*domain.Claims, error)
 	ValidateRefreshToken(tokenString string) (*domain.Claims, error)
 	GenerateEmailVerificationToken(userID string, email string) (string, error)
@@ -29,4 +31,15 @@ type TwoFAService interface {
 	ValidateCode(secret, code string) bool
 	GenerateBackupCodes(count int) ([]string, error)
 	ValidateBackupCode(codes []string, providedCode string) (remainingCodes []string, valid bool)
+}
+
+// TenantCreator allows the auth module to create a personal tenant for new users
+// without importing the tenants module (avoids circular imports).
+type TenantCreator interface {
+	CreatePersonalTenant(ctx context.Context, userID string, email string) (tenantID string, err error)
+}
+
+// TenantMemberFinder allows the auth module to load tenant context on login.
+type TenantMemberFinder interface {
+	FindTenantByUserID(ctx context.Context, userID string) (tenantID string, role string, err error)
 }

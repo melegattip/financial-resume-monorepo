@@ -17,10 +17,11 @@ type Module struct {
 	budgetHandler *handlers.BudgetHandler
 	logger        zerolog.Logger
 	authMW        *middleware.AuthMiddleware
+	permMW        *middleware.PermissionMiddleware
 }
 
 // New creates a new budgets Module, wiring the repository and handler.
-func New(db *gorm.DB, logger zerolog.Logger, cfg *config.AppConfig, eventBus sharedports.EventBus, authMW *middleware.AuthMiddleware) *Module {
+func New(db *gorm.DB, logger zerolog.Logger, cfg *config.AppConfig, eventBus sharedports.EventBus, authMW *middleware.AuthMiddleware, permMW *middleware.PermissionMiddleware) *Module {
 	budgetRepo := repository.NewBudgetRepository(db)
 	budgetHandler := handlers.NewBudgetHandler(budgetRepo, logger)
 
@@ -28,6 +29,7 @@ func New(db *gorm.DB, logger zerolog.Logger, cfg *config.AppConfig, eventBus sha
 		budgetHandler: budgetHandler,
 		logger:        logger,
 		authMW:        authMW,
+		permMW:        permMW,
 	}
 }
 
@@ -38,13 +40,13 @@ func (m *Module) RegisterRoutes(r *gin.RouterGroup) {
 	budgets := r.Group("/budgets")
 	budgets.Use(m.authMW.RequireAuth())
 	{
-		budgets.POST("", m.budgetHandler.Create)
-		budgets.GET("", m.budgetHandler.List)
-		budgets.GET("/status", m.budgetHandler.GetStatus)
-		budgets.GET("/dashboard", m.budgetHandler.GetDashboard)
-		budgets.GET("/:id", m.budgetHandler.GetByID)
-		budgets.PUT("/:id", m.budgetHandler.Update)
-		budgets.DELETE("/:id", m.budgetHandler.Delete)
+		budgets.POST("", m.permMW.Require("manage_budgets"), m.budgetHandler.Create)
+		budgets.GET("", m.permMW.Require("view_data"), m.budgetHandler.List)
+		budgets.GET("/status", m.permMW.Require("view_data"), m.budgetHandler.GetStatus)
+		budgets.GET("/dashboard", m.permMW.Require("view_data"), m.budgetHandler.GetDashboard)
+		budgets.GET("/:id", m.permMW.Require("view_data"), m.budgetHandler.GetByID)
+		budgets.PUT("/:id", m.permMW.Require("manage_budgets"), m.budgetHandler.Update)
+		budgets.DELETE("/:id", m.permMW.Require("manage_budgets"), m.budgetHandler.Delete)
 	}
 
 	m.logger.Info().Msg("budgets module routes registered")
