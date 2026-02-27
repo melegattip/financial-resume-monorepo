@@ -1,14 +1,12 @@
 import React, { useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
-import { FaPlusCircle, FaMinusCircle, FaFolderOpen, FaBrain, FaFileAlt, FaCog, FaBars, FaTimes, FaHome, FaStar, FaChartPie, FaBullseye, FaRedo, FaTrophy, FaChevronLeft, FaChevronRight, FaUserCog, FaHistory } from 'react-icons/fa';
+import { FaPlusCircle, FaMinusCircle, FaFolderOpen, FaBrain, FaFileAlt, FaCog, FaBars, FaTimes, FaHome, FaStar, FaChartPie, FaBullseye, FaRedo, FaTrophy, FaChevronLeft, FaChevronRight } from 'react-icons/fa';
 import Brand from '../Brand';
 import FeatureProgressIndicator from '../FeatureProgressIndicator';
-import { useTenant } from '../../contexts/TenantContext';
 
 const Sidebar = ({ isDesktopCollapsed = false, onDesktopToggle }) => {
   const location = useLocation();
   const [isOpen, setIsOpen] = useState(false);
-  const { hasPermission } = useTenant();
 
   // Grupo 1: Transacciones principales
   const mainMenuItems = [
@@ -31,8 +29,6 @@ const Sidebar = ({ isDesktopCollapsed = false, onDesktopToggle }) => {
   // Grupo 3: Configuración
   const settingsMenuItems = [
     { path: '/settings', icon: FaCog, label: 'Configuración' },
-    { path: '/tenant-settings', icon: FaUserCog, label: 'Espacio' },
-    ...(hasPermission('view_audit_logs') ? [{ path: '/audit-logs', icon: FaHistory, label: 'Actividad' }] : []),
   ];
 
   const toggleSidebar = () => {

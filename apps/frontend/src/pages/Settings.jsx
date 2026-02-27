@@ -1,14 +1,18 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useLocation } from 'react-router-dom';
-import { FaUser, FaBell, FaLock, FaDownload, FaTrash, FaShieldAlt, FaCamera, FaTimes } from 'react-icons/fa';
+import { FaUser, FaBell, FaLock, FaDownload, FaTrash, FaShieldAlt, FaCamera, FaTimes, FaUserCog, FaHistory } from 'react-icons/fa';
 import toast from 'react-hot-toast';
 import TwoFASetup from '../components/TwoFASetup';
 import ChangePasswordModal from '../components/ChangePasswordModal';
 import { useAuth } from '../contexts/AuthContext';
 import { getAvatarUrl } from '../utils/avatarUtils';
+import TenantSettings from './TenantSettings';
+import AuditLogs from './AuditLogs';
+import { useTenant } from '../contexts/TenantContext';
 
 const Settings = () => {
   const location = useLocation();
+  const { hasPermission } = useTenant();
   const [activeTab, setActiveTab] = useState('profile');
   const [show2FAModal, setShow2FAModal] = useState(false);
   const [showChangePasswordModal, setShowChangePasswordModal] = useState(false);
@@ -57,7 +61,7 @@ const Settings = () => {
     const searchParams = new URLSearchParams(location.search);
     const tabParam = searchParams.get('tab');
     
-    if (tabParam && ['profile', 'notifications', 'security'].includes(tabParam)) {
+    if (tabParam && ['profile', 'notifications', 'security', 'espacio', 'actividad'].includes(tabParam)) {
       setActiveTab(tabParam);
     }
   }, [location.search]);
@@ -66,6 +70,8 @@ const Settings = () => {
     { id: 'profile', label: 'Perfil', icon: FaUser },
     { id: 'notifications', label: 'Notificaciones', icon: FaBell, disabled: true },
     { id: 'security', label: 'Seguridad', icon: FaLock },
+    { id: 'espacio', label: 'Espacio', icon: FaUserCog },
+    ...(hasPermission('view_audit_logs') ? [{ id: 'actividad', label: 'Actividad', icon: FaHistory }] : []),
   ];
 
   const handleAvatarChange = (event) => {
@@ -221,7 +227,9 @@ const Settings = () => {
       </div>
 
       {/* Contenido de tabs */}
-      <div className="card">
+      {activeTab === 'espacio' && <TenantSettings />}
+      {activeTab === 'actividad' && <AuditLogs />}
+      <div className={`card${activeTab === 'espacio' || activeTab === 'actividad' ? ' hidden' : ''}`}>
         {activeTab === 'profile' && (
           <div className="space-y-6">
             <h3 className="text-lg font-semibold text-fr-gray-900 dark:text-gray-100">Información del Perfil</h3>

@@ -79,14 +79,6 @@ const Header = () => {
         title: 'Configuración',
         icon: FaCog
       },
-      '/tenant-settings': {
-        title: 'Configuración del espacio',
-        icon: FaUserCog
-      },
-      '/audit-logs': {
-        title: 'Registro de actividad',
-        icon: FaHistory
-      },
     };
     return routes[pathname] || { 
       title: 'Niloft', 
@@ -244,7 +236,7 @@ const Header = () => {
                       </button>
 
                       <button
-                        onClick={() => { setShowUserMenu(false); navigate('/tenant-settings'); }}
+                        onClick={() => { setShowUserMenu(false); navigate('/settings?tab=espacio'); }}
                         className="flex items-center w-full px-4 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
                       >
                         <FaUserCog className="w-4 h-4 mr-3" />
@@ -253,7 +245,7 @@ const Header = () => {
 
                       {hasPermission('view_audit_logs') && (
                         <button
-                          onClick={() => { setShowUserMenu(false); navigate('/audit-logs'); }}
+                          onClick={() => { setShowUserMenu(false); navigate('/settings?tab=actividad'); }}
                           className="flex items-center w-full px-4 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
                         >
                           <FaHistory className="w-4 h-4 mr-3" />

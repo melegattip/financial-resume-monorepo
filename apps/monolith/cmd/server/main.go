@@ -36,7 +36,10 @@ import (
 )
 
 func main() {
-	// Load .env file (optional — production uses real env vars)
+	// Load .env.local first (local dev overrides), then fall back to .env.
+	// godotenv.Load does NOT override vars already set in the environment,
+	// so loading .env.local first means its values take precedence over .env.
+	_ = godotenv.Load(".env.local")
 	if err := godotenv.Load(); err != nil {
 		log.Println("No .env file found, using environment variables")
 	}

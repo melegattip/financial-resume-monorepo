@@ -7,8 +7,6 @@ import { GamificationProvider } from './contexts/GamificationContext';
 import { TenantProvider } from './contexts/TenantContext';
 import ProtectedRoute, { PublicOnlyRoute } from './components/ProtectedRoute';
 import FeatureGuard from './components/FeatureGuard';
-import RoleGuard from './components/RoleGuard';
-
 // Páginas principales
 import Resumen from './pages/Dashboard';
 import FinancialInsights from './pages/FinancialInsights';
@@ -23,10 +21,6 @@ import Budgets from './pages/Budgets';
 import SavingsGoals from './pages/SavingsGoals';
 import RecurringTransactions from './pages/RecurringTransactions';
 import Achievements from './pages/Achievements';
-
-// Páginas multi-tenant
-import TenantSettings from './pages/TenantSettings';
-import AuditLogs from './pages/AuditLogs';
 
 // Páginas de autenticación
 import Login from './pages/Login';
@@ -103,15 +97,6 @@ export function AppContent() {
           <Route path="recurring-transactions" element={<RecurringTransactions />} />
           <Route path="achievements" element={<Achievements />} />
           <Route path="settings" element={<Settings />} />
-          <Route path="tenant-settings" element={<TenantSettings />} />
-          <Route
-            path="audit-logs"
-            element={
-              <RoleGuard permission="view_audit_logs">
-                <AuditLogs />
-              </RoleGuard>
-            }
-          />
           <Route index element={<Navigate to="/dashboard" replace />} />
         </Route>
 
