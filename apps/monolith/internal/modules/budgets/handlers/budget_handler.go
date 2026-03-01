@@ -10,19 +10,22 @@ import (
 
 	"github.com/melegattip/financial-resume-monorepo/apps/monolith/internal/modules/budgets/domain"
 	"github.com/melegattip/financial-resume-monorepo/apps/monolith/internal/modules/budgets/ports"
+	sharedports "github.com/melegattip/financial-resume-monorepo/apps/monolith/internal/shared/ports"
 )
 
 // BudgetHandler handles HTTP requests for budget operations.
 type BudgetHandler struct {
-	repo   ports.BudgetRepository
-	logger zerolog.Logger
+	repo     ports.BudgetRepository
+	logger   zerolog.Logger
+	eventBus sharedports.EventBus
 }
 
 // NewBudgetHandler creates a new BudgetHandler.
-func NewBudgetHandler(repo ports.BudgetRepository, logger zerolog.Logger) *BudgetHandler {
+func NewBudgetHandler(repo ports.BudgetRepository, logger zerolog.Logger, eventBus sharedports.EventBus) *BudgetHandler {
 	return &BudgetHandler{
-		repo:   repo,
-		logger: logger,
+		repo:     repo,
+		logger:   logger,
+		eventBus: eventBus,
 	}
 }
 
@@ -189,6 +192,16 @@ func (h *BudgetHandler) Create(c *gin.Context) {
 		return
 	}
 
+	if err := h.eventBus.Publish(c.Request.Context(), domain.BudgetCreatedEvent{
+		BudgetID:  budget.ID,
+		User:      userID.(string),
+		Amount:    budget.Amount,
+		Period:    string(budget.Period),
+		Timestamp: time.Now().UTC(),
+	}); err != nil {
+		h.logger.Warn().Err(err).Msg("failed to publish BudgetCreatedEvent")
+	}
+
 	c.JSON(http.StatusCreated, toBudgetResponse(budget))
 }
 
@@ -303,6 +316,8 @@ func (h *BudgetHandler) GetByID(c *gin.Context) {
 // Update handles PUT /budgets/:id
 func (h *BudgetHandler) Update(c *gin.Context) {
 	tenantID := c.GetString("tenant_id")
+	userIDVal, _ := c.Get("user_id")
+	userIDStr, _ := userIDVal.(string)
 
 	id := c.Param("id")
 	budget, err := h.repo.GetByID(c.Request.Context(), tenantID, id)
@@ -358,12 +373,22 @@ func (h *BudgetHandler) Update(c *gin.Context) {
 		return
 	}
 
+	if err := h.eventBus.Publish(c.Request.Context(), domain.BudgetUpdatedEvent{
+		BudgetID:  budget.ID,
+		User:      userIDStr,
+		Timestamp: time.Now().UTC(),
+	}); err != nil {
+		h.logger.Warn().Err(err).Msg("failed to publish BudgetUpdatedEvent")
+	}
+
 	c.JSON(http.StatusOK, toBudgetResponse(budget))
 }
 
 // Delete handles DELETE /budgets/:id
 func (h *BudgetHandler) Delete(c *gin.Context) {
 	tenantID := c.GetString("tenant_id")
+	userIDVal, _ := c.Get("user_id")
+	userIDStr, _ := userIDVal.(string)
 
 	id := c.Param("id")
 	budget, err := h.repo.GetByID(c.Request.Context(), tenantID, id)
@@ -382,6 +407,14 @@ func (h *BudgetHandler) Delete(c *gin.Context) {
 		h.logger.Error().Err(err).Msg("failed to delete budget")
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to delete budget"})
 		return
+	}
+
+	if err := h.eventBus.Publish(c.Request.Context(), domain.BudgetDeletedEvent{
+		BudgetID:  id,
+		User:      userIDStr,
+		Timestamp: time.Now().UTC(),
+	}); err != nil {
+		h.logger.Warn().Err(err).Msg("failed to publish BudgetDeletedEvent")
 	}
 
 	c.JSON(http.StatusNoContent, nil)

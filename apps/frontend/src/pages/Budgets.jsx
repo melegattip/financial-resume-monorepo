@@ -92,7 +92,7 @@ const Budgets = () => {
   const handleEdit = (budget) => {
     setEditingBudget(budget);
     setFormData({
-      name: budget.category_name || '',
+      name: getCategoryName(budget.category_id),
       amount: budget.amount.toString(),
       category_id: budget.category_id || '',
       period: budget.period,
@@ -315,7 +315,7 @@ const Budgets = () => {
               <thead className="bg-gray-50 dark:bg-gray-700">
                 <tr>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                    Presupuesto
+                    Vigencia
                   </th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
                     Categoría

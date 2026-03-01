@@ -10,6 +10,7 @@ type Income struct {
 	ID           string
 	UserID       string
 	TenantID     string
+	CategoryID   string
 	Amount       float64
 	Source       string
 	Description  string

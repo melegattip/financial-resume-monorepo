@@ -71,17 +71,18 @@ func (TenantInvitationModel) TableName() string { return "tenant_invitations" }
 // AuditLogModel is the GORM model for the audit_logs table.
 // No soft delete — audit logs are immutable.
 type AuditLogModel struct {
-	ID         string    `gorm:"column:id;type:varchar(50);primaryKey"`
-	TenantID   string    `gorm:"column:tenant_id;type:varchar(50);not null;index:idx_audit_tenant_time"`
-	UserID     string    `gorm:"column:user_id;type:varchar(255);not null"`
-	Action     string    `gorm:"column:action;type:varchar(50);not null"`
-	EntityType string    `gorm:"column:entity_type;type:varchar(50)"`
-	EntityID   string    `gorm:"column:entity_id;type:varchar(255)"`
-	OldValues  string    `gorm:"column:old_values;type:jsonb"`
-	NewValues  string    `gorm:"column:new_values;type:jsonb"`
-	IPAddress  string    `gorm:"column:ip_address;type:varchar(45)"`
-	UserAgent  string    `gorm:"column:user_agent;type:varchar(500)"`
-	CreatedAt  time.Time `gorm:"column:created_at;autoCreateTime;index:idx_audit_tenant_time"`
+	ID          string    `gorm:"column:id;type:varchar(50);primaryKey"`
+	TenantID    string    `gorm:"column:tenant_id;type:varchar(50);not null;index:idx_audit_tenant_time"`
+	UserID      string    `gorm:"column:user_id;type:varchar(255);not null"`
+	Action      string    `gorm:"column:action;type:varchar(50);not null"`
+	Description string    `gorm:"column:description;type:text"`
+	EntityType  string    `gorm:"column:entity_type;type:varchar(50)"`
+	EntityID    string    `gorm:"column:entity_id;type:varchar(255)"`
+	OldValues   string    `gorm:"column:old_values;type:jsonb"`
+	NewValues   string    `gorm:"column:new_values;type:jsonb"`
+	IPAddress   string    `gorm:"column:ip_address;type:varchar(45)"`
+	UserAgent   string    `gorm:"column:user_agent;type:varchar(500)"`
+	CreatedAt   time.Time `gorm:"column:created_at;autoCreateTime;index:idx_audit_tenant_time"`
 }
 
 func (AuditLogModel) TableName() string { return "audit_logs" }

@@ -9,19 +9,22 @@ import (
 
 	"github.com/melegattip/financial-resume-monorepo/apps/monolith/internal/modules/savings/domain"
 	"github.com/melegattip/financial-resume-monorepo/apps/monolith/internal/modules/savings/ports"
+	sharedports "github.com/melegattip/financial-resume-monorepo/apps/monolith/internal/shared/ports"
 )
 
 // SavingsHandler handles HTTP requests for savings goals
 type SavingsHandler struct {
-	repo   ports.SavingsGoalRepository
-	logger zerolog.Logger
+	repo     ports.SavingsGoalRepository
+	logger   zerolog.Logger
+	eventBus sharedports.EventBus
 }
 
 // NewSavingsHandler creates a new SavingsHandler
-func NewSavingsHandler(repo ports.SavingsGoalRepository, logger zerolog.Logger) *SavingsHandler {
+func NewSavingsHandler(repo ports.SavingsGoalRepository, logger zerolog.Logger, eventBus sharedports.EventBus) *SavingsHandler {
 	return &SavingsHandler{
-		repo:   repo,
-		logger: logger,
+		repo:     repo,
+		logger:   logger,
+		eventBus: eventBus,
 	}
 }
 
@@ -218,6 +221,16 @@ func (h *SavingsHandler) CreateGoal(c *gin.Context) {
 		return
 	}
 
+	if err := h.eventBus.Publish(c.Request.Context(), domain.SavingsGoalCreatedEvent{
+		GoalID:    goal.ID,
+		User:      userID,
+		Name:      goal.Name,
+		Amount:    goal.TargetAmount,
+		Timestamp: time.Now().UTC(),
+	}); err != nil {
+		h.logger.Warn().Err(err).Msg("failed to publish SavingsGoalCreatedEvent")
+	}
+
 	goal.UpdateCalculatedFields()
 	c.JSON(http.StatusCreated, toGoalResponse(goal))
 }
@@ -338,6 +351,7 @@ func (h *SavingsHandler) GetGoal(c *gin.Context) {
 // UpdateGoal handles PUT /savings/:id
 func (h *SavingsHandler) UpdateGoal(c *gin.Context) {
 	tenantID := c.GetString("tenant_id")
+	userID, _ := getUserID(c)
 
 	goalID := c.Param("id")
 	goal, err := h.repo.GetByID(c.Request.Context(), tenantID, goalID)
@@ -391,12 +405,21 @@ func (h *SavingsHandler) UpdateGoal(c *gin.Context) {
 		return
 	}
 
+	if err := h.eventBus.Publish(c.Request.Context(), domain.SavingsGoalUpdatedEvent{
+		GoalID:    goal.ID,
+		User:      userID,
+		Timestamp: time.Now().UTC(),
+	}); err != nil {
+		h.logger.Warn().Err(err).Msg("failed to publish SavingsGoalUpdatedEvent")
+	}
+
 	c.JSON(http.StatusOK, toGoalResponse(goal))
 }
 
 // DeleteGoal handles DELETE /savings/:id
 func (h *SavingsHandler) DeleteGoal(c *gin.Context) {
 	tenantID := c.GetString("tenant_id")
+	userID, _ := getUserID(c)
 
 	goalID := c.Param("id")
 	goal, err := h.repo.GetByID(c.Request.Context(), tenantID, goalID)
@@ -414,6 +437,14 @@ func (h *SavingsHandler) DeleteGoal(c *gin.Context) {
 		h.logger.Error().Err(err).Msg("failed to delete savings goal")
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to delete savings goal"})
 		return
+	}
+
+	if err := h.eventBus.Publish(c.Request.Context(), domain.SavingsGoalDeletedEvent{
+		GoalID:    goalID,
+		User:      userID,
+		Timestamp: time.Now().UTC(),
+	}); err != nil {
+		h.logger.Warn().Err(err).Msg("failed to publish SavingsGoalDeletedEvent")
 	}
 
 	c.JSON(http.StatusNoContent, nil)

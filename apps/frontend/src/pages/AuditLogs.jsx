@@ -5,6 +5,27 @@ import toast from '../utils/notifications';
 
 const PAGE_SIZE = 50;
 
+const ACTION_LABELS = {
+  'expense.created':        'Gasto creado',
+  'expense.updated':        'Gasto editado',
+  'expense.deleted':        'Gasto eliminado',
+  'income.created':         'Ingreso creado',
+  'income.updated':         'Ingreso editado',
+  'income.deleted':         'Ingreso eliminado',
+  'recurring.created':      'Recurrente creado',
+  'recurring.updated':      'Recurrente editado',
+  'recurring.deleted':      'Recurrente eliminado',
+  'budget.created':         'Presupuesto creado',
+  'budget.updated':         'Presupuesto editado',
+  'budget.deleted':         'Presupuesto eliminado',
+  'savings_goal.created':   'Meta de ahorro creada',
+  'savings_goal.updated':   'Meta de ahorro editada',
+  'savings_goal.deleted':   'Meta de ahorro eliminada',
+  'user.registered':        'Usuario registrado',
+};
+
+const actionLabel = (action) => ACTION_LABELS[action] || action;
+
 const actionBadgeClass = (action) => {
   if (action?.includes('deleted')) return 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400';
   if (action?.includes('created')) return 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400';
@@ -66,11 +87,10 @@ const AuditLogs = () => {
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-700/50">
-                <th className="text-left px-4 py-3 text-gray-600 dark:text-gray-400 font-medium">Fecha</th>
+                <th className="text-left px-4 py-3 text-gray-600 dark:text-gray-400 font-medium whitespace-nowrap">Fecha</th>
                 <th className="text-left px-4 py-3 text-gray-600 dark:text-gray-400 font-medium">Acción</th>
+                <th className="text-left px-4 py-3 text-gray-600 dark:text-gray-400 font-medium">Detalle</th>
                 <th className="text-left px-4 py-3 text-gray-600 dark:text-gray-400 font-medium">Usuario</th>
-                <th className="text-left px-4 py-3 text-gray-600 dark:text-gray-400 font-medium">Entidad</th>
-                <th className="text-left px-4 py-3 text-gray-600 dark:text-gray-400 font-medium">ID</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100 dark:divide-gray-700">
@@ -84,19 +104,16 @@ const AuditLogs = () => {
                         })
                       : '—'}
                   </td>
-                  <td className="px-4 py-3">
+                  <td className="px-4 py-3 whitespace-nowrap">
                     <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${actionBadgeClass(log.action)}`}>
-                      {log.action}
+                      {actionLabel(log.action)}
                     </span>
                   </td>
-                  <td className="px-4 py-3 text-gray-700 dark:text-gray-300 font-mono text-xs">
-                    {log.user_id ? log.user_id.slice(0, 8) + '…' : '—'}
+                  <td className="px-4 py-3 text-gray-700 dark:text-gray-300">
+                    {log.description || '—'}
                   </td>
-                  <td className="px-4 py-3 text-gray-700 dark:text-gray-300 capitalize">
-                    {log.entity_type || '—'}
-                  </td>
-                  <td className="px-4 py-3 text-gray-500 dark:text-gray-400 font-mono text-xs">
-                    {log.entity_id ? log.entity_id.slice(0, 12) + '…' : '—'}
+                  <td className="px-4 py-3 text-gray-700 dark:text-gray-300 whitespace-nowrap">
+                    {log.user_name || (log.user_id ? log.user_id.slice(0, 8) + '…' : '—')}
                   </td>
                 </tr>
               ))}

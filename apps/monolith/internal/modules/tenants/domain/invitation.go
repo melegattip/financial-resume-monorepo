@@ -7,17 +7,17 @@ import (
 
 // Invitation represents a tenant invitation link (code-based).
 type Invitation struct {
-	ID        string
-	TenantID  string
-	Code      string
-	Role      string
-	CreatedBy string
-	ExpiresAt *time.Time
-	MaxUses   int
-	UsedCount int
-	IsActive  bool
-	CreatedAt time.Time
-	UpdatedAt time.Time
+	ID        string     `json:"id"`
+	TenantID  string     `json:"tenant_id"`
+	Code      string     `json:"code"`
+	Role      string     `json:"role"`
+	CreatedBy string     `json:"created_by"`
+	ExpiresAt *time.Time `json:"expires_at,omitempty"`
+	MaxUses   int        `json:"max_uses"`
+	UsedCount int        `json:"used_count"`
+	IsActive  bool       `json:"is_active"`
+	CreatedAt time.Time  `json:"created_at"`
+	UpdatedAt time.Time  `json:"updated_at"`
 }
 
 // IsUsable returns true if the invitation can still be accepted.

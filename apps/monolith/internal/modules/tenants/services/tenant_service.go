@@ -79,6 +79,7 @@ func (s *tenantService) ListMembers(ctx context.Context, tenantID string) ([]dom
 
 // UpdateMemberRole changes a member's role.
 // Callers cannot change the owner's role or promote someone to owner.
+// Demoting the last admin is also prevented to ensure management continuity.
 func (s *tenantService) UpdateMemberRole(ctx context.Context, tenantID, requesterRole, targetUserID, newRole string) error {
 	if newRole == "owner" {
 		return errors.New("cannot assign owner role; use transfer_ownership instead")
@@ -93,6 +94,23 @@ func (s *tenantService) UpdateMemberRole(ctx context.Context, tenantID, requeste
 	}
 	if target.Role == "owner" {
 		return errors.New("cannot change owner's role")
+	}
+
+	// Prevent demoting the last admin: ensure at least one other admin remains.
+	if target.Role == "admin" && newRole != "admin" {
+		all, err := s.memberRepo.ListMembers(ctx, tenantID)
+		if err != nil {
+			return err
+		}
+		adminCount := 0
+		for _, m := range all {
+			if m.Role == "admin" {
+				adminCount++
+			}
+		}
+		if adminCount <= 1 {
+			return errors.New("no se puede bajar el rol del último administrador; asigna otro administrador primero")
+		}
 	}
 
 	return s.memberRepo.UpdateMemberRole(ctx, tenantID, targetUserID, newRole)

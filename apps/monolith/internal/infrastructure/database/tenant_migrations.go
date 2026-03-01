@@ -266,6 +266,24 @@ func GetRoleDefaultPermissions() map[string][]string {
 	return result
 }
 
+// MigrateAuditLogDescriptionColumn adds description to the audit_logs table (idempotent).
+func MigrateAuditLogDescriptionColumn(db *gorm.DB, logger zerolog.Logger) {
+	if err := db.Exec("ALTER TABLE audit_logs ADD COLUMN IF NOT EXISTS description TEXT").Error; err != nil {
+		logger.Warn().Err(err).Msg("audit_log description column migration warning")
+	} else {
+		logger.Info().Msg("audit_log description column ensured")
+	}
+}
+
+// MigrateIncomeCategoryColumn adds category_id to the incomes table (idempotent).
+func MigrateIncomeCategoryColumn(db *gorm.DB, logger zerolog.Logger) {
+	if err := db.Exec("ALTER TABLE incomes ADD COLUMN IF NOT EXISTS category_id VARCHAR(255)").Error; err != nil {
+		logger.Warn().Err(err).Msg("income category_id column migration warning")
+	} else {
+		logger.Info().Msg("income category_id column ensured")
+	}
+}
+
 // GetCurrentTimestamp returns the current UTC time. Helper for migration scripts.
 func GetCurrentTimestamp() time.Time {
 	return time.Now().UTC()

@@ -45,24 +45,6 @@ function GeneralTab({ tenant, onRefresh, isAdmin }) {
 
   return (
     <div className="space-y-6">
-      <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-6">
-        <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-4">Información del espacio</h3>
-        <dl className="space-y-3 text-sm">
-          <div className="flex justify-between">
-            <dt className="text-gray-500 dark:text-gray-400">ID</dt>
-            <dd className="font-mono text-gray-700 dark:text-gray-300">{tenant?.id}</dd>
-          </div>
-          <div className="flex justify-between">
-            <dt className="text-gray-500 dark:text-gray-400">Slug</dt>
-            <dd className="font-mono text-gray-700 dark:text-gray-300">{tenant?.slug}</dd>
-          </div>
-          <div className="flex justify-between">
-            <dt className="text-gray-500 dark:text-gray-400">Plan</dt>
-            <dd className="capitalize text-gray-700 dark:text-gray-300">{tenant?.plan || 'free'}</dd>
-          </div>
-        </dl>
-      </div>
-
       {isAdmin && (
         <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-6">
           <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-4">Editar nombre</h3>
@@ -85,6 +67,7 @@ function GeneralTab({ tenant, onRefresh, isAdmin }) {
           </form>
         </div>
       )}
+      <JoinTenantSection />
     </div>
   );
 }
@@ -108,6 +91,8 @@ function MembersTab({ isAdmin, currentUserID }) {
   };
 
   useEffect(() => { load(); }, []);
+
+  const adminCount = members.filter(m => m.role === 'admin').length;
 
   const handleRoleChange = async (userID, newRole) => {
     try {
@@ -146,46 +131,58 @@ function MembersTab({ isAdmin, currentUserID }) {
           </tr>
         </thead>
         <tbody className="divide-y divide-gray-100 dark:divide-gray-700">
-          {members.map((m) => (
-            <tr key={m.user_id || m.id} className="hover:bg-gray-50 dark:hover:bg-gray-700/30">
-              <td className="px-4 py-3">
-                <div className="font-medium text-gray-900 dark:text-gray-100">{m.user_email || m.user_id}</div>
-              </td>
-              <td className="px-4 py-3">
-                {isAdmin && m.role !== 'owner' && m.user_id !== currentUserID ? (
-                  <select
-                    value={m.role}
-                    onChange={(e) => handleRoleChange(m.user_id, e.target.value)}
-                    className="text-xs px-2 py-1 border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-300"
-                  >
-                    {ROLES.filter(r => r !== 'owner').map(r => (
-                      <option key={r} value={r}>{r}</option>
-                    ))}
-                  </select>
-                ) : (
-                  <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${roleBadgeClass(m.role)}`}>
-                    {m.role}
-                  </span>
-                )}
-              </td>
-              <td className="px-4 py-3 text-gray-500 dark:text-gray-400">
-                {m.joined_at ? new Date(m.joined_at).toLocaleDateString() : '—'}
-              </td>
-              {isAdmin && (
-                <td className="px-4 py-3 text-right">
-                  {m.role !== 'owner' && m.user_id !== currentUserID && (
-                    <button
-                      onClick={() => handleRemove(m.user_id)}
-                      className="p-1.5 text-red-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 rounded transition-colors"
-                      title="Eliminar miembro"
-                    >
-                      <FaTrash className="w-3.5 h-3.5" />
-                    </button>
+          {members.map((m) => {
+            const isLastAdmin = m.role === 'admin' && adminCount <= 1;
+            const canEditRole = isAdmin && m.role !== 'owner' && m.user_id !== currentUserID;
+            return (
+              <tr key={m.user_id || m.id} className="hover:bg-gray-50 dark:hover:bg-gray-700/30">
+                <td className="px-4 py-3">
+                  <div className="font-medium text-gray-900 dark:text-gray-100">
+                    {m.user_name || m.user_email || m.user_id}
+                  </div>
+                  {m.user_name && m.user_email && (
+                    <div className="text-xs text-gray-500 dark:text-gray-400">{m.user_email}</div>
                   )}
                 </td>
-              )}
-            </tr>
-          ))}
+                <td className="px-4 py-3">
+                  {canEditRole && !isLastAdmin ? (
+                    <select
+                      value={m.role}
+                      onChange={(e) => handleRoleChange(m.user_id, e.target.value)}
+                      className="text-xs px-2 py-1 border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-300"
+                    >
+                      {ROLES.filter(r => r !== 'owner').map(r => (
+                        <option key={r} value={r}>{r}</option>
+                      ))}
+                    </select>
+                  ) : (
+                    <span
+                      className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${roleBadgeClass(m.role)}`}
+                      title={isLastAdmin ? 'Único administrador — asigna otro antes de cambiar este rol' : undefined}
+                    >
+                      {m.role}
+                    </span>
+                  )}
+                </td>
+                <td className="px-4 py-3 text-gray-500 dark:text-gray-400">
+                  {m.joined_at ? new Date(m.joined_at).toLocaleDateString('es-AR') : '—'}
+                </td>
+                {isAdmin && (
+                  <td className="px-4 py-3 text-right">
+                    {m.role !== 'owner' && m.user_id !== currentUserID && !isLastAdmin && (
+                      <button
+                        onClick={() => handleRemove(m.user_id)}
+                        className="p-1.5 text-red-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 rounded transition-colors"
+                        title="Eliminar miembro"
+                      >
+                        <FaTrash className="w-3.5 h-3.5" />
+                      </button>
+                    )}
+                  </td>
+                )}
+              </tr>
+            );
+          })}
           {members.length === 0 && (
             <tr>
               <td colSpan={isAdmin ? 4 : 3} className="px-4 py-8 text-center text-gray-500 dark:text-gray-400">
@@ -554,8 +551,6 @@ const TenantSettings = () => {
         )}
       </div>
 
-      {/* Join another tenant */}
-      <JoinTenantSection />
     </div>
   );
 };

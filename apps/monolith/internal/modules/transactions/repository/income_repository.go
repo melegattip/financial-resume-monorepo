@@ -16,6 +16,7 @@ type IncomeModel struct {
 	ID           string     `gorm:"column:id;type:varchar(255);primaryKey"`
 	UserID       string     `gorm:"column:user_id;type:varchar(255);not null;index"`
 	TenantID     string     `gorm:"column:tenant_id;type:varchar(50);index"`
+	CategoryID   string     `gorm:"column:category_id;type:varchar(255)"`
 	Amount       float64    `gorm:"column:amount;not null"`
 	Source       string     `gorm:"column:source"`
 	Description  string     `gorm:"column:description"`
@@ -35,6 +36,7 @@ func (m *IncomeModel) ToIncome() *domain.Income {
 		ID:           m.ID,
 		UserID:       m.UserID,
 		TenantID:     m.TenantID,
+		CategoryID:   m.CategoryID,
 		Amount:       m.Amount,
 		Source:       m.Source,
 		Description:  m.Description,
@@ -51,6 +53,7 @@ func FromIncome(i *domain.Income) *IncomeModel {
 		ID:           i.ID,
 		UserID:       i.UserID,
 		TenantID:     i.TenantID,
+		CategoryID:   i.CategoryID,
 		Amount:       i.Amount,
 		Source:       i.Source,
 		Description:  i.Description,

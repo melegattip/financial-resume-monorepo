@@ -2,6 +2,7 @@ package services
 
 import (
 	"context"
+	"fmt"
 	"strings"
 	"time"
 
@@ -45,15 +46,17 @@ func (al *AuditLogger) Handle(ctx context.Context, event sharedports.Event) erro
 	}
 
 	entityType := resolveEntityType(event.EventType())
+	description := al.buildDescription(ctx, event.EventType(), event.AggregateID())
 
 	entry := domain.AuditLog{
-		ID:         "aud_" + strings.ReplaceAll(uuid.New().String(), "-", "")[:12],
-		TenantID:   tenantID,
-		UserID:     event.UserID(),
-		Action:     event.EventType(),
-		EntityType: entityType,
-		EntityID:   event.AggregateID(),
-		CreatedAt:  time.Now().UTC(),
+		ID:          "aud_" + strings.ReplaceAll(uuid.New().String(), "-", "")[:12],
+		TenantID:    tenantID,
+		UserID:      event.UserID(),
+		Action:      event.EventType(),
+		Description: description,
+		EntityType:  entityType,
+		EntityID:    event.AggregateID(),
+		CreatedAt:   time.Now().UTC(),
 	}
 
 	if err := al.repo.CreateAuditLog(ctx, entry); err != nil {
@@ -97,6 +100,82 @@ func (al *AuditLogger) resolveTenantID(ctx context.Context, event sharedports.Ev
 	return tenantID, nil
 }
 
+// buildDescription fetches entity details from the DB and returns a concise
+// human-readable summary of what happened. Best-effort: returns empty string on failure.
+func (al *AuditLogger) buildDescription(ctx context.Context, eventType, aggregateID string) string {
+	switch {
+	case strings.HasPrefix(eventType, "expense."):
+		type row struct {
+			Description string
+			Amount      float64
+		}
+		var r row
+		if err := al.db.WithContext(ctx).
+			Raw("SELECT description, amount FROM expenses WHERE id = ? LIMIT 1", aggregateID).
+			Scan(&r).Error; err != nil || r.Description == "" {
+			return ""
+		}
+		return fmt.Sprintf("%s · $%.2f", r.Description, r.Amount)
+
+	case strings.HasPrefix(eventType, "income."):
+		type row struct {
+			Source string
+			Amount float64
+		}
+		var r row
+		if err := al.db.WithContext(ctx).
+			Raw("SELECT source, amount FROM incomes WHERE id = ? LIMIT 1", aggregateID).
+			Scan(&r).Error; err != nil || r.Source == "" {
+			return ""
+		}
+		return fmt.Sprintf("%s · $%.2f", r.Source, r.Amount)
+
+	case strings.HasPrefix(eventType, "recurring."):
+		type row struct {
+			Description string
+			Amount      float64
+			Type        string
+		}
+		var r row
+		if err := al.db.WithContext(ctx).
+			Raw("SELECT description, amount, type FROM recurring_transactions WHERE id = ? LIMIT 1", aggregateID).
+			Scan(&r).Error; err != nil || r.Description == "" {
+			return ""
+		}
+		return fmt.Sprintf("%s · $%.2f", r.Description, r.Amount)
+
+	case strings.HasPrefix(eventType, "budget."):
+		type row struct {
+			Amount float64
+			Period string
+		}
+		var r row
+		if err := al.db.WithContext(ctx).
+			Raw("SELECT amount, period FROM budgets WHERE id = ? LIMIT 1", aggregateID).
+			Scan(&r).Error; err != nil || r.Amount == 0 {
+			return ""
+		}
+		return fmt.Sprintf("$%.2f (%s)", r.Amount, r.Period)
+
+	case strings.HasPrefix(eventType, "savings_goal."):
+		type row struct {
+			Name         string
+			TargetAmount float64
+		}
+		var r row
+		if err := al.db.WithContext(ctx).
+			Raw("SELECT name, target_amount FROM savings_goals WHERE id = ? LIMIT 1", aggregateID).
+			Scan(&r).Error; err != nil || r.Name == "" {
+			return ""
+		}
+		return fmt.Sprintf("%s · $%.2f", r.Name, r.TargetAmount)
+
+	case eventType == "user.registered":
+		return "Usuario se unió al espacio"
+	}
+	return ""
+}
+
 // resolveTable returns the database table name for a given event type prefix.
 func resolveTable(eventType string) string {
 	switch {
@@ -106,6 +185,10 @@ func resolveTable(eventType string) string {
 		return "incomes"
 	case strings.HasPrefix(eventType, "recurring."):
 		return "recurring_transactions"
+	case strings.HasPrefix(eventType, "budget."):
+		return "budgets"
+	case strings.HasPrefix(eventType, "savings_goal."):
+		return "savings_goals"
 	}
 	return ""
 }
@@ -119,6 +202,10 @@ func resolveEntityType(eventType string) string {
 		return "income"
 	case strings.HasPrefix(eventType, "recurring."):
 		return "recurring_transaction"
+	case strings.HasPrefix(eventType, "budget."):
+		return "budget"
+	case strings.HasPrefix(eventType, "savings_goal."):
+		return "savings_goal"
 	case eventType == "user.registered":
 		return "user"
 	}

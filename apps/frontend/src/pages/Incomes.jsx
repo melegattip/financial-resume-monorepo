@@ -178,30 +178,22 @@ const Incomes = () => {
 
       if (editingIncome) {
         await incomesAPI.update(editingIncome.id, dataToSend);
-        // useOptimizedAPI ya muestra el toast de éxito
-        
-        // 🎮 Registrar acción de gamificación
-        console.log(`🎯 [Incomes] Registrando actualización de income: ${editingIncome.id}`);
         recordUpdateIncome(editingIncome.id, `Ingreso actualizado: ${dataToSend.description}`);
       } else {
         const result = await incomesAPI.create(dataToSend);
-        // useOptimizedAPI ya muestra el toast de éxito
-        
-        // 🎮 Registrar acción de gamificación  
         const incomeId = result?.data?.id || `income-${Date.now()}`;
-        console.log(`🎯 [Incomes] Registrando creación de income: ${incomeId}`);
         recordCreateIncome(incomeId, `Nuevo ingreso: ${dataToSend.description}`);
       }
-      
+
       dataService.invalidateAfterMutation('income');
+      await loadData();
+    } catch (error) {
+      console.error('Error en handleSubmit:', error);
+    } finally {
       setShowModal(false);
       setEditingIncome(null);
       setFormData({ description: '', amount: '', category_id: '', received_date: '' });
       setFormErrors({});
-      await loadData();
-    } catch (error) {
-      // useOptimizedAPI ya maneja el error
-      console.error('Error en handleSubmit:', error);
     }
   };
 
@@ -417,8 +409,11 @@ const Incomes = () => {
                     )}
                   </div>
 
-                  {/* Espacio para fecha (vacío para ingresos) */}
-                  <div className="flex-shrink-0 hidden md:block min-w-[100px]">
+                  {/* Fecha del ingreso */}
+                  <div className="flex-shrink-0 hidden md:block min-w-[100px] text-right">
+                    <span className="text-xs text-gray-500 dark:text-gray-400">
+                      {income.received_date ? new Date(income.received_date).toLocaleDateString('es-AR', { day: '2-digit', month: 'short', year: 'numeric' }) : '—'}
+                    </span>
                   </div>
 
                   {/* Monto */}

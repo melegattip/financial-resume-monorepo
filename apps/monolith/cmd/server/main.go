@@ -233,6 +233,12 @@ func runMigrations(db *gorm.DB, logger zerolog.Logger) {
 	// Add tenant_id column to existing tables (idempotent)
 	database.MigrateTenantColumns(db, logger)
 
+	// Add category_id column to incomes table (idempotent)
+	database.MigrateIncomeCategoryColumn(db, logger)
+
+	// Add description column to audit_logs table (idempotent)
+	database.MigrateAuditLogDescriptionColumn(db, logger)
+
 	// Create personal tenants for existing users and backfill tenant_id (idempotent)
 	database.MigrateExistingDataToTenants(db, logger)
 

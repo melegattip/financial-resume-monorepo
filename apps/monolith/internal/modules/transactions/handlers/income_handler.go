@@ -33,7 +33,7 @@ type CreateIncomeRequest struct {
 	Source       string  `json:"source"`
 	Description  string  `json:"description" binding:"required"`
 	ReceivedDate string  `json:"received_date"`
-	CategoryID   string  `json:"category_id"` // accepted but ignored (incomes have no category)
+	CategoryID   string  `json:"category_id"`
 }
 
 // UpdateIncomeRequest is the request body for updating an income.
@@ -42,13 +42,14 @@ type UpdateIncomeRequest struct {
 	Source       string  `json:"source"`
 	Description  string  `json:"description" binding:"required"`
 	ReceivedDate string  `json:"received_date"`
-	CategoryID   string  `json:"category_id"` // accepted but ignored
+	CategoryID   string  `json:"category_id"`
 }
 
 // IncomeResponse is the response format for an income
 type IncomeResponse struct {
 	ID           string  `json:"id"`
 	UserID       string  `json:"user_id"`
+	CategoryID   string  `json:"category_id,omitempty"`
 	Amount       float64 `json:"amount"`
 	Source       string  `json:"source"`
 	Description  string  `json:"description"`
@@ -61,6 +62,7 @@ func toIncomeResponse(i *domain.Income) IncomeResponse {
 	return IncomeResponse{
 		ID:           i.ID,
 		UserID:       i.UserID,
+		CategoryID:   i.CategoryID,
 		Amount:       i.Amount,
 		Source:       i.Source,
 		Description:  i.Description,
@@ -111,6 +113,7 @@ func (h *IncomeHandler) Create(c *gin.Context) {
 	}
 
 	income.TenantID = tenantID
+	income.CategoryID = req.CategoryID
 
 	if err := h.repo.Create(c.Request.Context(), income); err != nil {
 		h.logger.Error().Err(err).Msg("failed to create income")
@@ -235,6 +238,7 @@ func (h *IncomeHandler) Update(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
+	income.CategoryID = req.CategoryID
 
 	if err := h.repo.Update(c.Request.Context(), income); err != nil {
 		h.logger.Error().Err(err).Msg("failed to update income")

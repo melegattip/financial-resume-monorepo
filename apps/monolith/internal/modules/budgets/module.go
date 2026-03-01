@@ -23,7 +23,7 @@ type Module struct {
 // New creates a new budgets Module, wiring the repository and handler.
 func New(db *gorm.DB, logger zerolog.Logger, cfg *config.AppConfig, eventBus sharedports.EventBus, authMW *middleware.AuthMiddleware, permMW *middleware.PermissionMiddleware) *Module {
 	budgetRepo := repository.NewBudgetRepository(db)
-	budgetHandler := handlers.NewBudgetHandler(budgetRepo, logger)
+	budgetHandler := handlers.NewBudgetHandler(budgetRepo, logger, eventBus)
 
 	return &Module{
 		budgetHandler: budgetHandler,

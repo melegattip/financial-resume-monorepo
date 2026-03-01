@@ -63,10 +63,16 @@ export const PeriodProvider = ({ children }) => {
     });
 
     // Auto-seleccionar el mes más reciente SOLO la primera vez (carga inicial).
+    // No seleccionar meses futuros: usar el mes más reciente ≤ mes actual.
     // Usar ref en lugar de leer selectedMonth para evitar stale closure.
     if (!hasAutoSelected.current && newMonths.size > 0) {
       hasAutoSelected.current = true;
-      const latestMonth = Array.from(newMonths).sort().reverse()[0];
+      const currentMonth = new Date().toISOString().slice(0, 7);
+      const latestMonth =
+        Array.from(newMonths)
+          .filter(m => m <= currentMonth)
+          .sort()
+          .reverse()[0] || currentMonth;
       const [latestYear] = latestMonth.split('-');
       setSelectedMonth(latestMonth);
       setSelectedYear(latestYear);

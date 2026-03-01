@@ -22,7 +22,7 @@ type Module struct {
 // New creates a new savings module
 func New(db *gorm.DB, logger zerolog.Logger, eventBus sharedports.EventBus, authMW *middleware.AuthMiddleware, permMW *middleware.PermissionMiddleware) *Module {
 	savingsRepo := repository.NewSavingsRepository(db)
-	savingsHandler := handlers.NewSavingsHandler(savingsRepo, logger)
+	savingsHandler := handlers.NewSavingsHandler(savingsRepo, logger, eventBus)
 
 	return &Module{
 		savingsHandler: savingsHandler,

@@ -29,14 +29,18 @@ func NewInMemoryEventBus(logger zerolog.Logger) *InMemoryEventBus {
 
 // Publish dispatches an event to all registered handlers for its type.
 // Handlers run in separate goroutines. If no subscribers exist, this is a no-op.
-func (bus *InMemoryEventBus) Publish(ctx context.Context, event ports.Event) error {
+//
+// A fresh background context is used for each handler so that async subscribers
+// are not cancelled when the originating HTTP request context is done. All
+// business data is carried by the event itself, not the context.
+func (bus *InMemoryEventBus) Publish(_ context.Context, event ports.Event) error {
 	bus.mu.RLock()
 	handlers := make([]ports.EventHandler, len(bus.handlers[event.EventType()]))
 	copy(handlers, bus.handlers[event.EventType()])
 	bus.mu.RUnlock()
 
 	for _, handler := range handlers {
-		go bus.safeExecute(ctx, event, handler)
+		go bus.safeExecute(context.Background(), event, handler)
 	}
 
 	return nil

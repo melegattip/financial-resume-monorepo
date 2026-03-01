@@ -117,6 +117,8 @@ func (m *Module) RegisterSubscribers(bus sharedports.EventBus) {
 		"income.created", "income.updated", "income.deleted",
 		"recurring.created", "recurring.updated", "recurring.deleted",
 		"recurring.executed", "recurring.paused", "recurring.resumed",
+		"budget.created", "budget.updated", "budget.deleted",
+		"savings_goal.created", "savings_goal.updated", "savings_goal.deleted",
 		"user.registered",
 	}
 

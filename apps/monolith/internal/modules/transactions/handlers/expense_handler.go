@@ -142,6 +142,9 @@ func (h *ExpenseHandler) Create(c *gin.Context) {
 
 	expense.Notes = req.Notes
 	expense.TenantID = tenantID
+	if req.Paid {
+		expense.ApplyPayment(true, expense.Amount)
+	}
 
 	// Save to repository
 	if err := h.repo.Create(c.Request.Context(), expense); err != nil {

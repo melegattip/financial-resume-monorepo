@@ -154,18 +154,47 @@ func (r *GormRepository) DeleteTenant(ctx context.Context, id string) error {
 
 // ─── MemberRepository ─────────────────────────────────────────────────────────
 
-// ListMembers returns all members of a tenant ordered by join date.
+// ListMembers returns all members of a tenant ordered by join date,
+// enriched with the user's email and display name via a LEFT JOIN on users.
 func (r *GormRepository) ListMembers(ctx context.Context, tenantID string) ([]domain.TenantMember, error) {
-	var models []TenantMemberModel
-	if err := r.db.WithContext(ctx).
-		Where("tenant_id = ?", tenantID).
-		Order("joined_at ASC").
-		Find(&models).Error; err != nil {
+	type memberRow struct {
+		ID        string    `gorm:"column:id"`
+		TenantID  string    `gorm:"column:tenant_id"`
+		UserID    string    `gorm:"column:user_id"`
+		UserEmail string    `gorm:"column:user_email"`
+		UserName  string    `gorm:"column:user_name"`
+		Role      string    `gorm:"column:role"`
+		InvitedBy *string   `gorm:"column:invited_by"`
+		JoinedAt  time.Time `gorm:"column:joined_at"`
+		CreatedAt time.Time `gorm:"column:created_at"`
+	}
+	var rows []memberRow
+	err := r.db.WithContext(ctx).Raw(`
+		SELECT tm.id, tm.tenant_id, tm.user_id,
+		       u.email AS user_email,
+		       COALESCE(NULLIF(TRIM(u.first_name || ' ' || u.last_name), ''), u.email) AS user_name,
+		       tm.role, tm.invited_by, tm.joined_at, tm.created_at
+		FROM tenant_members tm
+		LEFT JOIN users u ON u.id = tm.user_id
+		WHERE tm.tenant_id = ?
+		ORDER BY tm.joined_at ASC
+	`, tenantID).Scan(&rows).Error
+	if err != nil {
 		return nil, fmt.Errorf("list members: %w", err)
 	}
-	members := make([]domain.TenantMember, len(models))
-	for i, m := range models {
-		members[i] = memberModelToDomain(&m)
+	members := make([]domain.TenantMember, len(rows))
+	for i, row := range rows {
+		members[i] = domain.TenantMember{
+			ID:        row.ID,
+			TenantID:  row.TenantID,
+			UserID:    row.UserID,
+			UserEmail: row.UserEmail,
+			UserName:  row.UserName,
+			Role:      row.Role,
+			InvitedBy: row.InvitedBy,
+			JoinedAt:  row.JoinedAt,
+			CreatedAt: row.CreatedAt,
+		}
 	}
 	return members, nil
 }
@@ -312,39 +341,104 @@ func (r *GormRepository) ListPermissionsByRole(ctx context.Context, tenantID, ro
 
 // CreateAuditLog persists a new audit log entry.
 func (r *GormRepository) CreateAuditLog(ctx context.Context, log domain.AuditLog) error {
+	oldValues := log.OldValues
+	if oldValues == "" {
+		oldValues = "null"
+	}
+	newValues := log.NewValues
+	if newValues == "" {
+		newValues = "null"
+	}
 	m := AuditLogModel{
-		ID:         log.ID,
-		TenantID:   log.TenantID,
-		UserID:     log.UserID,
-		Action:     log.Action,
-		EntityType: log.EntityType,
-		EntityID:   log.EntityID,
-		OldValues:  log.OldValues,
-		NewValues:  log.NewValues,
-		IPAddress:  log.IPAddress,
-		UserAgent:  log.UserAgent,
-		CreatedAt:  time.Now(),
+		ID:          log.ID,
+		TenantID:    log.TenantID,
+		UserID:      log.UserID,
+		Action:      log.Action,
+		Description: log.Description,
+		EntityType:  log.EntityType,
+		EntityID:    log.EntityID,
+		OldValues:   oldValues,
+		NewValues:   newValues,
+		IPAddress:   log.IPAddress,
+		UserAgent:   log.UserAgent,
+		CreatedAt:   time.Now(),
 	}
 	return r.db.WithContext(ctx).Create(&m).Error
 }
 
 // ListAuditLogs returns audit log entries for a tenant, newest first.
+// Descriptions are computed on-the-fly via LEFT JOINs on entity tables, so that
+// both old records (no stored description) and new records show context.
 func (r *GormRepository) ListAuditLogs(ctx context.Context, tenantID string, limit, offset int) ([]domain.AuditLog, error) {
 	if limit <= 0 || limit > 100 {
 		limit = 50
 	}
-	var models []AuditLogModel
-	if err := r.db.WithContext(ctx).
-		Where("tenant_id = ?", tenantID).
-		Order("created_at DESC").
-		Limit(limit).
-		Offset(offset).
-		Find(&models).Error; err != nil {
+	type auditLogRow struct {
+		ID          string    `gorm:"column:id"`
+		TenantID    string    `gorm:"column:tenant_id"`
+		UserID      string    `gorm:"column:user_id"`
+		UserName    string    `gorm:"column:user_name"`
+		Action      string    `gorm:"column:action"`
+		Description string    `gorm:"column:description"`
+		EntityType  string    `gorm:"column:entity_type"`
+		EntityID    string    `gorm:"column:entity_id"`
+		OldValues   string    `gorm:"column:old_values"`
+		NewValues   string    `gorm:"column:new_values"`
+		IPAddress   string    `gorm:"column:ip_address"`
+		UserAgent   string    `gorm:"column:user_agent"`
+		CreatedAt   time.Time `gorm:"column:created_at"`
+	}
+	var rows []auditLogRow
+	err := r.db.WithContext(ctx).Raw(`
+		SELECT al.id, al.tenant_id, al.user_id,
+		       COALESCE(NULLIF(TRIM(u.first_name || ' ' || u.last_name), ''), u.email) AS user_name,
+		       al.action,
+		       CASE
+		         WHEN al.entity_type = 'expense' AND e.id IS NOT NULL THEN
+		           e.description || ' · $' || TO_CHAR(e.amount, 'FM9999999990.00')
+		         WHEN al.entity_type = 'income' AND i.id IS NOT NULL THEN
+		           i.source || ' · $' || TO_CHAR(i.amount, 'FM9999999990.00')
+		         WHEN al.entity_type = 'recurring_transaction' AND r.id IS NOT NULL THEN
+		           r.description || ' · $' || TO_CHAR(r.amount, 'FM9999999990.00')
+		         WHEN al.entity_type = 'budget' AND b.id IS NOT NULL THEN
+		           '$' || TO_CHAR(b.amount, 'FM9999999990.00') || ' (' || b.period || ')'
+		         WHEN al.entity_type = 'savings_goal' AND sg.id IS NOT NULL THEN
+		           sg.name || ' · $' || TO_CHAR(sg.target_amount, 'FM9999999990.00')
+		         ELSE NULL
+		       END AS description,
+		       al.entity_type, al.entity_id,
+		       al.old_values, al.new_values, al.ip_address, al.user_agent, al.created_at
+		FROM audit_logs al
+		LEFT JOIN users u ON u.id = al.user_id
+		LEFT JOIN expenses e ON al.entity_type = 'expense' AND e.id = al.entity_id
+		LEFT JOIN incomes i ON al.entity_type = 'income' AND i.id = al.entity_id
+		LEFT JOIN recurring_transactions r ON al.entity_type = 'recurring_transaction' AND r.id = al.entity_id
+		LEFT JOIN budgets b ON al.entity_type = 'budget' AND b.id = al.entity_id
+		LEFT JOIN savings_goals sg ON al.entity_type = 'savings_goal' AND sg.id = al.entity_id
+		WHERE al.tenant_id = ?
+		ORDER BY al.created_at DESC
+		LIMIT ? OFFSET ?
+	`, tenantID, limit, offset).Scan(&rows).Error
+	if err != nil {
 		return nil, fmt.Errorf("list audit logs: %w", err)
 	}
-	logs := make([]domain.AuditLog, len(models))
-	for i, m := range models {
-		logs[i] = auditModelToDomain(&m)
+	logs := make([]domain.AuditLog, len(rows))
+	for i, row := range rows {
+		logs[i] = domain.AuditLog{
+			ID:          row.ID,
+			TenantID:    row.TenantID,
+			UserID:      row.UserID,
+			UserName:    row.UserName,
+			Action:      row.Action,
+			Description: row.Description,
+			EntityType:  row.EntityType,
+			EntityID:    row.EntityID,
+			OldValues:   row.OldValues,
+			NewValues:   row.NewValues,
+			IPAddress:   row.IPAddress,
+			UserAgent:   row.UserAgent,
+			CreatedAt:   row.CreatedAt,
+		}
 	}
 	return logs, nil
 }
