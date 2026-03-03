@@ -56,4 +56,6 @@ go.work.sum
 # Specs
 specs/
 
+# Claude
+CLAUDE.md
 .claude/settings.local.json
