@@ -102,6 +102,7 @@ func (m *Module) RegisterRoutes(router *gin.RouterGroup) {
 	{
 		// Session
 		users.POST("/logout", m.securityHandler.Logout)
+		users.POST("/switch-tenant", m.authHandler.SwitchTenant)
 
 		// Profile
 		users.GET("/profile", m.profileHandler.GetProfile)

@@ -10,6 +10,7 @@ import (
 type TenantRepository interface {
 	FindTenantByID(ctx context.Context, id string) (*domain.Tenant, error)
 	FindTenantForUser(ctx context.Context, userID string) (*domain.Tenant, error)
+	FindTenantsByUserID(ctx context.Context, userID string) ([]domain.TenantWithRole, error)
 	UpdateTenant(ctx context.Context, id string, req domain.UpdateTenantRequest) error
 	DeleteTenant(ctx context.Context, id string) error
 }
@@ -45,7 +46,8 @@ type AuditRepository interface {
 
 // TenantService defines all business operations for the tenants module.
 type TenantService interface {
-	GetMyTenant(ctx context.Context, userID string) (*domain.Tenant, error)
+	GetMyTenant(ctx context.Context, tenantID string) (*domain.Tenant, error)
+	ListMyTenants(ctx context.Context, userID string) ([]domain.TenantWithRole, error)
 	UpdateMyTenant(ctx context.Context, tenantID, userID string, req domain.UpdateTenantRequest) error
 	DeleteMyTenant(ctx context.Context, tenantID, userID string) error
 

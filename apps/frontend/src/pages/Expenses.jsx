@@ -40,7 +40,7 @@ const Expenses = () => {
   // Estados para nuevos filtros de ordenamiento
   const [sortBy, setSortBy] = useState('category_priority');
   const [sortOrder, setSortOrder] = useState('desc');
-  const [totalIncome, setTotalIncome] = useState(0);
+  const [allIncomes, setAllIncomes] = useState([]);
   const [formData, setFormData] = useState({
     description: '',
     amount: '',
@@ -150,10 +150,7 @@ const Expenses = () => {
       setExpenses(Array.isArray(expensesData) ? expensesData : []);
       setCategories(Array.isArray(categoriesData) ? categoriesData : []);
 
-      // Calcular total de ingresos para porcentajes
-      const totalIncomeAmount = Array.isArray(incomesData) ?
-        incomesData.reduce((sum, income) => sum + (income.amount || 0), 0) : 0;
-      setTotalIncome(totalIncomeAmount);
+      setAllIncomes(Array.isArray(incomesData) ? incomesData : []);
 
       // Actualizar datos disponibles en el contexto de períodos
       updateAvailableData(expensesData, incomesData);
@@ -165,7 +162,7 @@ const Expenses = () => {
       // Establecer datos vacíos
       setExpenses([]);
       setCategories([]);
-      setTotalIncome(0);
+      setAllIncomes([]);
 
       // No mostrar toast aquí porque useOptimizedAPI ya lo maneja
     } finally {
@@ -725,6 +722,13 @@ const Expenses = () => {
         }
       })
     : [];
+
+  const totalIncome = allIncomes.filter(income => {
+    const dateStr = income.received_date || income.ReceivedDate || income.created_at || '';
+    const matchesYear = !selectedYear || dateStr.slice(0, 4) === selectedYear;
+    const matchesMonth = !selectedMonth || dateStr.slice(0, 7) === selectedMonth;
+    return matchesYear && matchesMonth;
+  }).reduce((sum, income) => sum + (income.amount || 0), 0);
 
   const totalExpenses = filteredExpenses.reduce((sum, expense) => sum + expense.amount, 0);
   const unpaidExpenses = filteredExpenses.filter(e => !e.paid);

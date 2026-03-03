@@ -21,14 +21,14 @@ func NewTenantHandler(service ports.TenantService, logger zerolog.Logger) *Tenan
 	return &TenantHandler{service: service, logger: logger}
 }
 
-// GetMyTenant returns the current user's tenant.
+// GetMyTenant returns the tenant scoped by the JWT's tenant_id claim.
 // GET /api/v1/tenants/me
 func (h *TenantHandler) GetMyTenant(c *gin.Context) {
-	userID := c.GetString("user_id")
+	tenantID := c.GetString("tenant_id")
 
-	tenant, err := h.service.GetMyTenant(c.Request.Context(), userID)
+	tenant, err := h.service.GetMyTenant(c.Request.Context(), tenantID)
 	if err != nil {
-		h.logger.Error().Err(err).Str("user_id", userID).Msg("get my tenant failed")
+		h.logger.Error().Err(err).Str("tenant_id", tenantID).Msg("get my tenant failed")
 		c.JSON(http.StatusNotFound, gin.H{"error": err.Error()})
 		return
 	}
@@ -70,6 +70,21 @@ func (h *TenantHandler) DeleteMyTenant(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, gin.H{"message": "tenant deleted"})
+}
+
+// ListMyTenants returns all tenants the authenticated user belongs to, with their role.
+// GET /api/v1/tenants/list
+func (h *TenantHandler) ListMyTenants(c *gin.Context) {
+	userID := c.GetString("user_id")
+
+	tenants, err := h.service.ListMyTenants(c.Request.Context(), userID)
+	if err != nil {
+		h.logger.Error().Err(err).Str("user_id", userID).Msg("list my tenants failed")
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to list tenants"})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"tenants": tenants})
 }
 
 // GetMyPermissions returns the permission keys for the caller's current role.

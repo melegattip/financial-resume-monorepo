@@ -22,3 +22,16 @@ type UpdateTenantRequest struct {
 	Name     *string `json:"name"`
 	Settings *string `json:"settings"`
 }
+
+// TenantWithRole represents a tenant together with the caller's membership role.
+// Used for listing all tenants a user belongs to.
+type TenantWithRole struct {
+	ID       string    `json:"id"`
+	Name     string    `json:"name"`
+	Slug     string    `json:"slug"`
+	OwnerID  string    `json:"owner_id"`
+	IsActive bool      `json:"is_active"`
+	Plan     string    `json:"plan"`
+	Role     string    `json:"role"`
+	JoinedAt time.Time `json:"joined_at"`
+}

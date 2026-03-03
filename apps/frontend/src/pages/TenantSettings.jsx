@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { FaBuilding, FaUsers, FaEnvelope, FaExclamationTriangle, FaCopy, FaCheck, FaTrash, FaUserCog, FaPlus, FaKey, FaSignInAlt } from 'react-icons/fa';
+import { FaBuilding, FaUsers, FaEnvelope, FaExclamationTriangle, FaCopy, FaCheck, FaTrash, FaUserCog, FaPlus, FaKey, FaSignInAlt, FaExchangeAlt, FaCheckCircle } from 'react-icons/fa';
 import { useTenant } from '../contexts/TenantContext';
 import RoleGuard from '../components/RoleGuard';
 import tenantService from '../services/tenantService';
@@ -17,6 +17,80 @@ const roleBadgeClass = (role) => {
   };
   return map[role] || map.viewer;
 };
+
+// ─── My Spaces Section ────────────────────────────────────────────────────────
+
+function MySpacesSection() {
+  const { currentTenant, availableTenants, switching, switchTenant } = useTenant();
+
+  if (availableTenants.length <= 1) return null;
+
+  const roleBadge = (role) => {
+    const map = {
+      owner: 'bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400',
+      admin: 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400',
+      member: 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400',
+      viewer: 'bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-300',
+    };
+    return map[role] || map.viewer;
+  };
+
+  const handleSwitch = async (tenantId) => {
+    try {
+      await switchTenant(tenantId);
+      toast.success('Espacio activado');
+      window.location.href = '/dashboard';
+    } catch (err) {
+      toast.error(err?.response?.data?.error || 'Error al cambiar de espacio');
+    }
+  };
+
+  return (
+    <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 overflow-hidden">
+      <div className="px-6 py-4 border-b border-gray-100 dark:border-gray-700 flex items-center gap-3">
+        <div className="p-2 bg-blue-50 dark:bg-blue-900/30 rounded-lg flex-shrink-0">
+          <FaExchangeAlt className="w-4 h-4 text-blue-600 dark:text-blue-400" />
+        </div>
+        <div>
+          <h3 className="text-base font-semibold text-gray-900 dark:text-gray-100">Mis espacios</h3>
+          <p className="text-sm text-gray-500 dark:text-gray-400">Cambiá de espacio sin cerrar sesión.</p>
+        </div>
+      </div>
+      <ul className="divide-y divide-gray-100 dark:divide-gray-700">
+        {availableTenants.map(t => {
+          const isActive = t.id === currentTenant?.id;
+          return (
+            <li key={t.id} className={`flex items-center justify-between px-6 py-4 ${isActive ? 'bg-blue-50/60 dark:bg-blue-900/10' : 'hover:bg-gray-50 dark:hover:bg-gray-700/30'}`}>
+              <div className="flex items-center gap-3 min-w-0">
+                {isActive
+                  ? <FaCheckCircle className="w-4 h-4 text-blue-500 flex-shrink-0" />
+                  : <div className="w-4 h-4 rounded-full border-2 border-gray-300 dark:border-gray-600 flex-shrink-0" />
+                }
+                <div className="min-w-0">
+                  <p className="text-sm font-medium text-gray-900 dark:text-gray-100 truncate">{t.name}</p>
+                  <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium mt-0.5 ${roleBadge(t.role)}`}>
+                    {t.role}
+                  </span>
+                </div>
+              </div>
+              {isActive ? (
+                <span className="text-xs text-blue-600 dark:text-blue-400 font-medium flex-shrink-0">Activo</span>
+              ) : (
+                <button
+                  onClick={() => handleSwitch(t.id)}
+                  disabled={switching}
+                  className="flex-shrink-0 px-3 py-1.5 text-xs font-medium bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                >
+                  {switching ? 'Cambiando…' : 'Activar'}
+                </button>
+              )}
+            </li>
+          );
+        })}
+      </ul>
+    </div>
+  );
+}
 
 // ─── General Tab ──────────────────────────────────────────────────────────────
 
@@ -45,6 +119,7 @@ function GeneralTab({ tenant, onRefresh, isAdmin }) {
 
   return (
     <div className="space-y-6">
+      <MySpacesSection />
       {isAdmin && (
         <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-6">
           <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-4">Editar nombre</h3>
@@ -397,9 +472,9 @@ function DangerZoneTab({ tenantName }) {
 // ─── Join Tenant Section ──────────────────────────────────────────────────────
 
 function JoinTenantSection() {
+  const { switchTenant, refreshTenant } = useTenant();
   const [code, setCode] = useState('');
   const [joining, setJoining] = useState(false);
-  const [joined, setJoined] = useState(false);
 
   const handleJoin = async (e) => {
     e.preventDefault();
@@ -407,9 +482,18 @@ function JoinTenantSection() {
     try {
       setJoining(true);
       const result = await tenantService.joinTenant(code.trim());
-      setJoined(true);
+      const tenantName = result.tenant?.name || 'el nuevo espacio';
+      const tenantId = result.tenant?.id;
       setCode('');
-      toast.success(`Te uniste al espacio "${result.tenant?.name || ''}". Vuelve a iniciar sesión para activarlo.`);
+      // Auto-switch to the newly joined tenant
+      if (tenantId) {
+        await switchTenant(tenantId);
+        toast.success(`¡Te uniste a "${tenantName}"! Espacio activado.`);
+        window.location.href = '/dashboard';
+      } else {
+        await refreshTenant();
+        toast.success(`¡Te uniste a "${tenantName}"!`);
+      }
     } catch (err) {
       toast.error(err.response?.data?.error || 'Código inválido o expirado');
     } finally {
@@ -426,35 +510,27 @@ function JoinTenantSection() {
         <div>
           <h3 className="text-base font-semibold text-gray-900 dark:text-gray-100">Unirse a otro espacio</h3>
           <p className="text-sm text-gray-500 dark:text-gray-400 mt-0.5">
-            Si tienes un código de invitación, ingrésalo para unirte al espacio de otra persona.
+            Ingresá un código de invitación para unirte y activar el espacio automáticamente.
           </p>
         </div>
       </div>
-
-      {joined ? (
-        <div className="flex items-center gap-2 text-sm text-green-600 dark:text-green-400 bg-green-50 dark:bg-green-900/20 px-4 py-3 rounded-lg">
-          <FaSignInAlt className="w-4 h-4 flex-shrink-0" />
-          <span>¡Te uniste! Cerrá sesión y volvé a entrar para cambiar al nuevo espacio.</span>
-        </div>
-      ) : (
-        <form onSubmit={handleJoin} className="flex gap-3">
-          <input
-            type="text"
-            value={code}
-            onChange={(e) => setCode(e.target.value)}
-            placeholder="Código de invitación"
-            className="flex-1 px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 font-mono text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-          />
-          <button
-            type="submit"
-            disabled={joining || !code.trim()}
-            className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white text-sm rounded-lg hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-          >
-            <FaSignInAlt className="w-3.5 h-3.5" />
-            {joining ? 'Uniéndose…' : 'Unirse'}
-          </button>
-        </form>
-      )}
+      <form onSubmit={handleJoin} className="flex gap-3">
+        <input
+          type="text"
+          value={code}
+          onChange={(e) => setCode(e.target.value)}
+          placeholder="Código de invitación"
+          className="flex-1 px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 font-mono text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+        />
+        <button
+          type="submit"
+          disabled={joining || !code.trim()}
+          className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white text-sm rounded-lg hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+        >
+          <FaSignInAlt className="w-3.5 h-3.5" />
+          {joining ? 'Uniéndose…' : 'Unirse'}
+        </button>
+      </form>
     </div>
   );
 }

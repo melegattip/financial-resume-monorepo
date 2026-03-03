@@ -306,8 +306,8 @@ class DataService {
       if (!dateStr) return true;
 
       const itemDate = new Date(dateStr);
-      const itemYear = itemDate.getFullYear();
-      const itemMonth = itemDate.getMonth() + 1;
+      const itemYear = itemDate.getUTCFullYear();
+      const itemMonth = itemDate.getUTCMonth() + 1;
 
       if (yearFilter && itemYear !== parseInt(yearFilter)) return false;
       if (monthFilter && itemMonth !== parseInt(monthFilter)) return false;

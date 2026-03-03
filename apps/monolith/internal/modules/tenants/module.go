@@ -73,6 +73,9 @@ func (m *Module) RegisterRoutes(r *gin.RouterGroup) {
 	tenants := r.Group("/tenants")
 	tenants.Use(m.authMW.RequireAuth())
 
+	// List all tenants the user belongs to (for tenant switcher)
+	tenants.GET("/list", m.tenantHandler.ListMyTenants)
+
 	// Join via invitation code — no extra permission required
 	tenants.POST("/join", m.invitationHandler.Join)
 

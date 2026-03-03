@@ -70,12 +70,14 @@ func (r *GormRepository) CreatePersonalTenant(ctx context.Context, userID, email
 	return tenantID, nil
 }
 
-// FindTenantByUserID returns the active tenant ID and role for a given user.
+// FindTenantByUserID returns the tenant ID and role for a given user.
+// Returns the most recently joined tenant when the user has multiple memberships.
 // Implements auth/ports.TenantMemberFinder.
 func (r *GormRepository) FindTenantByUserID(ctx context.Context, userID string) (tenantID, role string, err error) {
 	var member TenantMemberModel
 	if dbErr := r.db.WithContext(ctx).
 		Where("user_id = ?", userID).
+		Order("joined_at ASC").
 		First(&member).Error; dbErr != nil {
 		if dbErr == gorm.ErrRecordNotFound {
 			return "", "owner", nil
@@ -83,6 +85,61 @@ func (r *GormRepository) FindTenantByUserID(ctx context.Context, userID string) 
 		return "", "", fmt.Errorf("failed to find tenant membership: %w", dbErr)
 	}
 	return member.TenantID, member.Role, nil
+}
+
+// FindMemberInTenant returns the role of a user within a specific tenant.
+// Returns an empty string and no error when the user is not a member.
+// Implements auth/ports.TenantMemberFinder (extended).
+func (r *GormRepository) FindMemberInTenant(ctx context.Context, userID, tenantID string) (role string, err error) {
+	var member TenantMemberModel
+	if dbErr := r.db.WithContext(ctx).
+		Where("user_id = ? AND tenant_id = ?", userID, tenantID).
+		First(&member).Error; dbErr != nil {
+		if dbErr == gorm.ErrRecordNotFound {
+			return "", nil
+		}
+		return "", fmt.Errorf("failed to find member in tenant: %w", dbErr)
+	}
+	return member.Role, nil
+}
+
+// FindTenantsByUserID returns all tenants the user is a member of, with their role.
+func (r *GormRepository) FindTenantsByUserID(ctx context.Context, userID string) ([]domain.TenantWithRole, error) {
+	type row struct {
+		TenantID string    `gorm:"column:tenant_id"`
+		Name     string    `gorm:"column:name"`
+		Slug     string    `gorm:"column:slug"`
+		OwnerID  string    `gorm:"column:owner_id"`
+		IsActive bool      `gorm:"column:is_active"`
+		Plan     string    `gorm:"column:plan"`
+		Role     string    `gorm:"column:role"`
+		JoinedAt time.Time `gorm:"column:joined_at"`
+	}
+	var rows []row
+	if err := r.db.WithContext(ctx).Raw(`
+		SELECT tm.tenant_id, t.name, t.slug, t.owner_id, t.is_active, t.plan,
+		       tm.role, tm.joined_at
+		FROM tenant_members tm
+		JOIN tenants t ON t.id = tm.tenant_id AND t.deleted_at IS NULL
+		WHERE tm.user_id = ?
+		ORDER BY tm.joined_at ASC
+	`, userID).Scan(&rows).Error; err != nil {
+		return nil, fmt.Errorf("find tenants by user: %w", err)
+	}
+	result := make([]domain.TenantWithRole, len(rows))
+	for i, r := range rows {
+		result[i] = domain.TenantWithRole{
+			ID:       r.TenantID,
+			Name:     r.Name,
+			Slug:     r.Slug,
+			OwnerID:  r.OwnerID,
+			IsActive: r.IsActive,
+			Plan:     r.Plan,
+			Role:     r.Role,
+			JoinedAt: r.JoinedAt,
+		}
+	}
+	return result, nil
 }
 
 // HasPermission checks if a role has a specific permission within a tenant.

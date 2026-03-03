@@ -39,7 +39,10 @@ type TenantCreator interface {
 	CreatePersonalTenant(ctx context.Context, userID string, email string) (tenantID string, err error)
 }
 
-// TenantMemberFinder allows the auth module to load tenant context on login.
+// TenantMemberFinder allows the auth module to load tenant context on login and switch tenants.
 type TenantMemberFinder interface {
 	FindTenantByUserID(ctx context.Context, userID string) (tenantID string, role string, err error)
+	// FindMemberInTenant returns the user's role in a specific tenant.
+	// Returns an empty string and nil error when the user is not a member.
+	FindMemberInTenant(ctx context.Context, userID, tenantID string) (role string, err error)
 }

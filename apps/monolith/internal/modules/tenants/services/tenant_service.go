@@ -39,9 +39,9 @@ func NewTenantService(repo *repository.GormRepository, logger zerolog.Logger) po
 
 // ─── Tenant ───────────────────────────────────────────────────────────────────
 
-// GetMyTenant returns the tenant of the calling user.
-func (s *tenantService) GetMyTenant(ctx context.Context, userID string) (*domain.Tenant, error) {
-	tenant, err := s.tenantRepo.FindTenantForUser(ctx, userID)
+// GetMyTenant returns the tenant identified by the tenantID extracted from the JWT context.
+func (s *tenantService) GetMyTenant(ctx context.Context, tenantID string) (*domain.Tenant, error) {
+	tenant, err := s.tenantRepo.FindTenantByID(ctx, tenantID)
 	if err != nil {
 		return nil, err
 	}
@@ -49,6 +49,11 @@ func (s *tenantService) GetMyTenant(ctx context.Context, userID string) (*domain
 		return nil, errors.New("tenant not found")
 	}
 	return tenant, nil
+}
+
+// ListMyTenants returns all tenants the user is a member of, with their role in each.
+func (s *tenantService) ListMyTenants(ctx context.Context, userID string) ([]domain.TenantWithRole, error) {
+	return s.tenantRepo.FindTenantsByUserID(ctx, userID)
 }
 
 // UpdateMyTenant updates the tenant name or settings.

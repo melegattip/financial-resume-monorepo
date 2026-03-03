@@ -752,6 +752,37 @@ func (s *AuthService) Verify2FA(ctx context.Context, userID string, code string)
 	return nil
 }
 
+// SwitchTenant generates a new token pair for the user scoped to a different tenant.
+// The user must already be a member of the target tenant.
+func (s *AuthService) SwitchTenant(ctx context.Context, userID, targetTenantID string) (*domain.TokenPair, error) {
+	user, err := s.userRepo.FindByID(ctx, userID)
+	if err != nil || user == nil {
+		return nil, fmt.Errorf("user not found")
+	}
+
+	role, err := s.tenantFinder.FindMemberInTenant(ctx, userID, targetTenantID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to verify tenant membership: %w", err)
+	}
+	if role == "" {
+		return nil, fmt.Errorf("you are not a member of this tenant")
+	}
+
+	tokens, err := s.jwtService.GenerateTokens(userID, user.Email, targetTenantID, role)
+	if err != nil {
+		return nil, fmt.Errorf("failed to generate tokens: %w", err)
+	}
+
+	s.logger.Info().
+		Str("component", "auth").
+		Str("user_id", userID).
+		Str("target_tenant_id", targetTenantID).
+		Str("role", role).
+		Msg("tenant switched")
+
+	return tokens, nil
+}
+
 // ---------------------------------------------------------------------------
 // US3: Session Management
 // ---------------------------------------------------------------------------

@@ -116,6 +116,29 @@ func (h *AuthHandler) Check2FA(c *gin.Context) {
 	c.JSON(http.StatusOK, resp)
 }
 
+// SwitchTenant issues new tokens scoped to a different tenant the user belongs to.
+// POST /api/v1/users/switch-tenant
+func (h *AuthHandler) SwitchTenant(c *gin.Context) {
+	userID := c.GetString("user_id")
+
+	var body struct {
+		TenantID string `json:"tenant_id" binding:"required"`
+	}
+	if err := c.ShouldBindJSON(&body); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "tenant_id is required"})
+		return
+	}
+
+	tokens, err := h.authService.SwitchTenant(c.Request.Context(), userID, body.TenantID)
+	if err != nil {
+		h.logger.Warn().Err(err).Str("user_id", userID).Str("tenant_id", body.TenantID).Msg("switch tenant failed")
+		c.JSON(http.StatusForbidden, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, tokens)
+}
+
 // VerifyEmail handles email verification via token.
 func (h *AuthHandler) VerifyEmail(c *gin.Context) {
 	token := c.Param("token")

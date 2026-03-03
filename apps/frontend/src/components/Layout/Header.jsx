@@ -5,15 +5,17 @@ import { useTenant } from '../../contexts/TenantContext';
 import PeriodFilter from './PeriodFilter';
 import ThemeToggle from '../ThemeToggle';
 import GamificationWidget from '../GamificationWidget';
-import { FaUser, FaSignOutAlt, FaHome, FaBrain, FaPlusCircle, FaMinusCircle, FaFolderOpen, FaFileAlt, FaCog, FaChartPie, FaBullseye, FaRedo, FaTrophy, FaBell, FaLock, FaChevronDown, FaUserCog, FaHistory } from 'react-icons/fa';
+import { FaUser, FaSignOutAlt, FaHome, FaBrain, FaPlusCircle, FaMinusCircle, FaFolderOpen, FaFileAlt, FaCog, FaChartPie, FaBullseye, FaRedo, FaTrophy, FaBell, FaLock, FaChevronDown, FaUserCog, FaHistory, FaExchangeAlt, FaCheck } from 'react-icons/fa';
 import { getAvatarUrl } from '../../utils/avatarUtils';
+import toast from 'react-hot-toast';
 
 const Header = () => {
   const { user, logout } = useAuth();
-  const { currentTenant, myRole, hasPermission } = useTenant();
+  const { currentTenant, myRole, hasPermission, availableTenants, switching, switchTenant } = useTenant();
   const location = useLocation();
   const navigate = useNavigate();
   const [showUserMenu, setShowUserMenu] = useState(false);
+  const [showTenantMenu, setShowTenantMenu] = useState(false);
   const userMenuRef = useRef(null);
 
 
@@ -96,6 +98,7 @@ const Header = () => {
 
   const handleMenuClick = (action) => {
     setShowUserMenu(false);
+    setShowTenantMenu(false);
     switch (action) {
       case 'profile':
         navigate('/settings?tab=profile');
@@ -108,6 +111,19 @@ const Header = () => {
         break;
       default:
         break;
+    }
+  };
+
+  const handleSwitchTenant = async (tenantId) => {
+    if (tenantId === currentTenant?.id) return;
+    setShowUserMenu(false);
+    setShowTenantMenu(false);
+    try {
+      await switchTenant(tenantId);
+      toast.success('Espacio cambiado correctamente');
+      window.location.href = '/dashboard';
+    } catch (err) {
+      toast.error(err?.response?.data?.error || 'Error al cambiar de espacio');
     }
   };
 
@@ -234,6 +250,43 @@ const Header = () => {
                         <FaLock className="w-4 h-4 mr-3" />
                         Seguridad
                       </button>
+
+                      {/* Tenant Switcher — only shown when user belongs to multiple tenants */}
+                      {availableTenants.length > 1 && (
+                        <div className="border-t border-gray-100 dark:border-gray-700 mt-1 pt-1">
+                          <button
+                            onClick={() => setShowTenantMenu(v => !v)}
+                            className="flex items-center justify-between w-full px-4 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+                            disabled={switching}
+                          >
+                            <span className="flex items-center">
+                              <FaExchangeAlt className="w-4 h-4 mr-3 text-blue-500" />
+                              Cambiar espacio
+                            </span>
+                            <FaChevronDown className={`w-3 h-3 transition-transform ${showTenantMenu ? 'rotate-180' : ''}`} />
+                          </button>
+                          {showTenantMenu && (
+                            <div className="bg-gray-50 dark:bg-gray-750 border-t border-gray-100 dark:border-gray-700">
+                              {availableTenants.map(t => (
+                                <button
+                                  key={t.id}
+                                  onClick={() => handleSwitchTenant(t.id)}
+                                  disabled={switching || t.id === currentTenant?.id}
+                                  className="flex items-center justify-between w-full px-6 py-2 text-sm hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors disabled:opacity-60"
+                                >
+                                  <span className="text-left min-w-0">
+                                    <span className="block truncate text-gray-800 dark:text-gray-200 font-medium">{t.name}</span>
+                                    <span className="block text-xs text-gray-500 dark:text-gray-400">{t.role}</span>
+                                  </span>
+                                  {t.id === currentTenant?.id && (
+                                    <FaCheck className="w-3 h-3 text-green-500 flex-shrink-0 ml-2" />
+                                  )}
+                                </button>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      )}
 
                       <button
                         onClick={() => { setShowUserMenu(false); navigate('/settings?tab=espacio'); }}

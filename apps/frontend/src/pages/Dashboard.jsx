@@ -27,7 +27,8 @@ const Resumen = () => {
   const [loading, setLoading] = useState(true);
   const [sortBy, setSortBy] = useState('prioridad');
   const [rowsToShow, setRowsToShow] = useState('all'); // 'all' | '10' | '25' | '50'
-  const [activeTab, setActiveTab] = useState('Metricas'); // 'Metricas' | 'transacciones'
+  const [activeTab, setActiveTab] = useState('transacciones'); // 'Metricas' | 'transacciones'
+  const [filterExpenseStatus, setFilterExpenseStatus] = useState('all'); // 'all' | 'paid' | 'unpaid'
   const [data, setData] = useState({
     totalIncome: 0,
     totalExpenses: 0,
@@ -439,7 +440,11 @@ const Resumen = () => {
           return categoryA.localeCompare(categoryB);
         });
       case 'prioridad':
-        return sorted.sort((a, b) => (b.priority || 0) - (a.priority || 0));
+        return sorted.sort((a, b) => {
+          const catA = data.categories.find(c => c.id === a.category_id);
+          const catB = data.categories.find(c => c.id === b.category_id);
+          return (catB?.priority || 0) - (catA?.priority || 0);
+        });
       default:
         return sorted;
     }
@@ -1096,7 +1101,7 @@ const Resumen = () => {
           <div className="relative grid grid-cols-1 md:grid-cols-2 gap-4 lg:gap-6 xl:gap-8">
             {/* Columna de Gastos */}
             <div className="space-y-4">
-              <div className="space-y-3 mb-4">
+              <div className="space-y-2 mb-2">
                 <div className="flex items-center justify-between">
                   <h4 className="font-semibold text-gray-900 dark:text-gray-100 flex items-center">
                     <FaArrowDown className="w-5 h-5 mr-2" />
@@ -1106,27 +1111,47 @@ const Resumen = () => {
                     {formatAmount(data.totalExpenses)}
                   </span>
                 </div>
-
-
+                {/* Filter pills */}
+                <div className="flex gap-1.5">
+                  {[['all', 'Todos'], ['unpaid', 'Pendientes'], ['paid', 'Pagados']].map(([val, label]) => (
+                    <button
+                      key={val}
+                      onClick={() => setFilterExpenseStatus(val)}
+                      className={`px-2.5 py-0.5 rounded-full text-xs font-medium transition-colors ${
+                        filterExpenseStatus === val
+                          ? 'bg-gray-800 dark:bg-gray-200 text-white dark:text-gray-900'
+                          : 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-600'
+                      }`}
+                    >
+                      {label}
+                    </button>
+                  ))}
+                </div>
               </div>
 
-              <div className="space-y-3 lg:max-h-none lg:overflow-visible max-h-[26rem] overflow-y-auto">
+              <div className="divide-y divide-gray-100 dark:divide-gray-700/50 lg:max-h-none lg:overflow-visible max-h-[26rem] overflow-y-auto">
                 {data.expenses.length === 0 ? (
                   <div className="text-center py-8 text-gray-500 dark:text-gray-400">
                     <FaArrowDown className="w-8 h-8 mx-auto mb-2 opacity-50" />
                     <p>No hay gastos en este período</p>
                   </div>
                 ) : (
-                  (rowsToShow === 'all'
-                    ? sortTransactions(data.expenses, sortBy)
-                    : sortTransactions(data.expenses, sortBy).slice(0, Number(rowsToShow)))
-                    .map((expense, index) => {
+                  (() => {
+                    const sorted = rowsToShow === 'all'
+                      ? sortTransactions(data.expenses, sortBy)
+                      : sortTransactions(data.expenses, sortBy).slice(0, Number(rowsToShow));
+                    const filtered = sorted.filter(e =>
+                      filterExpenseStatus === 'all' ? true
+                      : filterExpenseStatus === 'paid' ? e.paid
+                      : !e.paid
+                    );
+                    return filtered.map((expense, index) => {
                       const category = data.categories.find(c => c.id === expense.category_id);
                       const color = getCategoryColor(expense.category_id);
                       return (
                         <div
                           key={expense.id || index}
-                          className={`group flex items-center gap-2 py-1.5 px-3 rounded-lg bg-white dark:bg-gray-700 border border-gray-100 dark:border-gray-600 hover:shadow-sm transition-all cursor-pointer`}
+                          className="group flex items-center gap-2 py-1.5 px-3 hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors cursor-pointer"
                           onClick={() => handleEditExpense(expense)}
                         >
                           {/* Estado de pago compacto */}
@@ -1180,7 +1205,7 @@ const Resumen = () => {
 
                           {/* % de Ingreso */}
                           <div className="flex-shrink-0 hidden lg:block text-xs text-gray-500 dark:text-gray-400 text-center whitespace-nowrap">
-                            {expense.percentage ? formatPercentage(expense.percentage) : '0.0%'}
+                            {data.totalIncome > 0 ? formatPercentage((expense.amount / data.totalIncome) * 100) : '0.0%'}
                           </div>
 
                           {/* Monto - Total tachado + Saldo pendiente */}
@@ -1198,7 +1223,8 @@ const Resumen = () => {
                           </div>
                         </div>
                       );
-                    })
+                    });
+                  })()
                 )}
               </div>
             </div>
@@ -1221,7 +1247,7 @@ const Resumen = () => {
 
               </div>
 
-              <div className="space-y-3 lg:max-h-none lg:overflow-visible max-h-[26rem] overflow-y-auto">
+              <div className="divide-y divide-gray-100 dark:divide-gray-700/50 lg:max-h-none lg:overflow-visible max-h-[26rem] overflow-y-auto">
                 {data.incomes.length === 0 ? (
                   <div className="text-center py-8 text-gray-500 dark:text-gray-400">
                     <FaArrowUp className="w-8 h-8 mx-auto mb-2 opacity-50" />
@@ -1237,7 +1263,7 @@ const Resumen = () => {
                       return (
                         <div
                           key={income.id || index}
-                          className={`group flex items-center gap-2 py-1.5 px-3 rounded-lg bg-white dark:bg-gray-700 border border-gray-100 dark:border-gray-600 hover:shadow-sm transition-all cursor-pointer`}
+                          className="group flex items-center gap-2 py-1.5 px-3 hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors cursor-pointer"
                           onClick={() => handleEditIncome(income)}
                         >
                           {/* Icono de ingreso */}
@@ -1275,13 +1301,13 @@ const Resumen = () => {
                             )}
                           </div>
 
-                          {/* Porcentaje y monto */}
-                          <div className="flex items-center gap-2 flex-shrink-0 text-right min-w-[100px]">
-                            {income.percentage && (
-                              <span className="text-xs text-gray-500 dark:text-gray-400">
-                                {formatPercentage(income.percentage)}
-                              </span>
-                            )}
+                          {/* % de Ingreso total */}
+                          <div className="flex-shrink-0 hidden lg:block text-xs text-gray-500 dark:text-gray-400 text-center whitespace-nowrap">
+                            {data.totalIncome > 0 ? formatPercentage((income.amount / data.totalIncome) * 100) : '0.0%'}
+                          </div>
+
+                          {/* Monto */}
+                          <div className="flex-shrink-0 text-right min-w-[100px]">
                             <span className="font-semibold text-green-600 dark:text-green-400 text-sm">
                               +{formatAmount(income.amount)}
                             </span>
@@ -1301,20 +1327,15 @@ const Resumen = () => {
                 {/* Total gastos */}
                 <div className="flex items-center justify-between">
                   <span className="font-medium text-gray-600 dark:text-gray-400">Total gastos:</span>
-                  <div className="text-right">
-                    <div className="font-bold text-gray-900 dark:text-gray-100">
-                      {formatAmount(data.totalExpenses)}
-                      {data.totalIncome > 0 && (
-                        <span className="hidden md:inline text-xs text-gray-500 dark:text-gray-400 ml-2 align-middle">
-                          {((data.totalExpenses / data.totalIncome) * 100).toFixed(1)}% de ingresos
-                        </span>
-                      )}
-                    </div>
+                  <div className="flex items-center gap-3">
                     {data.totalIncome > 0 && (
-                      <div className="md:hidden text-xs text-gray-500 dark:text-gray-400">
+                      <span className="text-xs text-gray-500 dark:text-gray-400">
                         {((data.totalExpenses / data.totalIncome) * 100).toFixed(1)}% de ingresos
-                      </div>
+                      </span>
                     )}
+                    <span className="font-bold text-gray-900 dark:text-gray-100">
+                      {formatAmount(data.totalExpenses)}
+                    </span>
                   </div>
                 </div>
 

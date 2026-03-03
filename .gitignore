@@ -47,6 +47,9 @@ tmp/
 temp/
 *.tmp
 
+# MCP tools (not part of project)
+claude-talk-to-figma-mcp/
+
 # Go
 go.work.sum
 
