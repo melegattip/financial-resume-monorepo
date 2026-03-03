@@ -51,7 +51,6 @@ temp/
 claude-talk-to-figma-mcp/
 
 # Go
-go.work.sum
 
 # Specs
 specs/
