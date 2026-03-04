@@ -931,6 +931,42 @@ func (h *RecurringHandler) ProcessPending(c *gin.Context) {
 	})
 }
 
+// RunAllDue processes all due recurring transactions across all tenants.
+// Intended to be called by the internal scheduler (no HTTP context required).
+func (h *RecurringHandler) RunAllDue(ctx context.Context) {
+	dueItems, err := h.repo.ListDue(ctx, time.Now().UTC())
+	if err != nil {
+		h.logger.Error().Err(err).Msg("scheduler: failed to list due recurring transactions")
+		return
+	}
+
+	var successCount, failureCount int
+	for _, rt := range dueItems {
+		if !rt.IsActive {
+			continue
+		}
+		_, txErr := h.executeRecurringTransaction(ctx, rt)
+		if txErr != nil {
+			h.logger.Error().Err(txErr).Str("id", rt.ID).Msg("scheduler: failed to execute recurring transaction")
+			failureCount++
+		} else {
+			successCount++
+			event := domain.RecurringTransactionExecutedEvent{
+				RecurringID:   rt.ID,
+				User:          rt.UserID,
+				Type:          rt.Type,
+				Amount:        rt.Amount,
+				TransactionID: rt.ID,
+				Timestamp:     time.Now().UTC(),
+			}
+			if pubErr := h.eventBus.Publish(ctx, event); pubErr != nil {
+				h.logger.Warn().Err(pubErr).Str("id", rt.ID).Msg("scheduler: failed to publish event")
+			}
+		}
+	}
+	h.logger.Info().Int("success", successCount).Int("failure", failureCount).Msg("scheduler: processed due recurring transactions")
+}
+
 // SendNotifications handles POST /recurring-transactions/batch/notify
 // Stub: notification service is not implemented yet.
 func (h *RecurringHandler) SendNotifications(c *gin.Context) {

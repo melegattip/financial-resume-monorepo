@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"log"
 	"os"
 	"os/signal"
@@ -121,6 +122,9 @@ func main() {
 	recurringModule := recurring.New(db, logger, cfg, eventBus, authMW, permMW)
 	recurringModule.RegisterRoutes(apiV1)
 	recurringModule.RegisterSubscribers(eventBus)
+	schedulerCtx, cancelScheduler := context.WithCancel(context.Background())
+	defer cancelScheduler()
+	recurringModule.StartScheduler(schedulerCtx)
 	logger.Info().Msg("recurring module registered")
 
 	// Budgets module

@@ -1,6 +1,9 @@
 package recurring
 
 import (
+	"context"
+	"time"
+
 	"github.com/gin-gonic/gin"
 	"github.com/rs/zerolog"
 	"gorm.io/gorm"
@@ -63,4 +66,26 @@ func (m *Module) RegisterRoutes(r *gin.RouterGroup) {
 // Reserved for future use (e.g., reacting to UserDeletedEvent).
 func (m *Module) RegisterSubscribers(eventBus sharedports.EventBus) {
 	m.logger.Info().Msg("recurring module subscribers registered")
+}
+
+// StartScheduler runs a background goroutine that processes all due recurring
+// transactions once on startup and then every hour. Stops when ctx is cancelled.
+func (m *Module) StartScheduler(ctx context.Context) {
+	go func() {
+		m.logger.Info().Msg("recurring scheduler started (interval: 1h)")
+		m.recurringHandler.RunAllDue(ctx)
+
+		ticker := time.NewTicker(1 * time.Hour)
+		defer ticker.Stop()
+
+		for {
+			select {
+			case <-ticker.C:
+				m.recurringHandler.RunAllDue(ctx)
+			case <-ctx.Done():
+				m.logger.Info().Msg("recurring scheduler stopped")
+				return
+			}
+		}
+	}()
 }
