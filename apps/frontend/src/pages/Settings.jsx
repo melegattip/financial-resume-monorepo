@@ -201,33 +201,31 @@ const Settings = () => {
   };
 
   return (
-    <div className="space-y-6">
-      {/* Tabs */}
-      <div className="card">
-        <div className="flex space-x-1 overflow-x-auto">
-          {tabs.map((tab) => {
-            const Icon = tab.icon;
-            return (
-              <button
-                key={tab.id}
-                onClick={() => setActiveTab(tab.id)}
-                className={`flex items-center space-x-2 px-4 py-2 rounded-fr transition-colors whitespace-nowrap ${
-                  activeTab === tab.id
-                    ? 'bg-fr-primary text-white'
-                    : 'text-fr-gray-600 hover:bg-fr-gray-100'
-                } ${tab.disabled ? 'opacity-50 cursor-not-allowed' : ''}`}
-                disabled={tab.disabled}
-              >
-                <Icon className="w-4 h-4" />
-                <span>{tab.label}</span>
-              </button>
-            );
-          })}
-        </div>
+    <div className="space-y-4">
+      {/* Tabs — mismo estilo que el dashboard */}
+      <div className="flex border-b border-gray-200 dark:border-gray-700">
+        {tabs.map((tab) => {
+          const Icon = tab.icon;
+          return (
+            <button
+              key={tab.id}
+              onClick={() => !tab.disabled && setActiveTab(tab.id)}
+              disabled={tab.disabled}
+              className={`flex items-center gap-1.5 px-4 py-2.5 text-sm font-medium border-b-2 transition-colors -mb-px whitespace-nowrap ${
+                activeTab === tab.id
+                  ? 'border-blue-500 text-blue-600 dark:text-blue-400'
+                  : 'border-transparent text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200'
+              } ${tab.disabled ? 'opacity-40 cursor-not-allowed' : ''}`}
+            >
+              <Icon className="w-4 h-4" />
+              <span>{tab.label}</span>
+            </button>
+          );
+        })}
       </div>
 
       {/* Contenido de tabs */}
-      {activeTab === 'espacio' && <TenantSettings />}
+      {activeTab === 'espacio' && <TenantSettings widgetMode />}
       {activeTab === 'actividad' && <AuditLogs />}
       <div className={`card${activeTab === 'espacio' || activeTab === 'actividad' ? ' hidden' : ''}`}>
         {activeTab === 'profile' && (

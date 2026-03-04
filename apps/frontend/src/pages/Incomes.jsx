@@ -25,7 +25,7 @@ const Incomes = () => {
   
   // Estados para nuevos filtros de ordenamiento
   const [sortBy, setSortBy] = useState('category_priority');
-  const [sortOrder, setSortOrder] = useState('desc');
+  const [sortOrder, setSortOrder] = useState('asc');
   const [formData, setFormData] = useState({
     description: '',
     amount: '',
@@ -385,7 +385,7 @@ const Incomes = () => {
               const color = getCategoryColor(income.category_id);
               
               return (
-                <div key={income.id} className="flex items-center gap-2 py-1.5 px-3 hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors">
+                <div key={income.id} className="flex items-center gap-3 py-2 px-3 hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors">
                   {/* Icono de ingreso */}
                   <div className="flex-shrink-0 w-6 h-6">
                     <div className="w-full h-full rounded-md bg-green-100 dark:bg-green-900/30 flex items-center justify-center">
@@ -401,16 +401,23 @@ const Incomes = () => {
                   </div>
 
                   {/* Categoría */}
-                  <div className="flex-shrink-0 hidden sm:block text-left min-w-[80px]">
+                  <div className="flex-shrink-0 hidden sm:flex items-center gap-1 w-[120px] overflow-hidden">
                     {category && (
-                      <span className={`px-1.5 py-0.5 rounded-full text-xs font-medium ${color.bg} ${color.text} border ${color.border}`}>
-                        {category.name}
-                      </span>
+                      <>
+                        <span className={`px-1.5 py-0.5 rounded-full text-xs font-medium ${color.bg} ${color.text} border ${color.border}`}>
+                          {category.name}
+                        </span>
+                        {category.priority > 0 && (
+                          <span className="text-xs font-mono text-blue-500 dark:text-blue-400 bg-blue-50 dark:bg-blue-900/30 px-1 py-0.5 rounded">
+                            #{category.priority}
+                          </span>
+                        )}
+                      </>
                     )}
                   </div>
 
                   {/* Fecha del ingreso */}
-                  <div className="flex-shrink-0 hidden md:block min-w-[100px] text-right">
+                  <div className="flex-shrink-0 hidden md:block w-[80px] text-right">
                     <span className="text-xs text-gray-500 dark:text-gray-400">
                       {income.received_date ? new Date(income.received_date).toLocaleDateString('es-AR', { day: '2-digit', month: 'short', year: 'numeric' }) : '—'}
                     </span>

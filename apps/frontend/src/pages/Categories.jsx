@@ -58,6 +58,8 @@ const Categories = () => {
   const [showModal, setShowModal] = useState(false);
   const [editingCategory, setEditingCategory] = useState(null);
   const [searchTerm, setSearchTerm] = useState('');
+  const [sortBy, setSortBy] = useState('priority');
+  const [sortOrder, setSortOrder] = useState('asc');
   const [formData, setFormData] = useState({
     name: '',
     priority: '',
@@ -228,9 +230,21 @@ const Categories = () => {
   };
 
   const filteredCategories = Array.isArray(categories)
-    ? categories.filter(category =>
-        category.name.toLowerCase().includes(searchTerm.toLowerCase())
-      )
+    ? categories
+        .filter(category => category.name.toLowerCase().includes(searchTerm.toLowerCase()))
+        .sort((a, b) => {
+          if (sortBy === 'priority') {
+            const pA = a.priority || 0;
+            const pB = b.priority || 0;
+            if (pA === 0 && pB === 0) return a.name.localeCompare(b.name);
+            if (pA === 0) return 1;
+            if (pB === 0) return -1;
+            return sortOrder === 'asc' ? pA - pB : pB - pA;
+          } else if (sortBy === 'name') {
+            return sortOrder === 'asc' ? a.name.localeCompare(b.name) : b.name.localeCompare(a.name);
+          }
+          return 0;
+        })
     : [];
 
   // id→name map built from loaded categories
@@ -239,6 +253,37 @@ const Categories = () => {
     categories.forEach((c) => { map[c.id] = c.name; });
     return map;
   }, [categories]);
+
+  const sortedSpendingByCategory = useMemo(() => {
+    let list = [...spendingByCategory];
+    if (searchTerm.trim()) {
+      const q = searchTerm.toLowerCase();
+      list = list.filter(cat => (cat.category_name || '').toLowerCase().includes(q));
+    }
+    if (sortBy === 'priority') {
+      return list.sort((a, b) => {
+        const catA = categories.find(c => c.id === a.category_id);
+        const catB = categories.find(c => c.id === b.category_id);
+        const pA = catA?.priority || 0;
+        const pB = catB?.priority || 0;
+        if (pA === 0 && pB === 0) return 0;
+        if (pA === 0) return 1;
+        if (pB === 0) return -1;
+        return sortOrder === 'asc' ? pA - pB : pB - pA;
+      });
+    } else if (sortBy === 'name') {
+      return list.sort((a, b) =>
+        sortOrder === 'asc'
+          ? (a.category_name || '').localeCompare(b.category_name || '')
+          : (b.category_name || '').localeCompare(a.category_name || '')
+      );
+    } else if (sortBy === 'amount') {
+      return list.sort((a, b) =>
+        sortOrder === 'asc' ? (a.amount || 0) - (b.amount || 0) : (b.amount || 0) - (a.amount || 0)
+      );
+    }
+    return list;
+  }, [spendingByCategory, sortBy, sortOrder, categories, searchTerm]);
 
   // Adaptive grouping: daily when a month is selected, monthly otherwise
   const displayedChartData = useMemo(() => {
@@ -281,31 +326,46 @@ const Categories = () => {
 
   return (
     <div className="space-y-4">
-      {/* Toolbar */}
-      <div className="card">
-        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between space-y-4 sm:space-y-0">
-          <div className="relative">
-            <FaSearch className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-fr-gray-400" />
+      {/* Categorías — toolbar compacta + gastos */}
+      <div className="card p-0 overflow-hidden">
+        <div className="flex flex-wrap items-center gap-2 px-3 py-2 border-b border-gray-100 dark:border-gray-700 bg-gray-50 dark:bg-gray-800/50">
+          <div className="relative flex-1 min-w-[160px]">
+            <FaSearch className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3 h-3 text-gray-400 dark:text-gray-500" />
             <input
               type="text"
               placeholder="Buscar categorías..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              className="pl-10 input w-full sm:w-64"
+              className="pl-8 pr-3 py-1.5 text-sm border border-gray-200 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-1 focus:ring-blue-500 w-full"
             />
           </div>
+          <select
+            value={sortBy}
+            onChange={(e) => setSortBy(e.target.value)}
+            className="text-sm border border-gray-200 dark:border-gray-600 rounded-lg px-2 py-1.5 bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-300 focus:outline-none focus:ring-1 focus:ring-blue-500"
+          >
+            <option value="priority">Prioridad</option>
+            <option value="name">Nombre</option>
+            <option value="amount">Monto</option>
+          </select>
+          <select
+            value={sortOrder}
+            onChange={(e) => setSortOrder(e.target.value)}
+            className="text-sm border border-gray-200 dark:border-gray-600 rounded-lg px-2 py-1.5 bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-300 focus:outline-none focus:ring-1 focus:ring-blue-500"
+          >
+            <option value="asc">↑ Asc</option>
+            <option value="desc">↓ Desc</option>
+          </select>
           <button
             onClick={() => { setShowModal(true); setIsSubmitting(false); }}
-            className="btn-primary flex items-center space-x-2"
+            className="ml-auto btn-primary flex items-center gap-1.5 py-1.5 px-3 text-sm"
           >
-            <FaPlus className="w-4 h-4" />
-            <span>Nueva Categoría</span>
+            <FaPlus className="w-3 h-3" />
+            <span>Nueva</span>
           </button>
         </div>
-      </div>
 
-      {/* Gastos por categoría — barras + acciones inline */}
-      <div className="card">
+        <div className="p-4">
         <div className="flex items-center justify-between mb-4">
           <h3 className="text-base font-semibold text-fr-gray-900 dark:text-gray-100 flex items-center space-x-2">
             <FaChartBar className="w-4 h-4 text-fr-primary dark:text-blue-400" />
@@ -325,7 +385,7 @@ const Categories = () => {
           </p>
         ) : (
           <div className="space-y-3">
-            {spendingByCategory.map((cat, index) => {
+            {sortedSpendingByCategory.map((cat, index) => {
               const pct = cat.percentage || 0;
               const color = CHART_COLORS[index % CHART_COLORS.length];
               // Match to category object for edit/delete
@@ -335,9 +395,16 @@ const Categories = () => {
               return (
                 <div key={cat.category_id || index}>
                   <div className="flex items-center justify-between text-sm mb-1">
-                    <span className="font-medium text-fr-gray-800 dark:text-gray-200 truncate max-w-xs">
-                      {cat.category_name || 'Sin nombre'}
-                    </span>
+                    <div className="flex items-center gap-1.5 min-w-0 flex-1">
+                      {matchedCategory?.priority > 0 && (
+                        <span className="flex-shrink-0 text-xs font-mono font-semibold text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-900/30 px-1.5 py-0.5 rounded">
+                          #{matchedCategory.priority}
+                        </span>
+                      )}
+                      <span className="font-medium text-fr-gray-800 dark:text-gray-200 truncate">
+                        {cat.category_name || 'Sin nombre'}
+                      </span>
+                    </div>
                     <div className="flex items-center space-x-2 flex-shrink-0 ml-4">
                       <span className="text-fr-gray-500 dark:text-gray-400 text-xs">{pct.toFixed(1)}%</span>
                       <span className="font-semibold text-fr-gray-900 dark:text-gray-100 min-w-[80px] text-right">
@@ -389,7 +456,7 @@ const Categories = () => {
                     <FaTag className="w-3 h-3 text-fr-primary dark:text-blue-400" />
                     <span className="text-sm text-fr-gray-700 dark:text-gray-300">{category.name}</span>
                     {category.priority > 0 && (
-                      <span className="text-xs text-fr-gray-400 dark:text-gray-500">#{category.priority}</span>
+                      <span className="text-xs font-mono font-semibold text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-900/30 px-1.5 py-0.5 rounded">#{category.priority}</span>
                     )}
                     <button
                       onClick={() => handleEdit(category)}
@@ -409,7 +476,8 @@ const Categories = () => {
             </div>
           );
         })()}
-      </div>
+        </div>{/* end p-4 */}
+      </div>{/* end card */}
 
       {/* Evolución mensual por categoría */}
       <div className="card">

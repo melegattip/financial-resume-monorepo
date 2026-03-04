@@ -1,7 +1,9 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
+import Expenses from './Expenses';
+import Incomes from './Incomes';
 import { createPortal } from 'react-dom';
-import { FaArrowUp, FaArrowDown, FaDollarSign, FaChartPie, FaCalendar, FaCheckCircle, FaTimesCircle, FaChartBar, FaBullseye, FaExclamationCircle, FaRedo, FaBrain } from 'react-icons/fa';
+import { FaArrowUp, FaArrowDown, FaDollarSign, FaChartPie, FaCalendar, FaCheckCircle, FaTimesCircle, FaChartBar, FaBullseye, FaExclamationCircle, FaRedo, FaBrain, FaSearch } from 'react-icons/fa';
 import ValidatedInput from '../components/ValidatedInput';
 import { validateAmount, validateDescription } from '../utils/validation';
 import {
@@ -27,7 +29,13 @@ const Resumen = () => {
   const [loading, setLoading] = useState(true);
   const [sortBy, setSortBy] = useState('prioridad');
   const [rowsToShow, setRowsToShow] = useState('all'); // 'all' | '10' | '25' | '50'
-  const [activeTab, setActiveTab] = useState('transacciones'); // 'Metricas' | 'transacciones'
+  const [expenseSearch, setExpenseSearch] = useState('');
+  const [expenseSortBy, setExpenseSortBy] = useState('prioridad');
+  const [expenseSortOrder, setExpenseSortOrder] = useState('asc');
+  const [incomeSearch, setIncomeSearch] = useState('');
+  const [incomeSortBy, setIncomeSortBy] = useState('prioridad');
+  const [incomeSortOrder, setIncomeSortOrder] = useState('asc');
+  const [activeTab, setActiveTab] = useState('resumen'); // 'resumen' | 'gastos' | 'ingresos' | 'metricas'
   const [filterExpenseStatus, setFilterExpenseStatus] = useState('all'); // 'all' | 'paid' | 'unpaid'
   const [data, setData] = useState({
     totalIncome: 0,
@@ -409,7 +417,7 @@ const Resumen = () => {
   }, [selectedMonth, selectedYear]);
 
   // Función para ordenar transacciones
-  const sortTransactions = (transactions, sortType) => {
+  const sortTransactions = (transactions, sortType, sortOrder = 'asc') => {
     const sorted = [...transactions];
 
     switch (sortType) {
@@ -419,31 +427,34 @@ const Resumen = () => {
           const rawB = b.transaction_date || b.received_date || b.created_at;
           const dateA = new Date(rawA);
           const dateB = new Date(rawB);
-
-          // Manejar fechas inválidas - ponerlas al final
           if (isNaN(dateA.getTime()) && isNaN(dateB.getTime())) return 0;
           if (isNaN(dateA.getTime())) return 1;
           if (isNaN(dateB.getTime())) return -1;
-
-          return dateB - dateA;
+          return sortOrder === 'asc' ? dateA - dateB : dateB - dateA;
         });
       case 'monto':
         return sorted.sort((a, b) => {
           const amountA = Number(a.amount) || 0;
           const amountB = Number(b.amount) || 0;
-          return amountB - amountA;
+          return sortOrder === 'asc' ? amountA - amountB : amountB - amountA;
         });
       case 'categoria':
         return sorted.sort((a, b) => {
           const categoryA = data.categories.find(c => c.id === a.category_id)?.name || 'Sin categoría';
           const categoryB = data.categories.find(c => c.id === b.category_id)?.name || 'Sin categoría';
-          return categoryA.localeCompare(categoryB);
+          return sortOrder === 'asc' ? categoryA.localeCompare(categoryB) : categoryB.localeCompare(categoryA);
         });
       case 'prioridad':
         return sorted.sort((a, b) => {
           const catA = data.categories.find(c => c.id === a.category_id);
           const catB = data.categories.find(c => c.id === b.category_id);
-          return (catB?.priority || 0) - (catA?.priority || 0);
+          const pA = catA?.priority || 0;
+          const pB = catB?.priority || 0;
+          // 0 = sin prioridad → siempre al final
+          if (pA === 0 && pB === 0) return 0;
+          if (pA === 0) return 1;
+          if (pB === 0) return -1;
+          return sortOrder === 'asc' ? pA - pB : pB - pA;
         });
       default:
         return sorted;
@@ -593,7 +604,7 @@ const Resumen = () => {
       description: expense.description,
       amount: expense.amount.toString(),
       category_id: expense.category_id || '',
-      transaction_date: expense.transaction_date ? expense.transaction_date.split('T')[0] : '',
+      transaction_date: (expense.transaction_date || expense.due_date) ? (expense.transaction_date || expense.due_date).split('T')[0] : '',
       paid: expense.paid || false,
     });
     setShowExpenseEditModal(true);
@@ -775,27 +786,29 @@ const Resumen = () => {
     <div className="space-y-3 sm:space-y-4">
       {/* Tab bar */}
       <div className="flex border-b border-gray-200 dark:border-gray-700">
-        <button
-          onClick={() => setActiveTab('transacciones')}
-          className={`px-4 py-2.5 text-sm font-medium border-b-2 transition-colors -mb-px flex items-center gap-1.5 ${activeTab === 'transacciones' ? 'border-blue-500 text-blue-600 dark:text-blue-400' : 'border-transparent text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200'}`}
-        >
-          Transacciones
-          {(data.expenses.length + data.incomes.length) > 0 && (
-            <span className="text-xs bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400 px-1.5 py-0.5 rounded-full">
-              {data.expenses.length + data.incomes.length}
-            </span>
-          )}
-        </button>
-        <button
-          onClick={() => setActiveTab('Metricas')}
-          className={`px-4 py-2.5 text-sm font-medium border-b-2 transition-colors -mb-px ${activeTab === 'Metricas' ? 'border-blue-500 text-blue-600 dark:text-blue-400' : 'border-transparent text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200'}`}
-        >
-          Métricas
-        </button>
+        {[
+          { id: 'resumen', label: 'Resumen', badge: (data.expenses.length + data.incomes.length) || null },
+          { id: 'gastos', label: 'Gastos', badge: data.expenses.length || null },
+          { id: 'ingresos', label: 'Ingresos', badge: data.incomes.length || null },
+          { id: 'metricas', label: 'Métricas', badge: null },
+        ].map(({ id, label, badge }) => (
+          <button
+            key={id}
+            onClick={() => setActiveTab(id)}
+            className={`px-4 py-2.5 text-sm font-medium border-b-2 transition-colors -mb-px flex items-center gap-1.5 ${activeTab === id ? 'border-blue-500 text-blue-600 dark:text-blue-400' : 'border-transparent text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200'}`}
+          >
+            {label}
+            {badge > 0 && (
+              <span className="text-xs bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400 px-1.5 py-0.5 rounded-full">
+                {badge}
+              </span>
+            )}
+          </button>
+        ))}
       </div>
 
       {/* Métricas principales */}
-      <div className={activeTab === 'transacciones' ? 'hidden' : 'grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3 sm:gap-4'}>
+      <div className={activeTab !== 'metricas' ? 'hidden' : 'grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3 sm:gap-4'}>
         {/* Balance total */}
         <div className="card p-3 sm:p-4">
           <div className="flex items-start justify-between">
@@ -893,7 +906,7 @@ const Resumen = () => {
       </div>
 
       {/* Fila unificada: Todos los widgets en una sola cuadrícula */}
-      <div className={activeTab === 'transacciones' ? 'hidden' : 'grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4'}>
+      <div className={activeTab !== 'metricas' ? 'hidden' : 'grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4'}>
         {/* Widget de Transacciones Recurrentes - Siempre visible */}
         {recurringTransactionsSummary && (
           <div className="card p-4 sm:p-5 cursor-pointer hover:shadow-lg transition-shadow" onClick={navigateToRecurringTransactions}>
@@ -1048,34 +1061,18 @@ const Resumen = () => {
 
       {/* Transacciones por mes - Dos columnas */}
       {(data.expenses.length > 0 || data.incomes.length > 0) && (
-        <div className={activeTab === 'Metricas' ? 'hidden' : 'card'}>
+        <div className={activeTab !== 'resumen' ? 'hidden' : 'card'}>
           <div className="flex items-center justify-between mb-3 sticky top-0 z-10 bg-white/90 dark:bg-gray-800/90 backdrop-blur rounded-t-lg px-3 py-2 -mx-3 border-b border-gray-100 dark:border-gray-700">
             <h3 className="text-base font-semibold text-gray-900 dark:text-gray-100">
               Transacciones{hasActiveFilters ? ` · ${getPeriodTitle()}` : ''}
             </h3>
-            <div className="grid grid-cols-2 gap-3 sm:flex sm:flex-row sm:items-center sm:space-x-4 sm:space-y-0">
-              {/* Dropdown de ordenamiento */}
-              <div className="flex items-center space-x-2 col-span-1">
-                <label className="text-sm font-medium text-gray-600 dark:text-gray-400">Ordenar por:</label>
-                <select
-                  value={sortBy}
-                  onChange={(e) => setSortBy(e.target.value)}
-                  className="text-sm border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-1 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                >
-                  <option value="fecha">Fecha</option>
-                  <option value="prioridad">Prioridad</option>
-                  <option value="monto">Monto</option>
-                  <option value="categoria">Categoría</option>
-                </select>
-              </div>
-
-              {/* Selector de filas */}
-              <div className="flex items-center space-x-2 col-span-1">
-                <label className="text-sm font-medium text-gray-600 dark:text-gray-400">Filas:</label>
+            <div className="flex items-center gap-3">
+              <div className="flex items-center gap-1.5">
+                <label className="text-xs text-gray-500 dark:text-gray-400">Filas:</label>
                 <select
                   value={rowsToShow}
                   onChange={(e) => setRowsToShow(e.target.value)}
-                  className="text-sm border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-1 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  className="text-xs border border-gray-200 dark:border-gray-600 rounded-lg px-2 py-1 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-1 focus:ring-blue-500"
                 >
                   <option value="10">10</option>
                   <option value="25">25</option>
@@ -1083,17 +1080,9 @@ const Resumen = () => {
                   <option value="all">Todas</option>
                 </select>
               </div>
-
-              {/* Indicadores de cantidad */}
-              <div className="col-span-2 sm:col-span-1 flex items-center space-x-4 text-sm">
-                <div className="flex items-center">
-                  <div className="w-3 h-3 bg-red-500 rounded-full mr-2"></div>
-                  <span className="text-gray-600 dark:text-gray-400">Gastos ({data.expenses.length})</span>
-                </div>
-                <div className="flex items-center">
-                  <div className="w-3 h-3 bg-green-500 rounded-full mr-2"></div>
-                  <span className="text-gray-600 dark:text-gray-400">Ingresos ({data.incomes.length})</span>
-                </div>
+              <div className="flex items-center gap-3 text-xs text-gray-500 dark:text-gray-400">
+                <span className="flex items-center gap-1"><span className="w-2 h-2 bg-red-500 rounded-full"></span>Gastos ({data.expenses.length})</span>
+                <span className="flex items-center gap-1"><span className="w-2 h-2 bg-green-500 rounded-full"></span>Ingresos ({data.incomes.length})</span>
               </div>
             </div>
           </div>
@@ -1110,6 +1099,29 @@ const Resumen = () => {
                   <span className="text-lg font-bold text-gray-900 dark:text-gray-100">
                     {formatAmount(data.totalExpenses)}
                   </span>
+                </div>
+                {/* Compact search/sort toolbar */}
+                <div className="flex items-center gap-1.5 flex-wrap">
+                  <div className="relative flex-1 min-w-[120px]">
+                    <FaSearch className="absolute left-2 top-1/2 -translate-y-1/2 w-3 h-3 text-gray-400" />
+                    <input
+                      type="text"
+                      placeholder="Buscar gastos..."
+                      value={expenseSearch}
+                      onChange={(e) => setExpenseSearch(e.target.value)}
+                      className="pl-7 pr-2 py-1 text-xs border border-gray-200 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-1 focus:ring-blue-500 w-full"
+                    />
+                  </div>
+                  <select value={expenseSortBy} onChange={(e) => setExpenseSortBy(e.target.value)} className="text-xs border border-gray-200 dark:border-gray-600 rounded-lg px-1.5 py-1 bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-300 focus:outline-none focus:ring-1 focus:ring-blue-500">
+                    <option value="prioridad">Prioridad</option>
+                    <option value="fecha">Fecha</option>
+                    <option value="monto">Monto</option>
+                    <option value="categoria">Categoría</option>
+                  </select>
+                  <select value={expenseSortOrder} onChange={(e) => setExpenseSortOrder(e.target.value)} className="text-xs border border-gray-200 dark:border-gray-600 rounded-lg px-1.5 py-1 bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-300 focus:outline-none focus:ring-1 focus:ring-blue-500">
+                    <option value="asc">↑ Asc</option>
+                    <option value="desc">↓ Desc</option>
+                  </select>
                 </div>
                 {/* Filter pills */}
                 <div className="flex gap-1.5">
@@ -1137,14 +1149,20 @@ const Resumen = () => {
                   </div>
                 ) : (
                   (() => {
-                    const sorted = rowsToShow === 'all'
-                      ? sortTransactions(data.expenses, sortBy)
-                      : sortTransactions(data.expenses, sortBy).slice(0, Number(rowsToShow));
-                    const filtered = sorted.filter(e =>
+                    let expList = sortTransactions(data.expenses, expenseSortBy, expenseSortOrder);
+                    if (expenseSearch.trim()) {
+                      const q = expenseSearch.toLowerCase();
+                      expList = expList.filter(e => {
+                        const cat = data.categories.find(c => c.id === e.category_id);
+                        return e.description.toLowerCase().includes(q) || cat?.name.toLowerCase().includes(q);
+                      });
+                    }
+                    expList = expList.filter(e =>
                       filterExpenseStatus === 'all' ? true
                       : filterExpenseStatus === 'paid' ? e.paid
                       : !e.paid
                     );
+                    const filtered = rowsToShow === 'all' ? expList : expList.slice(0, Number(rowsToShow));
                     return filtered.map((expense, index) => {
                       const category = data.categories.find(c => c.id === expense.category_id);
                       const color = getCategoryColor(expense.category_id);
@@ -1183,24 +1201,29 @@ const Resumen = () => {
                           </div>
 
                           {/* Categoría */}
-                          <div className="flex-shrink-0 hidden sm:flex items-center text-left">
+                          <div className="flex-shrink-0 hidden sm:flex items-center gap-1 text-left">
                             {category && (
-                              <span className={`px-1.5 py-0.5 rounded-full text-xs font-medium ${color.bg} ${color.text} border ${color.border} whitespace-nowrap`}>
-                                {category.name}
-                              </span>
+                              <>
+                                <span className={`px-1.5 py-0.5 rounded-full text-xs font-medium ${color.bg} ${color.text} border ${color.border} whitespace-nowrap`}>
+                                  {category.name}
+                                </span>
+                                {category.priority > 0 && (
+                                  <span className="text-xs font-mono font-semibold text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-900/30 px-1.5 py-0.5 rounded">
+                                    #{category.priority}
+                                  </span>
+                                )}
+                              </>
                             )}
                           </div>
 
                           {/* Fecha de transacción */}
-                          <div className="flex-shrink-0 hidden md:block text-xs text-gray-500 dark:text-gray-400 text-center whitespace-nowrap">
-                            {expense.transaction_date && (
-                              <span>
-                                {new Date(expense.transaction_date.split('T')[0] + 'T12:00:00').toLocaleDateString('es-AR', {
-                                  day: 'numeric',
-                                  month: 'short',
-                                })}
-                              </span>
-                            )}
+                          <div className="flex-shrink-0 text-xs text-gray-500 dark:text-gray-400 text-center w-[46px]">
+                            {(() => {
+                              const raw = expense.transaction_date || expense.due_date;
+                              return raw
+                                ? new Date(raw.split('T')[0] + 'T12:00:00').toLocaleDateString('es-AR', { day: 'numeric', month: 'short' })
+                                : <span className="opacity-30">—</span>;
+                            })()}
                           </div>
 
                           {/* % de Ingreso */}
@@ -1234,7 +1257,7 @@ const Resumen = () => {
 
             {/* Columna de Ingresos */}
             <div className="space-y-4">
-              <div className="space-y-3 mb-4">
+              <div className="space-y-2 mb-2">
                 <div className="flex items-center justify-between">
                   <h4 className="font-semibold text-green-600 dark:text-green-400 flex items-center">
                     <FaArrowUp className="w-5 h-5 mr-2" />
@@ -1244,7 +1267,29 @@ const Resumen = () => {
                     {formatAmount(data.totalIncome)}
                   </span>
                 </div>
-
+                {/* Compact search/sort toolbar */}
+                <div className="flex items-center gap-1.5 flex-wrap">
+                  <div className="relative flex-1 min-w-[120px]">
+                    <FaSearch className="absolute left-2 top-1/2 -translate-y-1/2 w-3 h-3 text-gray-400" />
+                    <input
+                      type="text"
+                      placeholder="Buscar ingresos..."
+                      value={incomeSearch}
+                      onChange={(e) => setIncomeSearch(e.target.value)}
+                      className="pl-7 pr-2 py-1 text-xs border border-gray-200 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-1 focus:ring-blue-500 w-full"
+                    />
+                  </div>
+                  <select value={incomeSortBy} onChange={(e) => setIncomeSortBy(e.target.value)} className="text-xs border border-gray-200 dark:border-gray-600 rounded-lg px-1.5 py-1 bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-300 focus:outline-none focus:ring-1 focus:ring-blue-500">
+                    <option value="prioridad">Prioridad</option>
+                    <option value="fecha">Fecha</option>
+                    <option value="monto">Monto</option>
+                    <option value="categoria">Categoría</option>
+                  </select>
+                  <select value={incomeSortOrder} onChange={(e) => setIncomeSortOrder(e.target.value)} className="text-xs border border-gray-200 dark:border-gray-600 rounded-lg px-1.5 py-1 bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-300 focus:outline-none focus:ring-1 focus:ring-blue-500">
+                    <option value="asc">↑ Asc</option>
+                    <option value="desc">↓ Desc</option>
+                  </select>
+                </div>
               </div>
 
               <div className="divide-y divide-gray-100 dark:divide-gray-700/50 lg:max-h-none lg:overflow-visible max-h-[26rem] overflow-y-auto">
@@ -1254,9 +1299,16 @@ const Resumen = () => {
                     <p>No hay ingresos en este período</p>
                   </div>
                 ) : (
-                  (rowsToShow === 'all'
-                    ? sortTransactions(data.incomes, sortBy)
-                    : sortTransactions(data.incomes, sortBy).slice(0, Number(rowsToShow)))
+                  (() => {
+                    let incList = sortTransactions(data.incomes, incomeSortBy, incomeSortOrder);
+                    if (incomeSearch.trim()) {
+                      const q = incomeSearch.toLowerCase();
+                      incList = incList.filter(i => {
+                        const cat = data.categories.find(c => c.id === i.category_id);
+                        return i.description.toLowerCase().includes(q) || cat?.name.toLowerCase().includes(q);
+                      });
+                    }
+                    return (rowsToShow === 'all' ? incList : incList.slice(0, Number(rowsToShow)))
                     .map((income, index) => {
                       const color = getCategoryColor(income.category_id);
                       const category = data.categories.find(c => c.id === income.category_id);
@@ -1281,11 +1333,18 @@ const Resumen = () => {
                           </div>
 
                           {/* Categoría */}
-                          <div className="flex-shrink-0 hidden sm:block text-left min-w-[80px]">
+                          <div className="flex-shrink-0 hidden sm:flex items-center gap-1 text-left">
                             {category && (
-                              <span className={`px-1.5 py-0.5 rounded-full text-xs font-medium ${color.bg} ${color.text} border ${color.border}`}>
-                                {category.name}
-                              </span>
+                              <>
+                                <span className={`px-1.5 py-0.5 rounded-full text-xs font-medium ${color.bg} ${color.text} border ${color.border}`}>
+                                  {category.name}
+                                </span>
+                                {category.priority > 0 && (
+                                  <span className="text-xs font-mono font-semibold text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-900/30 px-1.5 py-0.5 rounded">
+                                    #{category.priority}
+                                  </span>
+                                )}
+                              </>
                             )}
                           </div>
 
@@ -1315,6 +1374,7 @@ const Resumen = () => {
                         </div>
                       );
                     })
+                  })()
                 )}
               </div>
             </div>
@@ -1365,7 +1425,7 @@ const Resumen = () => {
       )}
 
       {/* Gráficos */}
-      <div className={activeTab === 'transacciones' ? 'hidden' : 'grid grid-cols-1 md:grid-cols-2 gap-3 sm:gap-4'}>
+      <div className={activeTab !== 'metricas' ? 'hidden' : 'grid grid-cols-1 md:grid-cols-2 gap-3 sm:gap-4'}>
         {/* Métricas clave */}
         <div className="card overflow-hidden">
           <div className="flex items-center justify-between mb-4">
@@ -1558,7 +1618,7 @@ const Resumen = () => {
       </div>
 
       {/* Transacciones recientes */}
-      <div className={activeTab === 'Metricas' ? 'hidden' : 'card'}>
+      <div className={activeTab !== 'resumen' ? 'hidden' : 'card'}>
         <div className="flex items-center justify-between mb-4">
           <h3 className="text-base font-semibold text-fr-gray-900 dark:text-gray-100">Transacciones Recientes</h3>
           <button
@@ -1932,6 +1992,12 @@ const Resumen = () => {
         </div>,
         document.body
       )}
+
+      {/* Tab: Gastos */}
+      {activeTab === 'gastos' && <Expenses />}
+
+      {/* Tab: Ingresos */}
+      {activeTab === 'ingresos' && <Incomes />}
 
     </div>
   );

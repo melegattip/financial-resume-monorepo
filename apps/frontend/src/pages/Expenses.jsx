@@ -39,7 +39,7 @@ const Expenses = () => {
 
   // Estados para nuevos filtros de ordenamiento
   const [sortBy, setSortBy] = useState('category_priority');
-  const [sortOrder, setSortOrder] = useState('desc');
+  const [sortOrder, setSortOrder] = useState('asc');
   const [allIncomes, setAllIncomes] = useState([]);
   const [formData, setFormData] = useState({
     description: '',
@@ -853,7 +853,7 @@ const Expenses = () => {
               const incomePercentage = totalIncome > 0 ? (expense.amount / totalIncome) * 100 : 0;
 
               return (
-                <div key={expense.id} className="flex items-center gap-2 py-1.5 px-3 hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors">
+                <div key={expense.id} className="flex items-center gap-3 py-2 px-3 hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors">
                   {/* Estado de pago compacto */}
                   <div className="flex-shrink-0 w-6 h-6">
                     <button
@@ -896,7 +896,7 @@ const Expenses = () => {
                   </div>
 
                   {/* Categoría - Editable inline */}
-                  <div className="flex-shrink-0 hidden sm:flex items-center text-left">
+                  <div className="flex-shrink-0 hidden sm:flex items-center gap-1 w-[120px] overflow-hidden">
                     {editingCell?.expenseId === expense.id && editingCell?.field === 'category_id' ? (
                       <select
                         value={editValues[`${expense.id}-category_id`] || expense.category_id}
@@ -921,19 +921,26 @@ const Expenses = () => {
                       </select>
                     ) : (
                       category && (
-                        <span
-                          className={`px-1.5 py-0.5 rounded-full text-xs font-medium ${color.bg} ${color.text} border ${color.border} whitespace-nowrap cursor-pointer hover:opacity-80 transition-opacity`}
-                          onClick={() => startEditing(expense.id, 'category_id', expense.category_id)}
-                          title="Click para editar"
-                        >
-                          {category.name}
-                        </span>
+                        <>
+                          <span
+                            className={`px-1.5 py-0.5 rounded-full text-xs font-medium ${color.bg} ${color.text} border ${color.border} whitespace-nowrap cursor-pointer hover:opacity-80 transition-opacity`}
+                            onClick={() => startEditing(expense.id, 'category_id', expense.category_id)}
+                            title="Click para editar"
+                          >
+                            {category.name}
+                          </span>
+                          {category.priority > 0 && (
+                            <span className="text-xs font-mono text-blue-500 dark:text-blue-400 bg-blue-50 dark:bg-blue-900/30 px-1 py-0.5 rounded">
+                              #{category.priority}
+                            </span>
+                          )}
+                        </>
                       )
                     )}
                   </div>
 
                   {/* Fecha de transacción - Editable inline */}
-                  <div className="flex-shrink-0 hidden md:block text-xs text-gray-500 dark:text-gray-400 text-center whitespace-nowrap">
+                  <div className="flex-shrink-0 hidden md:block text-xs text-gray-500 dark:text-gray-400 text-center w-[52px]">
                     {editingCell?.expenseId === expense.id && editingCell?.field === 'transaction_date' ? (
                       <input
                         type="date"
@@ -968,7 +975,7 @@ const Expenses = () => {
                   </div>
 
                   {/* % de Ingreso */}
-                  <div className="flex-shrink-0 hidden lg:block text-xs text-gray-500 dark:text-gray-400 text-center whitespace-nowrap">
+                  <div className="flex-shrink-0 hidden lg:block text-xs text-gray-500 dark:text-gray-400 text-right w-[42px]">
                     {incomePercentage.toFixed(1)}%
                   </div>
 
@@ -1005,20 +1012,22 @@ const Expenses = () => {
                   </div>
 
                   {/* Botones de acción compactos */}
-                  <div className="flex space-x-0.5 flex-shrink-0">
-                    {!expense.paid && (
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          setPayingExpense(expense);
-                          setShowPaymentModal(true);
-                        }}
-                        className="w-6 h-6 bg-green-100 dark:bg-green-900/30 rounded-md flex items-center justify-center hover:bg-green-200 dark:hover:bg-green-900/50 transition-colors"
-                        title="Pagar"
-                      >
-                        <FaCheckCircle className="w-3 h-3 text-green-600 dark:text-green-400" />
-                      </button>
-                    )}
+                  <div className="flex items-center gap-0.5 flex-shrink-0 w-[62px] justify-end">
+                    <div className="w-6 h-6 flex-shrink-0">
+                      {!expense.paid && (
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setPayingExpense(expense);
+                            setShowPaymentModal(true);
+                          }}
+                          className="w-full h-full bg-green-100 dark:bg-green-900/30 rounded-md flex items-center justify-center hover:bg-green-200 dark:hover:bg-green-900/50 transition-colors"
+                          title="Pagar"
+                        >
+                          <FaCheckCircle className="w-3 h-3 text-green-600 dark:text-green-400" />
+                        </button>
+                      )}
+                    </div>
 
                     <button
                       onClick={(e) => {

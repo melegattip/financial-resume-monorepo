@@ -37,8 +37,8 @@ const Header = () => {
   // Mapeo de rutas a información de página
   const getPageInfo = (pathname) => {
     const routes = {
-      '/dashboard': { 
-        title: 'Resumen', 
+      '/dashboard': {
+        title: 'Cuentas',
         icon: FaHome
       },
       '/insights': { 

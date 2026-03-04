@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
-import { FaPlusCircle, FaMinusCircle, FaFolderOpen, FaBrain, FaFileAlt, FaCog, FaBars, FaTimes, FaHome, FaStar, FaChartPie, FaBullseye, FaRedo, FaTrophy, FaChevronLeft, FaChevronRight } from 'react-icons/fa';
+import { FaFolderOpen, FaBrain, FaFileAlt, FaCog, FaBars, FaTimes, FaHome, FaStar, FaChartPie, FaBullseye, FaRedo, FaTrophy, FaChevronLeft, FaChevronRight } from 'react-icons/fa';
 import Brand from '../Brand';
+import Logo from '../Logo';
 import FeatureProgressIndicator from '../FeatureProgressIndicator';
 
 const Sidebar = ({ isDesktopCollapsed = false, onDesktopToggle }) => {
@@ -10,19 +11,17 @@ const Sidebar = ({ isDesktopCollapsed = false, onDesktopToggle }) => {
 
   // Grupo 1: Transacciones principales
   const mainMenuItems = [
-    { path: '/dashboard', icon: FaHome, label: 'Resumen' },
+    { path: '/dashboard', icon: FaHome, label: 'Cuentas' },
     { path: '/recurring-transactions', icon: FaRedo, label: 'Recurrentes' },
-    { path: '/incomes', icon: FaPlusCircle, label: 'Ingresos' },
-    { path: '/expenses', icon: FaMinusCircle, label: 'Gastos' },
     { path: '/categories', icon: FaFolderOpen, label: 'Categorías' }
   ];
 
   // Grupo 2: Análisis y planificación
   const analysisMenuItems = [
-    { path: '/insights', icon: FaBrain, label: 'IA Financiero', hasSparkles: true, feature: 'AI_INSIGHTS' },
-    { path: '/budgets', icon: FaChartPie, label: 'Presupuestos', subtitle: 'Controla tus límites', feature: 'BUDGETS' },
-    { path: '/savings-goals', icon: FaBullseye, label: 'Metas de Ahorro', subtitle: 'Objetivos financieros', feature: 'SAVINGS_GOALS' },
-    { path: '/achievements', icon: FaTrophy, label: 'Logros', subtitle: 'Progreso y gamificación' },
+    { path: '/insights', icon: FaBrain, label: 'Asesor IA', hasSparkles: true, feature: 'AI_INSIGHTS' },
+    { path: '/budgets', icon: FaChartPie, label: 'Presupuestos', feature: 'BUDGETS' },
+    { path: '/savings-goals', icon: FaBullseye, label: 'Objetivos Financieros', feature: 'SAVINGS_GOALS' },
+    { path: '/achievements', icon: FaTrophy, label: 'Logros' },
     { path: '/reports', icon: FaFileAlt, label: 'Reportes' }
   ];
 
@@ -142,12 +141,7 @@ const Sidebar = ({ isDesktopCollapsed = false, onDesktopToggle }) => {
         <div className="flex flex-col h-full">
           {/* Header */}
           <div className={`flex items-center border-b border-gray-200 dark:border-gray-700 transition-all duration-300 ${isDesktopCollapsed ? 'p-2 flex-col gap-2' : 'px-4 py-3 justify-between'}`}>
-            {!isDesktopCollapsed && <Brand size="sm" showTagline={false} />}
-            {isDesktopCollapsed && (
-              <div className="w-8 h-8 rounded-full bg-blue-600 flex items-center justify-center text-white text-xs font-bold">
-                N
-              </div>
-            )}
+            {isDesktopCollapsed ? <Logo size="sm" showText={false} /> : <Brand size="sm" showTagline={false} />}
             {/* Desktop collapse toggle - top of sidebar */}
             <button
               onClick={onDesktopToggle}
