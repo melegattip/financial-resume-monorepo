@@ -19,6 +19,7 @@ var (
 	ErrInvalidCredentials  = fmt.Errorf("invalid email or password")
 	ErrEmailAlreadyExists  = fmt.Errorf("user with email already exists")
 	ErrAccountDeactivated  = fmt.Errorf("account is deactivated")
+	ErrEmailNotVerified    = fmt.Errorf("EMAIL_NOT_VERIFIED")
 	ErrInvalid2FACode      = fmt.Errorf("invalid 2FA code")
 )
 
@@ -203,6 +204,16 @@ func (s *AuthService) Register(ctx context.Context, req *domain.RegisterRequest)
 		Str("email", user.Email).
 		Msg("user registered successfully")
 
+	// Send verification email (best-effort).
+	verificationLink := s.appURL + "/verify-email?token=" + verificationToken
+	if err := s.emailService.SendEmailVerification(user.Email, user.FirstName, verificationLink); err != nil {
+		s.logger.Error().
+			Str("component", "auth").
+			Str("user_id", user.ID).
+			Err(err).
+			Msg("failed to send verification email")
+	}
+
 	return &domain.AuthResponse{
 		User:   user.ToResponse(),
 		Tokens: *tokens,
@@ -230,6 +241,15 @@ func (s *AuthService) Login(ctx context.Context, req *domain.LoginRequest) (*dom
 			Str("user_id", user.ID).
 			Msg("login attempt on deactivated account")
 		return nil, ErrAccountDeactivated
+	}
+
+	// Check if email is verified.
+	if !user.IsVerified {
+		s.logger.Warn().
+			Str("component", "auth").
+			Str("user_id", user.ID).
+			Msg("login attempt on unverified account")
+		return nil, ErrEmailNotVerified
 	}
 
 	// Check if account is locked.

@@ -36,6 +36,7 @@ type TwoFAService interface {
 // EmailService handles sending transactional emails.
 type EmailService interface {
 	SendPasswordReset(toEmail, resetLink string) error
+	SendEmailVerification(toEmail, firstName, verificationLink string) error
 }
 
 // TenantCreator allows the auth module to create a personal tenant for new users

@@ -74,11 +74,9 @@ export const AuthProvider = ({ children }) => {
   const register = useCallback(async (userData) => {
     try {
       setAuthState(AUTH_STATES.LOADING);
-      
       const result = await authService.register(userData);
-      setUser(result.data.user);
-      setAuthState(AUTH_STATES.AUTHENTICATED);
-      
+      // Do NOT authenticate — user must verify email first.
+      setAuthState(AUTH_STATES.UNAUTHENTICATED);
       return result;
     } catch (error) {
       console.error('Registration error:', error);

@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { FaEye, FaEyeSlash, FaEnvelope, FaLock, FaUser, FaUserPlus, FaSpinner, FaCheckCircle } from 'react-icons/fa';
+import { FaEye, FaEyeSlash, FaEnvelope, FaLock, FaUser, FaUserPlus, FaSpinner, FaCheckCircle, FaPaperPlane } from 'react-icons/fa';
 import { useAuth } from '../contexts/AuthContext';
 import { validateEmail, sanitizeText } from '../utils/validation';
 import Logo from '../components/Logo';
@@ -17,6 +17,8 @@ const Register = () => {
     confirmPassword: '',
   });
 
+  const [registrationComplete, setRegistrationComplete] = useState(false);
+  const [registeredEmail, setRegisteredEmail] = useState('');
   const [errors, setErrors] = useState({});
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);

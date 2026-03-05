@@ -73,6 +73,8 @@ func (h *AuthHandler) Login(c *gin.Context) {
 				"twofa_required": true,
 				"message":        "2FA code required",
 			})
+		case errors.Is(err, services.ErrEmailNotVerified):
+			c.JSON(http.StatusForbidden, gin.H{"error": "EMAIL_NOT_VERIFIED"})
 		case strings.Contains(err.Error(), "deactivated"):
 			c.JSON(http.StatusForbidden, gin.H{"error": err.Error()})
 		case strings.Contains(err.Error(), "locked"):
