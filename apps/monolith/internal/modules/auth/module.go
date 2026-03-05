@@ -12,6 +12,7 @@ import (
 	authports "github.com/melegattip/financial-resume-monorepo/apps/monolith/internal/modules/auth/ports"
 	"github.com/melegattip/financial-resume-monorepo/apps/monolith/internal/modules/auth/repository"
 	"github.com/melegattip/financial-resume-monorepo/apps/monolith/internal/modules/auth/services"
+	sharedemail "github.com/melegattip/financial-resume-monorepo/apps/monolith/internal/shared/email"
 	"github.com/melegattip/financial-resume-monorepo/apps/monolith/internal/shared/ports"
 )
 
@@ -36,11 +37,19 @@ func New(db *gorm.DB, logger zerolog.Logger, cfg *config.AppConfig, eventBus por
 	jwtSvc := services.NewJWTService(cfg.JWT.Secret, cfg.JWT.AccessExpiry, cfg.JWT.RefreshExpiry, cfg.JWT.Issuer)
 	pwSvc := services.NewPasswordService(cfg.Security.PasswordMinLength)
 	twoFASvc := services.NewTwoFAService(cfg.JWT.Issuer)
+	emailSvc := sharedemail.NewService(sharedemail.SMTPConfig{
+		Host:     cfg.Email.Host,
+		Port:     cfg.Email.Port,
+		User:     cfg.Email.User,
+		Password: cfg.Email.Password,
+		From:     cfg.Email.From,
+	}, logger)
 
 	authSvc := services.NewAuthService(
 		repo, repo, repo, repo,
 		jwtSvc, pwSvc, twoFASvc,
 		tenantCreator, tenantFinder,
+		emailSvc, cfg.AppURL,
 		eventBus, logger,
 		cfg.Security.MaxLoginAttempts,
 		cfg.Security.LockoutDuration,

@@ -25,6 +25,8 @@ import Achievements from './pages/Achievements';
 // Páginas de autenticación
 import Login from './pages/Login';
 import Register from './pages/Register';
+import ForgotPassword from './pages/ForgotPassword';
+import ResetPassword from './pages/ResetPassword';
 
 // Layout components
 import Layout from './components/Layout/Layout';
@@ -47,14 +49,16 @@ export function AppContent() {
             </PublicOnlyRoute>
           } 
         />
-        <Route 
-          path="/register" 
+        <Route
+          path="/register"
           element={
             <PublicOnlyRoute>
               <Register />
             </PublicOnlyRoute>
-          } 
+          }
         />
+        <Route path="/forgot-password" element={<ForgotPassword />} />
+        <Route path="/reset-password" element={<ResetPassword />} />
 
         {/* Rutas protegidas (requieren autenticación) */}
         <Route 

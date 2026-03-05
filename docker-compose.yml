@@ -32,6 +32,12 @@ services:
       LOG_LEVEL: debug
       CORS_ALLOW_ORIGINS: http://localhost:3000
       OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      SMTP_HOST: smtp.gmail.com
+      SMTP_PORT: "587"
+      SMTP_USER: ${SMTP_USER:-no_reply@niloft.com}
+      SMTP_PASSWORD: ${SMTP_PASSWORD:-}
+      SMTP_FROM: ${SMTP_FROM:-no_reply@niloft.com}
+      APP_URL: ${APP_URL:-http://localhost:3000}
     restart: unless-stopped
     depends_on:
       postgres:

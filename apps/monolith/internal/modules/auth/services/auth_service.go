@@ -33,8 +33,10 @@ type AuthService struct {
 	twoFAService    ports.TwoFAService
 	tenantCreator   ports.TenantCreator
 	tenantFinder    ports.TenantMemberFinder
+	emailService    ports.EmailService
 	eventBus        sharedports.EventBus
 	logger          zerolog.Logger
+	appURL          string
 
 	maxLoginAttempts int
 	lockoutDuration  time.Duration
@@ -51,6 +53,8 @@ func NewAuthService(
 	twoFASvc ports.TwoFAService,
 	tenantCreator ports.TenantCreator,
 	tenantFinder ports.TenantMemberFinder,
+	emailSvc ports.EmailService,
+	appURL string,
 	eventBus sharedports.EventBus,
 	logger zerolog.Logger,
 	maxLoginAttempts int,
@@ -66,6 +70,8 @@ func NewAuthService(
 		twoFAService:     twoFASvc,
 		tenantCreator:    tenantCreator,
 		tenantFinder:     tenantFinder,
+		emailService:     emailSvc,
+		appURL:           appURL,
 		eventBus:         eventBus,
 		logger:           logger,
 		maxLoginAttempts: maxLoginAttempts,
@@ -487,6 +493,16 @@ func (s *AuthService) RequestPasswordReset(ctx context.Context, email string) er
 		Str("component", "auth").
 		Str("user_id", user.ID).
 		Msg("password reset token generated")
+
+	// Send reset email (best-effort: log error but don't fail the request).
+	resetLink := s.appURL + "/reset-password?token=" + resetToken
+	if err := s.emailService.SendPasswordReset(user.Email, resetLink); err != nil {
+		s.logger.Error().
+			Str("component", "auth").
+			Str("user_id", user.ID).
+			Err(err).
+			Msg("failed to send password reset email")
+	}
 
 	return nil
 }

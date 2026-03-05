@@ -22,12 +22,22 @@ type SecurityConfig struct {
 	LockoutDuration   time.Duration
 }
 
+// EmailConfig holds SMTP email configuration.
+type EmailConfig struct {
+	Host     string
+	Port     string
+	User     string
+	Password string
+	From     string
+}
+
 // AppConfig holds all application configuration loaded from environment variables.
 type AppConfig struct {
 	ServerPort       string
 	Environment      string
 	LogLevel         string
 	CORSAllowOrigins string
+	AppURL           string
 
 	// Database
 	DatabaseURL    string
@@ -47,6 +57,9 @@ type AppConfig struct {
 	// Auth
 	JWT      JWTConfig
 	Security SecurityConfig
+
+	// Email (SMTP)
+	Email EmailConfig
 }
 
 // Load reads configuration from environment variables.
@@ -78,6 +91,14 @@ func Load() (*AppConfig, error) {
 			PasswordMinLength: getEnvInt("PASSWORD_MIN_LENGTH", 8),
 			MaxLoginAttempts:  getEnvInt("MAX_LOGIN_ATTEMPTS", 5),
 			LockoutDuration:   time.Duration(getEnvInt("LOCKOUT_DURATION_MINUTES", 15)) * time.Minute,
+		},
+		AppURL: getEnv("APP_URL", "http://localhost:3000"),
+		Email: EmailConfig{
+			Host:     getEnv("SMTP_HOST", "smtp.gmail.com"),
+			Port:     getEnv("SMTP_PORT", "587"),
+			User:     os.Getenv("SMTP_USER"),
+			Password: os.Getenv("SMTP_PASSWORD"),
+			From:     os.Getenv("SMTP_FROM"),
 		},
 	}
 
