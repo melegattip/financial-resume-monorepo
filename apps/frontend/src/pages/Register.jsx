@@ -196,14 +196,15 @@ const Register = () => {
     setErrors({});
 
     try {
+      const email = sanitizeText(formData.email.trim().toLowerCase());
       await register({
         firstName: sanitizeText(formData.firstName.trim()),
         lastName: sanitizeText(formData.lastName.trim()),
-        email: sanitizeText(formData.email.trim().toLowerCase()),
+        email,
         password: formData.password
       });
-      
-      // La navegación se maneja en el useEffect
+      setRegisteredEmail(email);
+      setRegistrationComplete(true);
     } catch (error) {
       setErrors({
         general: error.message || 'Error al registrar usuario'
@@ -220,6 +221,31 @@ const Register = () => {
         <div className="flex flex-col items-center space-y-4">
           <FaSpinner className="w-8 h-8 animate-spin text-fr-primary" />
           <p className="text-fr-gray-600">Cargando...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (registrationComplete) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-fr-gray-50 dark:bg-gray-900 px-4">
+        <div className="max-w-md w-full bg-white dark:bg-gray-800 rounded-2xl shadow-lg p-10 text-center">
+          <FaPaperPlane className="w-14 h-14 text-blue-500 mx-auto mb-4" />
+          <h2 className="text-2xl font-bold text-fr-gray-900 dark:text-white mb-3">
+            ¡Revisá tu correo!
+          </h2>
+          <p className="text-fr-gray-600 dark:text-gray-400 mb-2">
+            Te enviamos un email de verificación a:
+          </p>
+          <p className="font-semibold text-fr-gray-900 dark:text-white mb-6">
+            {registeredEmail}
+          </p>
+          <p className="text-fr-gray-500 dark:text-gray-400 text-sm mb-8">
+            Hacé clic en el enlace del email para activar tu cuenta. El enlace expira en 24 horas.
+          </p>
+          <Link to="/login" className="btn-primary inline-block">
+            Ir al inicio de sesión
+          </Link>
         </div>
       </div>
     );

@@ -130,8 +130,11 @@ const Login = () => {
       }
     } catch (error) {
       console.error('Error en login:', error);
+      const msg = error.message || '';
       setErrors({
-        general: error.message || 'Error al iniciar sesión'
+        general: msg.includes('EMAIL_NOT_VERIFIED')
+          ? 'Debés verificar tu correo antes de iniciar sesión. Revisá tu bandeja de entrada.'
+          : (msg || 'Error al iniciar sesión')
       });
       // NO limpiar el formulario aquí
     } finally {
