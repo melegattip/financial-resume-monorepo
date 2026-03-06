@@ -204,15 +204,18 @@ func (s *AuthService) Register(ctx context.Context, req *domain.RegisterRequest)
 		Str("email", user.Email).
 		Msg("user registered successfully")
 
-	// Send verification email (best-effort).
+	// Send verification email asynchronously (best-effort: SMTP errors must not
+	// block or fail the registration response).
 	verificationLink := s.appURL + "/verify-email?token=" + verificationToken
-	if err := s.emailService.SendEmailVerification(user.Email, user.FirstName, verificationLink); err != nil {
-		s.logger.Error().
-			Str("component", "auth").
-			Str("user_id", user.ID).
-			Err(err).
-			Msg("failed to send verification email")
-	}
+	go func(toEmail, firstName, link, userID string) {
+		if err := s.emailService.SendEmailVerification(toEmail, firstName, link); err != nil {
+			s.logger.Error().
+				Str("component", "auth").
+				Str("user_id", userID).
+				Err(err).
+				Msg("failed to send verification email")
+		}
+	}(user.Email, user.FirstName, verificationLink, user.ID)
 
 	return &domain.AuthResponse{
 		User:   user.ToResponse(),
@@ -514,15 +517,18 @@ func (s *AuthService) RequestPasswordReset(ctx context.Context, email string) er
 		Str("user_id", user.ID).
 		Msg("password reset token generated")
 
-	// Send reset email (best-effort: log error but don't fail the request).
+	// Send reset email asynchronously (best-effort: SMTP errors must not block
+	// or fail the response — avoids hanging the request on TCP dial timeouts).
 	resetLink := s.appURL + "/reset-password?token=" + resetToken
-	if err := s.emailService.SendPasswordReset(user.Email, resetLink); err != nil {
-		s.logger.Error().
-			Str("component", "auth").
-			Str("user_id", user.ID).
-			Err(err).
-			Msg("failed to send password reset email")
-	}
+	go func(toEmail, link, userID string) {
+		if err := s.emailService.SendPasswordReset(toEmail, link); err != nil {
+			s.logger.Error().
+				Str("component", "auth").
+				Str("user_id", userID).
+				Err(err).
+				Msg("failed to send password reset email")
+		}
+	}(user.Email, resetLink, user.ID)
 
 	return nil
 }

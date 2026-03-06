@@ -95,7 +95,7 @@ func Load() (*AppConfig, error) {
 		AppURL: getEnv("APP_URL", "http://localhost:3000"),
 		Email: EmailConfig{
 			Host:     getEnv("SMTP_HOST", "smtp.gmail.com"),
-			Port:     getEnv("SMTP_PORT", "587"),
+			Port:     getEnv("SMTP_PORT", "465"),
 			User:     os.Getenv("SMTP_USER"),
 			Password: os.Getenv("SMTP_PASSWORD"),
 			From:     os.Getenv("SMTP_FROM"),

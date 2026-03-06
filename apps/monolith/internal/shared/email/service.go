@@ -3,8 +3,10 @@ package email
 import (
 	"crypto/tls"
 	"fmt"
+	"net"
 	"net/smtp"
 	"strings"
+	"time"
 
 	"github.com/rs/zerolog"
 )
@@ -46,20 +48,50 @@ func NewService(cfg SMTPConfig, logger zerolog.Logger) EmailService {
 	return &SMTPEmailService{cfg: cfg, logger: logger}
 }
 
+const smtpDialTimeout = 15 * time.Second
+
 // send dials SMTP and delivers a pre-built MIME message.
+// Port 465 uses implicit TLS (SMTPS); any other port uses STARTTLS.
 func (s *SMTPEmailService) send(toEmail, msg string) error {
 	addr := s.cfg.Host + ":" + s.cfg.Port
 	auth := smtp.PlainAuth("", s.cfg.User, s.cfg.Password, s.cfg.Host)
+	tlsCfg := &tls.Config{ServerName: s.cfg.Host}
 
-	conn, err := smtp.Dial(addr)
-	if err != nil {
-		return fmt.Errorf("smtp dial: %w", err)
+	var conn *smtp.Client
+	if s.cfg.Port == "465" {
+		// Implicit TLS (SMTPS) — TLS from the very first byte.
+		tlsConn, err := tls.DialWithDialer(
+			&net.Dialer{Timeout: smtpDialTimeout},
+			"tcp", addr, tlsCfg,
+		)
+		if err != nil {
+			return fmt.Errorf("smtp dial (tls): %w", err)
+		}
+		c, err := smtp.NewClient(tlsConn, s.cfg.Host)
+		if err != nil {
+			tlsConn.Close()
+			return fmt.Errorf("smtp new client: %w", err)
+		}
+		conn = c
+	} else {
+		// STARTTLS (port 587 or other).
+		netConn, err := net.DialTimeout("tcp", addr, smtpDialTimeout)
+		if err != nil {
+			return fmt.Errorf("smtp dial: %w", err)
+		}
+		c, err := smtp.NewClient(netConn, s.cfg.Host)
+		if err != nil {
+			netConn.Close()
+			return fmt.Errorf("smtp new client: %w", err)
+		}
+		if err := c.StartTLS(tlsCfg); err != nil {
+			c.Close()
+			return fmt.Errorf("smtp starttls: %w", err)
+		}
+		conn = c
 	}
 	defer conn.Close()
 
-	if err := conn.StartTLS(&tls.Config{ServerName: s.cfg.Host}); err != nil {
-		return fmt.Errorf("smtp starttls: %w", err)
-	}
 	if err := conn.Auth(auth); err != nil {
 		return fmt.Errorf("smtp auth: %w", err)
 	}
