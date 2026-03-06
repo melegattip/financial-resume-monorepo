@@ -83,7 +83,7 @@ func main() {
 	// Register modules
 	apiV1 := router.Group("/api/v1")
 
-	authModule := auth.New(db, logger, cfg, eventBus, tenantsRepo, tenantsRepo)
+	authModule := auth.New(db, logger, cfg, eventBus, tenantsRepo, tenantsRepo, tenantsRepo)
 	authModule.RegisterRoutes(apiV1)
 	authModule.RegisterSubscribers(eventBus)
 	logger.Info().Msg("auth module registered")

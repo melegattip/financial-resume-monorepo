@@ -151,13 +151,20 @@ func (s *tenantService) CreateInvitation(ctx context.Context, tenantID, userID s
 		maxUses = 10 // default
 	}
 
+	// Default expiration: 24 hours from now
+	expiresAt := req.ExpiresAt
+	if expiresAt == nil {
+		t := time.Now().Add(24 * time.Hour)
+		expiresAt = &t
+	}
+
 	inv := domain.Invitation{
 		ID:        "inv_" + strings.ReplaceAll(uuid.New().String(), "-", "")[:8],
 		TenantID:  tenantID,
 		Code:      domain.GenerateInviteCode(),
 		Role:      req.Role,
 		CreatedBy: userID,
-		ExpiresAt: req.ExpiresAt,
+		ExpiresAt: expiresAt,
 		MaxUses:   maxUses,
 		UsedCount: 0,
 		IsActive:  true,

@@ -583,6 +583,84 @@ func invitationModelToDomain(m *TenantInvitationModel) domain.Invitation {
 	}
 }
 
+// ─── TenantAccountCleaner ─────────────────────────────────────────────────────
+
+// CleanupUserTenants handles tenant lifecycle when a user account is deleted.
+//
+// For every tenant the user owns:
+//   - If other members exist, the next eligible one (admin > member > viewer,
+//     then oldest join date) becomes the new owner.
+//   - If no other members remain, the tenant is soft-deleted.
+//
+// Finally, the user is hard-deleted from all tenant_members rows.
+// Implements auth/ports.TenantAccountCleaner.
+func (r *GormRepository) CleanupUserTenants(ctx context.Context, userID string) error {
+	// Collect all tenant IDs owned by this user.
+	var ownedIDs []string
+	if err := r.db.WithContext(ctx).
+		Table("tenants").
+		Where("owner_id = ? AND deleted_at IS NULL", userID).
+		Pluck("id", &ownedIDs).Error; err != nil {
+		return fmt.Errorf("failed to list owned tenants: %w", err)
+	}
+
+	for _, tenantID := range ownedIDs {
+		// Find the next eligible member (excluding the owner being deleted).
+		var next struct {
+			UserID string
+			Role   string
+		}
+		err := r.db.WithContext(ctx).Raw(`
+			SELECT user_id, role
+			FROM tenant_members
+			WHERE tenant_id = ? AND user_id != ?
+			ORDER BY
+				CASE role
+					WHEN 'admin'  THEN 1
+					WHEN 'member' THEN 2
+					WHEN 'viewer' THEN 3
+					ELSE 4
+				END,
+				joined_at ASC
+			LIMIT 1
+		`, tenantID, userID).Scan(&next).Error
+		if err != nil {
+			return fmt.Errorf("failed to find next owner for tenant %s: %w", tenantID, err)
+		}
+
+		if next.UserID == "" {
+			// No other members — soft-delete the tenant.
+			if err := r.db.WithContext(ctx).Exec(
+				"UPDATE tenants SET deleted_at = NOW() WHERE id = ?", tenantID,
+			).Error; err != nil {
+				return fmt.Errorf("failed to delete tenant %s: %w", tenantID, err)
+			}
+		} else {
+			// Transfer ownership to next eligible member.
+			if err := r.db.WithContext(ctx).Exec(
+				"UPDATE tenants SET owner_id = ? WHERE id = ?", next.UserID, tenantID,
+			).Error; err != nil {
+				return fmt.Errorf("failed to transfer ownership for tenant %s: %w", tenantID, err)
+			}
+			if err := r.db.WithContext(ctx).Exec(
+				"UPDATE tenant_members SET role = 'owner' WHERE tenant_id = ? AND user_id = ?",
+				tenantID, next.UserID,
+			).Error; err != nil {
+				return fmt.Errorf("failed to update new owner role for tenant %s: %w", tenantID, err)
+			}
+		}
+	}
+
+	// Remove user from all tenant memberships (hard delete — no soft delete on this table).
+	if err := r.db.WithContext(ctx).
+		Where("user_id = ?", userID).
+		Delete(&TenantMemberModel{}).Error; err != nil {
+		return fmt.Errorf("failed to remove user from tenant members: %w", err)
+	}
+
+	return nil
+}
+
 func auditModelToDomain(m *AuditLogModel) domain.AuditLog {
 	return domain.AuditLog{
 		ID:         m.ID,

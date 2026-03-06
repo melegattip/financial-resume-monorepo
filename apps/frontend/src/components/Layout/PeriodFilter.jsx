@@ -2,7 +2,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import { FaEye, FaEyeSlash, FaCalendarAlt, FaChevronDown } from 'react-icons/fa';
 import { usePeriod } from '../../contexts/PeriodContext';
 
-const PeriodFilter = () => {
+const PeriodFilter = ({ compact = false }) => {
   const {
     selectedYear,
     selectedMonth,
@@ -51,29 +51,39 @@ const PeriodFilter = () => {
   };
 
   return (
-    <div className="flex items-center space-x-3">
+    <div className={`flex items-center ${compact ? 'space-x-1' : 'space-x-3'}`}>
       {/* Botón para ocultar/mostrar saldos */}
       <button
         onClick={toggleBalancesVisibility}
-        className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+        className="p-1.5 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
         title={balancesHidden ? "Mostrar saldos" : "Ocultar saldos"}
       >
         {balancesHidden ? (
-          <FaEyeSlash className="w-5 h-5 text-gray-600 dark:text-gray-400" />
+          <FaEyeSlash className={`${compact ? 'w-4 h-4' : 'w-5 h-5'} text-gray-600 dark:text-gray-400`} />
         ) : (
-          <FaEye className="w-5 h-5 text-gray-600 dark:text-gray-400" />
+          <FaEye className={`${compact ? 'w-4 h-4' : 'w-5 h-5'} text-gray-600 dark:text-gray-400`} />
         )}
       </button>
 
-      {/* Date Picker Moderno */}
+      {/* Date Picker */}
       <div className="relative" ref={dropdownRef}>
         <button
           onClick={() => setIsOpen(!isOpen)}
-          className="flex items-center space-x-2 px-3 py-2 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-600 transition-colors text-sm font-medium text-gray-700 dark:text-gray-300 min-w-[160px]"
+          className={compact
+            ? "p-1.5 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+            : "flex items-center space-x-2 px-3 py-2 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-600 transition-colors text-sm font-medium text-gray-700 dark:text-gray-300 min-w-[160px]"
+          }
+          title={compact ? getPeriodTitle() : undefined}
         >
-          <FaCalendarAlt className="w-4 h-4 text-gray-500 dark:text-gray-400" />
-          <span className="truncate">{getPeriodTitle()}</span>
-          <FaChevronDown className={`w-3 h-3 text-gray-400 transition-transform ${isOpen ? 'rotate-180' : ''}`} />
+          {compact ? (
+            <FaCalendarAlt className="w-4 h-4 text-gray-600 dark:text-gray-400" />
+          ) : (
+            <>
+              <FaCalendarAlt className="w-4 h-4 text-gray-500 dark:text-gray-400" />
+              <span className="truncate">{getPeriodTitle()}</span>
+              <FaChevronDown className={`w-3 h-3 text-gray-400 transition-transform ${isOpen ? 'rotate-180' : ''}`} />
+            </>
+          )}
         </button>
 
         {/* Dropdown Panel */}

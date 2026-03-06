@@ -39,3 +39,23 @@ func (e BudgetDeletedEvent) EventType() string   { return "budget.deleted" }
 func (e BudgetDeletedEvent) AggregateID() string { return e.BudgetID }
 func (e BudgetDeletedEvent) UserID() string      { return e.User }
 func (e BudgetDeletedEvent) OccurredAt() string  { return e.Timestamp.Format(time.RFC3339) }
+
+// BudgetThresholdCrossedEvent is published when a budget crosses a status threshold
+// (on_track → warning, on_track → exceeded, or warning → exceeded).
+type BudgetThresholdCrossedEvent struct {
+	BudgetID    string
+	User        string
+	TenantID    string
+	CategoryID  string
+	SpentAmount float64
+	BudgetLimit float64
+	SpentPct    float64
+	Period      string
+	NewStatus   string
+	Timestamp   time.Time
+}
+
+func (e BudgetThresholdCrossedEvent) EventType() string   { return "budget.threshold_crossed" }
+func (e BudgetThresholdCrossedEvent) AggregateID() string { return e.BudgetID }
+func (e BudgetThresholdCrossedEvent) UserID() string      { return e.User }
+func (e BudgetThresholdCrossedEvent) OccurredAt() string  { return e.Timestamp.Format(time.RFC3339) }

@@ -157,6 +157,7 @@ func (h *ExpenseHandler) Create(c *gin.Context) {
 	event := domain.ExpenseCreatedEvent{
 		ExpenseID:       expense.ID,
 		User:            expense.UserID,
+		TenantID:        tenantID,
 		CategoryID:      expense.CategoryID,
 		Amount:          expense.Amount,
 		Description:     expense.Description,

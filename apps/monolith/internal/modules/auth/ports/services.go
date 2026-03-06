@@ -37,6 +37,8 @@ type TwoFAService interface {
 type EmailService interface {
 	SendPasswordReset(toEmail, resetLink string) error
 	SendEmailVerification(toEmail, firstName, verificationLink string) error
+	SendBudgetAlert(toEmail, firstName, categoryID, period, newStatus string, spentAmount, budgetLimit float64) error
+	SendLoginNotification(toEmail, firstName, loginTime string) error
 }
 
 // TenantCreator allows the auth module to create a personal tenant for new users
@@ -51,4 +53,12 @@ type TenantMemberFinder interface {
 	// FindMemberInTenant returns the user's role in a specific tenant.
 	// Returns an empty string and nil error when the user is not a member.
 	FindMemberInTenant(ctx context.Context, userID, tenantID string) (role string, err error)
+}
+
+// TenantAccountCleaner handles tenant cleanup when a user account is deleted.
+// For each tenant the user owns: if other members exist the next eligible member
+// (highest role then oldest join date) becomes the new owner; otherwise the
+// tenant is soft-deleted. The user is then removed from all memberships.
+type TenantAccountCleaner interface {
+	CleanupUserTenants(ctx context.Context, userID string) error
 }

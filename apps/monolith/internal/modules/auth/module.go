@@ -1,6 +1,8 @@
 package auth
 
 import (
+	"context"
+
 	"github.com/gin-gonic/gin"
 	"github.com/rs/zerolog"
 	"gorm.io/gorm"
@@ -12,6 +14,7 @@ import (
 	authports "github.com/melegattip/financial-resume-monorepo/apps/monolith/internal/modules/auth/ports"
 	"github.com/melegattip/financial-resume-monorepo/apps/monolith/internal/modules/auth/repository"
 	"github.com/melegattip/financial-resume-monorepo/apps/monolith/internal/modules/auth/services"
+	budgetsdomain "github.com/melegattip/financial-resume-monorepo/apps/monolith/internal/modules/budgets/domain"
 	sharedemail "github.com/melegattip/financial-resume-monorepo/apps/monolith/internal/shared/email"
 	"github.com/melegattip/financial-resume-monorepo/apps/monolith/internal/shared/ports"
 )
@@ -22,6 +25,7 @@ type Module struct {
 	logger          zerolog.Logger
 	cfg             *config.AppConfig
 	eventBus        ports.EventBus
+	authSvc         *services.AuthService
 	authHandler     *handlers.AuthHandler
 	securityHandler *handlers.SecurityHandler
 	profileHandler  *handlers.ProfileHandler
@@ -31,7 +35,8 @@ type Module struct {
 
 // New creates and initializes the auth module with all dependencies.
 func New(db *gorm.DB, logger zerolog.Logger, cfg *config.AppConfig, eventBus ports.EventBus,
-	tenantCreator authports.TenantCreator, tenantFinder authports.TenantMemberFinder) *Module {
+	tenantCreator authports.TenantCreator, tenantFinder authports.TenantMemberFinder,
+	tenantCleaner authports.TenantAccountCleaner) *Module {
 	repo := repository.New(db)
 
 	jwtSvc := services.NewJWTService(cfg.JWT.Secret, cfg.JWT.AccessExpiry, cfg.JWT.RefreshExpiry, cfg.JWT.Issuer)
@@ -55,7 +60,7 @@ func New(db *gorm.DB, logger zerolog.Logger, cfg *config.AppConfig, eventBus por
 	authSvc := services.NewAuthService(
 		repo, repo, repo, repo,
 		jwtSvc, pwSvc, twoFASvc,
-		tenantCreator, tenantFinder,
+		tenantCreator, tenantFinder, tenantCleaner,
 		emailSvc, cfg.AppURL,
 		eventBus, logger,
 		cfg.Security.MaxLoginAttempts,
@@ -69,6 +74,7 @@ func New(db *gorm.DB, logger zerolog.Logger, cfg *config.AppConfig, eventBus por
 		logger:          logger,
 		cfg:             cfg,
 		eventBus:        eventBus,
+		authSvc:         authSvc,
 		authHandler:     handlers.NewAuthHandler(authSvc, logger),
 		securityHandler: handlers.NewSecurityHandler(authSvc, logger),
 		profileHandler:  handlers.NewProfileHandler(authSvc, logger),
@@ -155,5 +161,16 @@ func (m *Module) RegisterRoutes(router *gin.RouterGroup) {
 
 // RegisterSubscribers registers event bus subscriptions for the auth module.
 func (m *Module) RegisterSubscribers(bus ports.EventBus) {
-	// No subscribers needed for auth module currently.
+	bus.Subscribe("budget.threshold_crossed", func(ctx context.Context, event ports.Event) error {
+		ev, ok := event.(budgetsdomain.BudgetThresholdCrossedEvent)
+		if !ok {
+			return nil
+		}
+		if err := m.authSvc.SendBudgetAlertNotification(ctx, ev.User, ev.CategoryID, ev.Period, ev.NewStatus, ev.SpentAmount, ev.BudgetLimit); err != nil {
+			m.logger.Warn().Err(err).Str("user_id", ev.User).Msg("auth subscriber: failed to send budget alert")
+		}
+		return nil
+	})
+
+	m.logger.Info().Msg("auth module subscribers registered")
 }

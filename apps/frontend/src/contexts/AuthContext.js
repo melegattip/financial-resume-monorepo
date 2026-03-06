@@ -119,12 +119,13 @@ export const AuthProvider = ({ children }) => {
 
   const updateProfile = useCallback(async (profileData) => {
     try {
-      const updatedUser = await authService.updateProfile(profileData);
-      
-      // Actualizar el estado global con los datos reales del backend
-      setUser(updatedUser);
-      
-      return { success: true, user: updatedUser };
+      const { user: updatedUser, emailChanged } = await authService.updateProfile(profileData);
+
+      if (!emailChanged) {
+        setUser(updatedUser);
+      }
+
+      return { success: true, user: updatedUser, emailChanged: !!emailChanged };
     } catch (error) {
       console.error('Profile update error:', error);
       return { success: false, error: error.message };

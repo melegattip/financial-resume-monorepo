@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useLocation } from 'react-router-dom';
-import { FaUser, FaBell, FaLock, FaDownload, FaTrash, FaShieldAlt, FaCamera, FaTimes, FaUserCog, FaHistory } from 'react-icons/fa';
+import { FaUser, FaBell, FaLock, FaDownload, FaTrash, FaShieldAlt, FaCamera, FaTimes, FaUserCog, FaHistory, FaCog, FaExclamationTriangle, FaChevronDown } from 'react-icons/fa';
 import toast from 'react-hot-toast';
 import TwoFASetup from '../components/TwoFASetup';
 import ChangePasswordModal from '../components/ChangePasswordModal';
@@ -9,17 +9,263 @@ import { getAvatarUrl } from '../utils/avatarUtils';
 import TenantSettings from './TenantSettings';
 import AuditLogs from './AuditLogs';
 import { useTenant } from '../contexts/TenantContext';
+import authService from '../services/authService';
+import tenantService from '../services/tenantService';
+
+// ─── Notifications Tab ────────────────────────────────────────────────────────
+
+function Toggle({ on, disabled, onChange, label }) {
+  return (
+    <button
+      onClick={onChange}
+      disabled={disabled}
+      aria-label={label}
+      className={`relative flex-shrink-0 w-11 h-6 rounded-full transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 ${
+        on ? 'bg-blue-600' : 'bg-gray-200 dark:bg-gray-700'
+      } ${disabled ? 'opacity-40 cursor-not-allowed' : ''}`}
+    >
+      <span
+        className={`absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full shadow transition-transform duration-200 ${
+          on ? 'translate-x-5' : 'translate-x-0'
+        }`}
+      />
+    </button>
+  );
+}
+
+function NotificationsTab() {
+  const [notifSettings, setNotifSettings] = useState(null);
+  const [saving, setSaving] = useState(null);
+
+  useEffect(() => {
+    authService.getNotifications()
+      .then(data => setNotifSettings(data))
+      .catch(() => toast.error('Error cargando preferencias de notificaciones'));
+  }, []);
+
+  const handleToggle = async (key) => {
+    if (!notifSettings || saving) return;
+    const newValue = !notifSettings[key];
+    setNotifSettings(prev => ({ ...prev, [key]: newValue }));
+    setSaving(key);
+    try {
+      await authService.updateNotifications({ ...notifSettings, [key]: newValue });
+    } catch {
+      setNotifSettings(prev => ({ ...prev, [key]: !newValue }));
+      toast.error('Error actualizando preferencia');
+    } finally {
+      setSaving(null);
+    }
+  };
+
+  if (!notifSettings) {
+    return <div className="py-8 text-center text-gray-500 dark:text-gray-400 text-sm">Cargando…</div>;
+  }
+
+  const emailOn = notifSettings.email_notifications;
+
+  return (
+    <div className="space-y-1">
+      <h3 className="text-lg font-semibold text-fr-gray-900 dark:text-gray-100 mb-4">Notificaciones</h3>
+
+      {/* Parent row */}
+      <div className="flex items-center justify-between gap-4 py-4 border-b border-gray-100 dark:border-gray-700">
+        <div className="min-w-0">
+          <p className="text-sm font-medium text-gray-900 dark:text-gray-100">Notificaciones por email</p>
+          <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">Recibí alertas importantes en tu casilla de correo.</p>
+        </div>
+        <Toggle on={emailOn} disabled={saving === 'email_notifications'} onChange={() => handleToggle('email_notifications')} label="Notificaciones por email" />
+      </div>
+
+      {/* Sub-rows — indented, disabled when parent is off */}
+      <div className="pl-5 border-l-2 border-gray-100 dark:border-gray-700 space-y-0">
+        <div className={`flex items-center justify-between gap-4 py-3.5 border-b border-gray-100 dark:border-gray-700 transition-opacity ${!emailOn ? 'opacity-40' : ''}`}>
+          <div className="min-w-0">
+            <p className="text-sm font-medium text-gray-900 dark:text-gray-100">Alertas de presupuesto</p>
+            <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">Avisá cuando estés cerca o superes el límite de un presupuesto.</p>
+          </div>
+          <Toggle on={notifSettings.budget_alerts} disabled={!emailOn || saving === 'budget_alerts'} onChange={() => handleToggle('budget_alerts')} label="Alertas de presupuesto" />
+        </div>
+
+        <div className={`flex items-center justify-between gap-4 py-3.5 transition-opacity ${!emailOn ? 'opacity-40' : ''}`}>
+          <div className="min-w-0">
+            <p className="text-sm font-medium text-gray-900 dark:text-gray-100">Nuevos dispositivos conectados</p>
+            <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">Notificá cada vez que tu cuenta inicia sesión desde un dispositivo.</p>
+          </div>
+          <Toggle on={notifSettings.login_notifications} disabled={!emailOn || saving === 'login_notifications'} onChange={() => handleToggle('login_notifications')} label="Nuevos dispositivos conectados" />
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── Deletion Section ─────────────────────────────────────────────────────────
+
+function DeletionSection({ user, myRole, currentTenant }) {
+  const [expanded, setExpanded] = useState(false);
+  const [confirmText, setConfirmText] = useState('');
+  const [password, setPassword] = useState('');
+  const [deleting, setDeleting] = useState(false);
+  const [memberCount, setMemberCount] = useState(null); // null = loading
+  const [alsoDeleteSpace, setAlsoDeleteSpace] = useState(false);
+
+  const isOwner = myRole === 'owner' && !!currentTenant;
+  const confirmTarget = user?.email || '';
+  const canDelete = confirmText === confirmTarget && password.length > 0;
+
+  useEffect(() => {
+    if (!isOwner) { setMemberCount(0); return; }
+    tenantService.listMembers()
+      .then(members => setMemberCount((members || []).length))
+      .catch(() => setMemberCount(1));
+  }, [isOwner]);
+
+  const willTransferOwnership = isOwner && memberCount > 1;
+  const willDeleteTenant      = isOwner && memberCount === 1;
+
+  const getTitle = () => {
+    if (willDeleteTenant || (willTransferOwnership && alsoDeleteSpace)) return 'Eliminar cuenta y espacio';
+    return 'Eliminar tu cuenta';
+  };
+
+  const getDescription = () => {
+    if (willTransferOwnership) {
+      return (
+        <>
+          Sos el propietario de <span className="font-semibold">"{currentTenant.name}"</span>.
+          {' '}Al eliminar tu cuenta, el miembro con mayor rango o antigüedad pasará a ser el nuevo propietario.
+        </>
+      );
+    }
+    if (willDeleteTenant) {
+      return (
+        <>
+          Sos el único miembro de <span className="font-semibold">"{currentTenant.name}"</span>.
+          {' '}Al eliminar tu cuenta también se eliminará el espacio y todos sus datos.
+        </>
+      );
+    }
+    return 'Se eliminarán permanentemente tu usuario y todos tus datos personales.';
+  };
+
+  const handleDelete = async () => {
+    if (!canDelete || !password || deleting) return;
+    if (!window.confirm('Esta acción es irreversible. ¿Confirmar eliminación?')) return;
+    setDeleting(true);
+    try {
+      if (willTransferOwnership && alsoDeleteSpace) {
+        await tenantService.deleteMyTenant();
+      }
+      await authService.deleteAccount(password);
+      toast.success('Cuenta eliminada. Hasta luego.');
+      await authService.logout();
+      window.location.href = '/login';
+    } catch (err) {
+      const msg = err?.response?.data?.error || err?.message || 'Error al eliminar la cuenta';
+      if (msg.includes('invalid') || msg.includes('password') || msg.includes('contraseña')) {
+        toast.error('Contraseña incorrecta');
+      } else {
+        toast.error(msg);
+      }
+    } finally {
+      setDeleting(false);
+    }
+  };
+
+  return (
+    <div className="border border-red-200 dark:border-red-800 rounded-fr overflow-hidden">
+      {/* Collapsible header */}
+      <button
+        onClick={() => setExpanded(v => !v)}
+        className="w-full flex items-center justify-between px-4 py-3 bg-red-50 dark:bg-red-900/20 text-left hover:bg-red-100 dark:hover:bg-red-900/30 transition-colors"
+      >
+        <span className="flex items-center gap-2 text-sm font-medium text-red-700 dark:text-red-400">
+          <FaExclamationTriangle className="w-4 h-4 flex-shrink-0" />
+          Eliminar cuenta
+        </span>
+        <FaChevronDown className={`w-3.5 h-3.5 text-red-500 transition-transform duration-200 ${expanded ? 'rotate-180' : ''}`} />
+      </button>
+
+      {/* Expandable body */}
+      {expanded && (
+        <div className="px-4 pb-4 pt-3 bg-red-50 dark:bg-red-900/20 border-t border-red-200 dark:border-red-800 space-y-4">
+          {/* Description */}
+          <div className="flex items-start gap-2.5">
+            <FaExclamationTriangle className="w-4 h-4 text-red-500 mt-0.5 flex-shrink-0" />
+            <div className="space-y-1">
+              <p className="text-sm font-semibold text-red-900 dark:text-red-100">{getTitle()}</p>
+              <p className="text-sm text-red-700 dark:text-red-300">{getDescription()}</p>
+              <p className="text-xs text-red-600 dark:text-red-400 opacity-80">Esta acción es irreversible.</p>
+            </div>
+          </div>
+
+          {/* Option to also delete space (only for transfer case) */}
+          {willTransferOwnership && isOwner && memberCount !== null && (
+            <label className="flex items-start gap-2.5 cursor-pointer group">
+              <input
+                type="checkbox"
+                checked={alsoDeleteSpace}
+                onChange={e => setAlsoDeleteSpace(e.target.checked)}
+                className="mt-0.5 accent-red-600 w-4 h-4 flex-shrink-0"
+              />
+              <span className="text-sm text-red-700 dark:text-red-300">
+                También eliminar el espacio <span className="font-semibold">"{currentTenant.name}"</span> y todos sus datos
+              </span>
+            </label>
+          )}
+
+          {/* Confirm inputs */}
+          <div className="space-y-3">
+            <div>
+              <label className="block text-xs text-red-700 dark:text-red-400 mb-1">
+                Escribí <span className="font-mono font-semibold">{confirmTarget}</span> para confirmar:
+              </label>
+              <input
+                type="text"
+                value={confirmText}
+                onChange={(e) => setConfirmText(e.target.value)}
+                placeholder={confirmTarget}
+                className="w-full px-3 py-2 border border-red-300 dark:border-red-700 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-red-500 text-sm"
+              />
+            </div>
+            <div>
+              <label className="block text-xs text-red-700 dark:text-red-400 mb-1">
+                Contraseña actual:
+              </label>
+              <input
+                type="password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                placeholder="••••••••"
+                className="w-full px-3 py-2 border border-red-300 dark:border-red-700 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-red-500 text-sm"
+              />
+            </div>
+            <button
+              onClick={handleDelete}
+              disabled={!canDelete || deleting}
+              className="flex items-center gap-2 px-4 py-2 bg-red-600 hover:bg-red-700 text-white text-sm font-medium rounded-lg disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+            >
+              <FaTrash className="w-3.5 h-3.5" />
+              {deleting ? 'Eliminando…' : getTitle()}
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
 
 const Settings = () => {
   const location = useLocation();
-  const { hasPermission } = useTenant();
-  const [activeTab, setActiveTab] = useState('profile');
+  const { hasPermission, currentTenant, myRole } = useTenant();
+  const [activeTab, setActiveTab] = useState('ajustes');
   const [show2FAModal, setShow2FAModal] = useState(false);
   const [showChangePasswordModal, setShowChangePasswordModal] = useState(false);
   const { user, updateProfile, uploadAvatar } = useAuth();
   const [loading, setLoading] = useState(false);
   const fileInputRef = useRef(null);
   const [avatarPreview, setAvatarPreview] = useState(null);
+  const [showEmailWarning, setShowEmailWarning] = useState(false);
 
 
   
@@ -61,14 +307,13 @@ const Settings = () => {
     const searchParams = new URLSearchParams(location.search);
     const tabParam = searchParams.get('tab');
     
-    if (tabParam && ['profile', 'notifications', 'security', 'espacio', 'actividad'].includes(tabParam)) {
+    if (tabParam && ['ajustes', 'security', 'espacio', 'actividad'].includes(tabParam)) {
       setActiveTab(tabParam);
     }
   }, [location.search]);
 
   const tabs = [
-    { id: 'profile', label: 'Perfil', icon: FaUser },
-    { id: 'notifications', label: 'Notificaciones', icon: FaBell, disabled: true },
+    { id: 'ajustes', label: 'Ajustes', icon: FaCog },
     { id: 'security', label: 'Seguridad', icon: FaLock },
     { id: 'espacio', label: 'Espacio', icon: FaUserCog },
     ...(hasPermission('view_audit_logs') ? [{ id: 'actividad', label: 'Actividad', icon: FaHistory }] : []),
@@ -119,57 +364,56 @@ const Settings = () => {
     }
   };
 
+  const emailChanged = settings.profile.email.trim() !== (user?.email || '');
+
   const handleSave = async () => {
-    // Validación mínima
     if (!settings.profile.name.trim()) {
       toast.error('El nombre es obligatorio');
       return;
     }
+    // If email changed, show warning first
+    if (emailChanged) {
+      setShowEmailWarning(true);
+      return;
+    }
+    await doSave();
+  };
+
+  const doSave = async () => {
+    setShowEmailWarning(false);
     setLoading(true);
     try {
-      // Separar nombre completo en first_name y last_name
       const [first_name, ...rest] = settings.profile.name.trim().split(' ');
       const last_name = rest.join(' ');
-      
-      // Subir avatar si hay un archivo nuevo
+
       if (settings.profile.avatar instanceof File) {
         try {
-          console.log('🔧 [Settings] Subiendo avatar usando authService...');
-          console.log('🔧 [Settings] Archivo a subir:', {
-            name: settings.profile.avatar.name,
-            size: settings.profile.avatar.size,
-            type: settings.profile.avatar.type
-          });
-          
           const result = await uploadAvatar(settings.profile.avatar);
-          console.log('🔧 [Settings] Resultado completo del uploadAvatar:', result);
-          
-          if (result.success) {
-            console.log('✅ [Settings] Avatar subido exitosamente:', result);
-          } else {
-            console.error('❌ [Settings] Upload falló:', result.error);
-            throw new Error(result.error || 'Error subiendo avatar');
-          }
+          if (!result.success) throw new Error(result.error || 'Error subiendo avatar');
         } catch (error) {
-          console.error('❌ [Settings] Error subiendo avatar:', error);
           toast.error(`Error subiendo avatar: ${error.message}`);
         }
       }
-      
-      // Actualizar datos del perfil (sin avatar, ya que se maneja por separado)
+
       const profileData = {
-        id: user?.id,
-        email: user?.email,
         first_name,
         last_name,
         phone: settings.profile.phone,
+        email: settings.profile.email.trim(),
       };
-      
+
       const result = await updateProfile(profileData);
       if (result.success) {
-        toast.success('Perfil actualizado');
-        // Limpiar preview después de guardar
-        setAvatarPreview(null);
+        if (result.emailChanged) {
+          toast.success('Email actualizado. Revisá tu casilla para verificarlo. Tu sesión se cerrará.');
+          setTimeout(async () => {
+            await authService.logout();
+            window.location.href = '/login';
+          }, 3000);
+        } else {
+          toast.success('Perfil actualizado');
+          setAvatarPreview(null);
+        }
       } else {
         toast.error(result.error || 'Error actualizando perfil');
       }
@@ -182,12 +426,6 @@ const Settings = () => {
 
   const handleExportData = () => {
     toast.success('Exportación iniciada. Recibirás un email con tus datos.');
-  };
-
-  const handleDeleteAccount = () => {
-    if (window.confirm('¿Estás seguro de que quieres eliminar tu cuenta? Esta acción no se puede deshacer.')) {
-      toast.error('Funcionalidad no implementada en demo');
-    }
   };
 
   const updateSetting = (section, key, value) => {
@@ -203,7 +441,7 @@ const Settings = () => {
   return (
     <div className="space-y-4">
       {/* Tabs — mismo estilo que el dashboard */}
-      <div className="flex border-b border-gray-200 dark:border-gray-700">
+      <div className="flex overflow-x-auto scrollbar-hide border-b border-gray-200 dark:border-gray-700">
         {tabs.map((tab) => {
           const Icon = tab.icon;
           return (
@@ -228,8 +466,10 @@ const Settings = () => {
       {activeTab === 'espacio' && <TenantSettings widgetMode />}
       {activeTab === 'actividad' && <AuditLogs />}
       <div className={`card${activeTab === 'espacio' || activeTab === 'actividad' ? ' hidden' : ''}`}>
-        {activeTab === 'profile' && (
-          <div className="space-y-6">
+        {activeTab === 'ajustes' && (
+          <div className="space-y-8">
+            {/* ── Perfil ── */}
+            <div className="space-y-6">
             <h3 className="text-lg font-semibold text-fr-gray-900 dark:text-gray-100">Información del Perfil</h3>
             
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -248,12 +488,17 @@ const Settings = () => {
               <div>
                 <label className="block text-sm font-medium text-fr-gray-700 dark:text-gray-300 mb-2">
                   Email
+                  {emailChanged && (
+                    <span className="ml-2 text-xs font-normal text-amber-600 dark:text-amber-400">
+                      · cambiar email cerrará tu sesión
+                    </span>
+                  )}
                 </label>
                 <input
                   type="email"
                   value={settings.profile.email}
                   onChange={(e) => updateSetting('profile', 'email', e.target.value)}
-                  className="input"
+                  className={`input ${emailChanged ? 'border-amber-400 dark:border-amber-500 focus:ring-amber-400' : ''}`}
                 />
               </div>
 
@@ -353,32 +598,12 @@ const Settings = () => {
               </button>
             </div>
           </div>
-        )}
 
-        {activeTab === 'notifications' && (
-          <div className="space-y-6">
-            <div className="flex items-center space-x-3 mb-6">
-              <h3 className="text-lg font-semibold text-fr-gray-900 dark:text-gray-100">Configuración de Notificaciones</h3>
-              <span className="px-2 py-1 text-xs bg-yellow-100 dark:bg-yellow-900/30 text-yellow-800 dark:text-yellow-200 rounded-full">
-                Próximamente
-              </span>
-            </div>
-            
-            <div className="bg-gray-50 dark:bg-gray-800 rounded-lg p-6 text-center">
-              <FaBell className="w-12 h-12 text-gray-400 dark:text-gray-500 mx-auto mb-4" />
-              <h4 className="text-lg font-medium text-gray-900 dark:text-gray-100 mb-2">
-                Configuración de Notificaciones
-              </h4>
-              <p className="text-gray-600 dark:text-gray-400 mb-4">
-                Esta funcionalidad estará disponible próximamente. Podrás configurar notificaciones por email, push y alertas personalizadas.
-              </p>
-              <div className="space-y-2 text-sm text-gray-500 dark:text-gray-400">
-                <p>• Notificaciones por email</p>
-                <p>• Notificaciones push en tiempo real</p>
-                <p>• Reportes semanales automáticos</p>
-                <p>• Alertas de gastos y presupuestos</p>
-              </div>
-            </div>
+            {/* ── Divider ── */}
+            <hr className="border-gray-200 dark:border-gray-700" />
+
+            {/* ── Notificaciones ── */}
+            <NotificationsTab />
           </div>
         )}
 
@@ -427,19 +652,8 @@ const Settings = () => {
                 </button>
               </div>
 
-              <div className="border border-red-200 dark:border-red-800 rounded-fr p-4 bg-red-50 dark:bg-red-900/20">
-                <h4 className="font-medium text-red-900 dark:text-red-100 mb-2">Zona de peligro</h4>
-                <p className="text-sm text-red-700 dark:text-red-200 mb-4">
-                  Una vez que elimines tu cuenta, no hay vuelta atrás. Por favor, ten cuidado.
-                </p>
-                <button 
-                  onClick={handleDeleteAccount}
-                  className="bg-red-600 hover:bg-red-700 dark:bg-red-700 dark:hover:bg-red-800 text-white font-medium py-2 px-4 rounded-fr transition-colors flex items-center space-x-2"
-                >
-                  <FaTrash className="w-4 h-4" />
-                  <span>Eliminar Cuenta</span>
-                </button>
-              </div>
+              {/* ── Zona de peligro ── */}
+              <DeletionSection user={user} myRole={myRole} currentTenant={currentTenant} />
             </div>
           </div>
         )}
@@ -458,6 +672,39 @@ const Settings = () => {
         isOpen={showChangePasswordModal}
         onClose={() => setShowChangePasswordModal(false)}
       />
+
+      {/* Email change warning modal */}
+      {showEmailWarning && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 px-4">
+          <div className="bg-white dark:bg-gray-800 rounded-xl shadow-xl max-w-sm w-full p-6 space-y-4">
+            <div className="flex items-start gap-3">
+              <FaBell className="w-5 h-5 text-amber-500 flex-shrink-0 mt-0.5" />
+              <div>
+                <h3 className="text-base font-semibold text-gray-900 dark:text-gray-100">Cambiar email</h3>
+                <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
+                  Tu sesión se cerrará y se enviará un correo de verificación a{' '}
+                  <span className="font-medium text-gray-900 dark:text-gray-100">{settings.profile.email}</span>.
+                  Necesitarás verificarlo para volver a iniciar sesión.
+                </p>
+              </div>
+            </div>
+            <div className="flex gap-3 justify-end">
+              <button
+                onClick={() => setShowEmailWarning(false)}
+                className="px-4 py-2 text-sm text-gray-700 dark:text-gray-300 border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={doSave}
+                className="px-4 py-2 text-sm bg-amber-500 hover:bg-amber-600 text-white rounded-lg transition-colors"
+              >
+                Confirmar y cerrar sesión
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

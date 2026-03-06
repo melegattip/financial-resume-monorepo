@@ -6,6 +6,7 @@ import { PeriodProvider } from '../../contexts/PeriodContext';
 
 const Layout = () => {
   const [isDesktopCollapsed, setIsDesktopCollapsed] = useState(false);
+  const [isMobileOpen, setIsMobileOpen] = useState(false);
 
   return (
     <PeriodProvider>
@@ -14,12 +15,14 @@ const Layout = () => {
         <Sidebar
           isDesktopCollapsed={isDesktopCollapsed}
           onDesktopToggle={() => setIsDesktopCollapsed(prev => !prev)}
+          isMobileOpen={isMobileOpen}
+          onMobileClose={() => setIsMobileOpen(false)}
         />
 
         {/* Main content area */}
         <div className={`transition-all duration-300 ease-in-out ${isDesktopCollapsed ? 'lg:ml-16' : 'lg:ml-52'}`}>
           {/* Header */}
-          <Header />
+          <Header onMobileMenuToggle={() => setIsMobileOpen(prev => !prev)} isMobileMenuOpen={isMobileOpen} />
 
           {/* Page content */}
           <main className="p-3 sm:p-4 pt-3">
@@ -31,4 +34,4 @@ const Layout = () => {
   );
 };
 
-export default Layout; 
+export default Layout;

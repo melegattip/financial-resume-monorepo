@@ -5,11 +5,11 @@ import { useTenant } from '../../contexts/TenantContext';
 import PeriodFilter from './PeriodFilter';
 import ThemeToggle from '../ThemeToggle';
 import GamificationWidget from '../GamificationWidget';
-import { FaUser, FaSignOutAlt, FaHome, FaBrain, FaPlusCircle, FaMinusCircle, FaFolderOpen, FaFileAlt, FaCog, FaChartPie, FaBullseye, FaRedo, FaTrophy, FaBell, FaLock, FaChevronDown, FaUserCog, FaHistory, FaExchangeAlt, FaCheck } from 'react-icons/fa';
+import { FaUser, FaSignOutAlt, FaHome, FaBrain, FaPlusCircle, FaMinusCircle, FaFolderOpen, FaFileAlt, FaCog, FaChartPie, FaBullseye, FaRedo, FaTrophy, FaBell, FaLock, FaChevronDown, FaUserCog, FaHistory, FaExchangeAlt, FaCheck, FaBars } from 'react-icons/fa';
 import { getAvatarUrl } from '../../utils/avatarUtils';
 import toast from 'react-hot-toast';
 
-const Header = () => {
+const Header = ({ onMobileMenuToggle }) => {
   const { user, logout } = useAuth();
   const { currentTenant, myRole, hasPermission, availableTenants, switching, switchTenant } = useTenant();
   const location = useLocation();
@@ -129,11 +129,20 @@ const Header = () => {
 
   return (
     <header className="bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 sticky top-0 z-40 shadow-sm dark:shadow-gray-900/20 transition-colors duration-300">
-      <div className="pl-14 pr-4 lg:px-6 xl:px-8">
+      <div className="px-3 sm:px-4 lg:px-6 xl:px-8">
         <div className="flex items-center justify-between h-12 sm:h-14">
-          
+
           {/* Left Side - Page title and info */}
-          <div className="flex items-center flex-1 min-w-0 mr-2 sm:mr-4">
+          <div className="flex items-center flex-1 min-w-0 mr-2 sm:mr-4 gap-2 sm:gap-3">
+            {/* Mobile/Tablet hamburger button — hidden on desktop */}
+            <button
+              onClick={onMobileMenuToggle}
+              className="lg:hidden flex-shrink-0 p-1.5 rounded-lg text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+              aria-label="Abrir menú"
+            >
+              <FaBars className="w-5 h-5" />
+            </button>
+
             {/* Desktop/Tablet: Icono + título completo */}
             <div className="hidden sm:flex items-center space-x-3">
               <div className="p-2 bg-blue-50 dark:bg-blue-900/30 rounded-lg">
@@ -160,16 +169,12 @@ const Header = () => {
           {/* Right Side - Actions */}
           <div className="flex items-center space-x-1 sm:space-x-2 lg:space-x-3 flex-shrink-0">
             
-            {/* Period Filter - Responsive sizing */}
+            {/* Period Filter */}
             <div className="hidden sm:block">
               <PeriodFilter />
             </div>
-            
-            {/* Mobile Period Filter - Very compact */}
             <div className="sm:hidden">
-              <div className="scale-75">
-                <PeriodFilter />
-              </div>
+              <PeriodFilter compact />
             </div>
 
             {/* Gamification Widget - Only desktop */}
@@ -177,10 +182,8 @@ const Header = () => {
               <GamificationWidget />
             </div>
 
-            {/* Theme Toggle - Very compact on mobile */}
-            <div className="scale-75 sm:scale-100">
-              <ThemeToggle />
-            </div>
+            {/* Theme Toggle */}
+            <ThemeToggle />
 
             {/* User Menu - Responsive */}
             <div className="flex items-center space-x-0.5 sm:space-x-2" ref={userMenuRef}>

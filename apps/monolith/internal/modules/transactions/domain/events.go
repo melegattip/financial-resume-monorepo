@@ -6,6 +6,7 @@ import "time"
 type ExpenseCreatedEvent struct {
 	ExpenseID       string
 	User            string
+	TenantID        string
 	CategoryID      string
 	Amount          float64
 	Description     string

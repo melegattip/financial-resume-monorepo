@@ -1,13 +1,12 @@
-import React, { useState } from 'react';
+import React from 'react';
 import { Link, useLocation } from 'react-router-dom';
-import { FaFolderOpen, FaBrain, FaFileAlt, FaCog, FaBars, FaTimes, FaHome, FaStar, FaChartPie, FaBullseye, FaRedo, FaTrophy, FaChevronLeft, FaChevronRight } from 'react-icons/fa';
+import { FaFolderOpen, FaBrain, FaFileAlt, FaCog, FaHome, FaStar, FaChartPie, FaBullseye, FaRedo, FaTrophy, FaChevronLeft, FaChevronRight } from 'react-icons/fa';
 import Brand from '../Brand';
 import Logo from '../Logo';
 import FeatureProgressIndicator from '../FeatureProgressIndicator';
 
-const Sidebar = ({ isDesktopCollapsed = false, onDesktopToggle }) => {
+const Sidebar = ({ isDesktopCollapsed = false, onDesktopToggle, isMobileOpen = false, onMobileClose }) => {
   const location = useLocation();
-  const [isOpen, setIsOpen] = useState(false);
 
   // Grupo 1: Transacciones principales
   const mainMenuItems = [
@@ -30,10 +29,6 @@ const Sidebar = ({ isDesktopCollapsed = false, onDesktopToggle }) => {
     { path: '/settings', icon: FaCog, label: 'Configuración' },
   ];
 
-  const toggleSidebar = () => {
-    setIsOpen(!isOpen);
-  };
-
   const isActive = (path) => location.pathname === path;
 
   const renderMenuItem = (item) => {
@@ -46,7 +41,7 @@ const Sidebar = ({ isDesktopCollapsed = false, onDesktopToggle }) => {
         key={item.path}
         to={item.path}
         title={item.label}
-        onClick={() => setIsOpen(false)}
+        onClick={onMobileClose}
         className={`
           group flex items-center justify-center p-3 rounded-xl transition-all duration-200 hover:bg-gray-50 dark:hover:bg-gray-700
           ${active
@@ -64,7 +59,7 @@ const Sidebar = ({ isDesktopCollapsed = false, onDesktopToggle }) => {
       <Link
         key={item.path}
         to={item.path}
-        onClick={() => setIsOpen(false)}
+        onClick={onMobileClose}
         className={`
           group flex flex-col px-4 py-3 rounded-xl transition-all duration-200 hover:bg-gray-50 dark:hover:bg-gray-700
           ${active
@@ -114,20 +109,11 @@ const Sidebar = ({ isDesktopCollapsed = false, onDesktopToggle }) => {
 
   return (
     <>
-      {/* Mobile menu button */}
-      <button
-        onClick={toggleSidebar}
-        className="lg:hidden fixed top-3 left-3 z-50 p-2 bg-white/90 backdrop-blur-sm dark:bg-gray-800/90 rounded-lg shadow-lg dark:shadow-gray-900/30 border border-gray-200 dark:border-gray-700 text-gray-900 dark:text-gray-100"
-        aria-label={isOpen ? 'Cerrar menú' : 'Abrir menú'}
-      >
-        {isOpen ? <FaTimes className="w-5 h-5" /> : <FaBars className="w-5 h-5" />}
-      </button>
-
       {/* Overlay for mobile */}
-      {isOpen && (
+      {isMobileOpen && (
         <div
           className="lg:hidden fixed inset-0 bg-black bg-opacity-50 z-30"
-          onClick={toggleSidebar}
+          onClick={onMobileClose}
         />
       )}
 
@@ -136,7 +122,7 @@ const Sidebar = ({ isDesktopCollapsed = false, onDesktopToggle }) => {
         fixed lg:fixed inset-y-0 left-0 z-40 bg-white dark:bg-gray-800 border-r border-gray-200 dark:border-gray-700 transform transition-all duration-300 ease-in-out
         ${isDesktopCollapsed ? 'lg:w-16' : 'lg:w-52'}
         w-52
-        ${isOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'}
+        ${isMobileOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'}
       `}>
         <div className="flex flex-col h-full">
           {/* Header */}

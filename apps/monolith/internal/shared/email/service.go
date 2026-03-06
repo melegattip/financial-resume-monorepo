@@ -18,6 +18,8 @@ import (
 type EmailService interface {
 	SendPasswordReset(toEmail, resetLink string) error
 	SendEmailVerification(toEmail, firstName, verificationLink string) error
+	SendBudgetAlert(toEmail, firstName, categoryID, period, newStatus string, spentAmount, budgetLimit float64) error
+	SendLoginNotification(toEmail, firstName, loginTime string) error
 }
 
 // SMTPConfig holds SMTP connection settings.
@@ -233,6 +235,63 @@ func (s *NoOpEmailService) SendEmailVerification(toEmail, firstName, verificatio
 	return nil
 }
 
+// SendBudgetAlert sends a budget threshold alert via SMTP.
+func (s *SMTPEmailService) SendBudgetAlert(toEmail, firstName, categoryID, period, newStatus string, spentAmount, budgetLimit float64) error {
+	msg := buildMIMEMessage(s.cfg.From, toEmail, "Alerta de presupuesto — Niloft", buildBudgetAlertHTML(firstName, categoryID, period, newStatus, spentAmount, budgetLimit))
+	if err := s.send(toEmail, msg); err != nil {
+		return err
+	}
+	s.logger.Info().Str("to", toEmail).Msg("budget alert email sent")
+	return nil
+}
+
+// SendLoginNotification sends a new login notification via SMTP.
+func (s *SMTPEmailService) SendLoginNotification(toEmail, firstName, loginTime string) error {
+	msg := buildMIMEMessage(s.cfg.From, toEmail, "Nuevo inicio de sesión — Niloft", buildLoginNotificationHTML(firstName, loginTime))
+	if err := s.send(toEmail, msg); err != nil {
+		return err
+	}
+	s.logger.Info().Str("to", toEmail).Msg("login notification email sent")
+	return nil
+}
+
+// SendBudgetAlert sends a budget threshold alert via Resend.
+func (s *ResendEmailService) SendBudgetAlert(toEmail, firstName, categoryID, period, newStatus string, spentAmount, budgetLimit float64) error {
+	if err := s.sendResend(toEmail, "Alerta de presupuesto — Niloft", buildBudgetAlertHTML(firstName, categoryID, period, newStatus, spentAmount, budgetLimit)); err != nil {
+		return err
+	}
+	s.logger.Info().Str("to", toEmail).Msg("budget alert email sent via Resend")
+	return nil
+}
+
+// SendLoginNotification sends a new login notification via Resend.
+func (s *ResendEmailService) SendLoginNotification(toEmail, firstName, loginTime string) error {
+	if err := s.sendResend(toEmail, "Nuevo inicio de sesión — Niloft", buildLoginNotificationHTML(firstName, loginTime)); err != nil {
+		return err
+	}
+	s.logger.Info().Str("to", toEmail).Msg("login notification email sent via Resend")
+	return nil
+}
+
+// SendBudgetAlert logs a budget alert (no-op mode).
+func (s *NoOpEmailService) SendBudgetAlert(toEmail, firstName, categoryID, period, newStatus string, spentAmount, budgetLimit float64) error {
+	s.logger.Info().
+		Str("to", toEmail).
+		Str("category_id", categoryID).
+		Str("new_status", newStatus).
+		Msg("[NO-OP EMAIL] budget alert — configure email to send real emails")
+	return nil
+}
+
+// SendLoginNotification logs a login notification (no-op mode).
+func (s *NoOpEmailService) SendLoginNotification(toEmail, firstName, loginTime string) error {
+	s.logger.Info().
+		Str("to", toEmail).
+		Str("login_time", loginTime).
+		Msg("[NO-OP EMAIL] login notification — configure email to send real emails")
+	return nil
+}
+
 func buildMIMEMessage(from, to, subject, htmlBody string) string {
 	var sb strings.Builder
 	sb.WriteString("MIME-Version: 1.0\r\n")
@@ -280,6 +339,74 @@ func buildVerificationEmailHTML(firstName, verificationLink string) string {
   </div>
 </body>
 </html>`
+}
+
+func buildBudgetAlertHTML(firstName, categoryID, period, newStatus string, spentAmount, budgetLimit float64) string {
+	spentPct := 0.0
+	if budgetLimit > 0 {
+		spentPct = (spentAmount / budgetLimit) * 100
+	}
+	statusLabel := "en alerta"
+	statusColor := "#f59e0b"
+	if newStatus == "exceeded" {
+		statusLabel = "excedido"
+		statusColor = "#ef4444"
+	}
+	return fmt.Sprintf(`<!DOCTYPE html>
+<html>
+<head><meta charset="UTF-8"></head>
+<body style="font-family: Arial, sans-serif; background: #f4f4f4; padding: 40px 0; margin: 0;">
+  <div style="max-width: 480px; margin: 0 auto; background: #fff; border-radius: 12px; overflow: hidden; box-shadow: 0 2px 8px rgba(0,0,0,0.08);">
+    <div style="background: linear-gradient(135deg, #3b82f6, #6366f1); padding: 32px; text-align: center;">
+      <img src="https://financial.niloft.com/logo-niloft.png" alt="Niloft" style="height: 48px; width: auto; display: block; margin: 0 auto;">
+      <p style="color: rgba(255,255,255,0.8); margin: 10px 0 0; font-size: 13px;">Tu asistente financiero</p>
+    </div>
+    <div style="padding: 36px 32px;">
+      <h2 style="color: #1f2937; margin-top: 0; font-size: 20px;">Alerta de presupuesto, %s</h2>
+      <p style="color: #6b7280; line-height: 1.6; margin-bottom: 20px;">
+        Tu presupuesto para el período <strong>%s</strong> está <span style="color:%s;font-weight:600;">%s</span>.
+      </p>
+      <div style="background:#f9fafb;border-radius:8px;padding:20px;margin-bottom:24px;">
+        <p style="margin:0 0 8px;color:#374151;font-size:14px;"><strong>Categoría:</strong> %s</p>
+        <p style="margin:0 0 8px;color:#374151;font-size:14px;"><strong>Gastado:</strong> $%.2f de $%.2f</p>
+        <p style="margin:0;color:%s;font-size:14px;font-weight:600;"><strong>Porcentaje:</strong> %.1f%%</p>
+      </div>
+      <hr style="border: none; border-top: 1px solid #e5e7eb; margin: 24px 0;">
+      <p style="color: #d1d5db; font-size: 12px; text-align: center; margin: 0;">
+        © 2025 Niloft · Tu asistente financiero
+      </p>
+    </div>
+  </div>
+</body>
+</html>`, firstName, period, statusColor, statusLabel, categoryID, spentAmount, budgetLimit, statusColor, spentPct)
+}
+
+func buildLoginNotificationHTML(firstName, loginTime string) string {
+	return fmt.Sprintf(`<!DOCTYPE html>
+<html>
+<head><meta charset="UTF-8"></head>
+<body style="font-family: Arial, sans-serif; background: #f4f4f4; padding: 40px 0; margin: 0;">
+  <div style="max-width: 480px; margin: 0 auto; background: #fff; border-radius: 12px; overflow: hidden; box-shadow: 0 2px 8px rgba(0,0,0,0.08);">
+    <div style="background: linear-gradient(135deg, #3b82f6, #6366f1); padding: 32px; text-align: center;">
+      <img src="https://financial.niloft.com/logo-niloft.png" alt="Niloft" style="height: 48px; width: auto; display: block; margin: 0 auto;">
+      <p style="color: rgba(255,255,255,0.8); margin: 10px 0 0; font-size: 13px;">Tu asistente financiero</p>
+    </div>
+    <div style="padding: 36px 32px;">
+      <h2 style="color: #1f2937; margin-top: 0; font-size: 20px;">Nuevo inicio de sesión, %s</h2>
+      <p style="color: #6b7280; line-height: 1.6; margin-bottom: 20px;">
+        Se detectó un nuevo inicio de sesión en tu cuenta el <strong>%s</strong>.
+      </p>
+      <p style="color: #6b7280; line-height: 1.6; font-size: 14px;">
+        Si no fuiste vos, cambiá tu contraseña inmediatamente desde la sección de seguridad.
+      </p>
+      <hr style="border: none; border-top: 1px solid #e5e7eb; margin: 24px 0;">
+      <p style="color: #d1d5db; font-size: 12px; text-align: center; margin: 0;">
+        © 2025 Niloft · Tu asistente financiero
+      </p>
+    </div>
+  </div>
+</body>
+</html>`, firstName, loginTime)
 }
 
 func buildResetEmailHTML(resetLink string) string {

@@ -676,7 +676,10 @@ const Resumen = () => {
     try {
       const dataToSend = {
         ...expenseFormData,
-        amount: parseFloat(expenseFormData.amount)
+        amount: parseFloat(expenseFormData.amount),
+        transaction_date: expenseFormData.transaction_date
+          ? new Date(expenseFormData.transaction_date + 'T12:00:00').toISOString().replace(/\.\d{3}Z$/, 'Z')
+          : undefined,
       };
 
       await expensesAPI.update(editingExpense.id, dataToSend);
@@ -711,7 +714,10 @@ const Resumen = () => {
     try {
       const dataToSend = {
         ...incomeFormData,
-        amount: parseFloat(incomeFormData.amount)
+        amount: parseFloat(incomeFormData.amount),
+        received_date: incomeFormData.received_date
+          ? new Date(incomeFormData.received_date + 'T12:00:00').toISOString().replace(/\.\d{3}Z$/, 'Z')
+          : undefined,
       };
 
       // Usar la API de ingresos ya declarada
@@ -785,7 +791,7 @@ const Resumen = () => {
   return (
     <div className="space-y-3 sm:space-y-4">
       {/* Tab bar */}
-      <div className="flex border-b border-gray-200 dark:border-gray-700">
+      <div className="flex overflow-x-auto scrollbar-hide border-b border-gray-200 dark:border-gray-700">
         {[
           { id: 'resumen', label: 'Resumen', badge: (data.expenses.length + data.incomes.length) || null },
           { id: 'gastos', label: 'Gastos', badge: data.expenses.length || null },
@@ -1640,34 +1646,34 @@ const Resumen = () => {
               const color = getCategoryColor(transaction.category_id);
               const category = data.categories.find(c => c.id === transaction.category_id);
               return (
-                <div key={index} className={`flex items-center justify-between p-4 rounded-fr bg-fr-gray-50 dark:bg-gray-700 border-l-4 ${color.border || (isExpense ? 'border-fr-gray-900 dark:border-gray-500' : 'border-fr-secondary')}`}>
-                  <div className="flex items-center space-x-3">
-                    <div className={`p-2 rounded-fr ${isExpense ? 'bg-gray-100 dark:bg-gray-600' : 'bg-green-100 dark:bg-green-900/30'}`}>
+                <div key={index} className={`flex items-start justify-between gap-2 p-3 sm:p-4 rounded-fr bg-fr-gray-50 dark:bg-gray-700 border-l-4 ${color.border || (isExpense ? 'border-fr-gray-900 dark:border-gray-500' : 'border-fr-secondary')}`}>
+                  <div className="flex items-start space-x-3 min-w-0 flex-1">
+                    <div className={`p-2 rounded-fr flex-shrink-0 mt-0.5 ${isExpense ? 'bg-gray-100 dark:bg-gray-600' : 'bg-green-100 dark:bg-green-900/30'}`}>
                       {isExpense ? (
                         <FaArrowDown className="w-4 h-4 text-fr-gray-900 dark:text-gray-300" />
                       ) : (
                         <FaArrowUp className="w-4 h-4 text-fr-secondary" />
                       )}
                     </div>
-                    <div className="flex-1">
-                      <div className="flex items-center space-x-2">
-                        <p className="font-medium text-fr-gray-900 dark:text-gray-100">{transaction.description}</p>
+                    <div className="min-w-0">
+                      <div className="flex flex-wrap items-center gap-1">
+                        <p className="font-medium text-fr-gray-900 dark:text-gray-100 truncate">{transaction.description}</p>
                         {/* Indicador de pago solo para gastos */}
                         {isExpense && (
-                          <div className="flex items-center space-x-1">
+                          <>
                             {transaction.paid ? (
-                              <FaCheckCircle className="w-4 h-4 text-fr-secondary" />
+                              <FaCheckCircle className="w-4 h-4 text-fr-secondary flex-shrink-0" />
                             ) : (
-                              <FaTimesCircle className="w-4 h-4 text-fr-error" />
+                              <FaTimesCircle className="w-4 h-4 text-fr-error flex-shrink-0" />
                             )}
                             {!transaction.paid && (
-                              <span className="px-1.5 py-0.5 rounded-full text-xs font-medium bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-300 border border-red-400">Pendiente</span>
+                              <span className="px-1.5 py-0.5 rounded-full text-xs font-medium bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-300 border border-red-400 whitespace-nowrap">Pendiente</span>
                             )}
-                          </div>
+                          </>
                         )}
                         {/* Badge de categoría */}
                         {category && (
-                          <span className={`px-1.5 py-0.5 rounded-full text-xs font-medium ${color.bg} ${color.text} border ${color.border}`}>
+                          <span className={`px-1.5 py-0.5 rounded-full text-xs font-medium whitespace-nowrap ${color.bg} ${color.text} border ${color.border}`}>
                             {category.name}
                           </span>
                         )}
@@ -1677,11 +1683,11 @@ const Resumen = () => {
                       </p>
                     </div>
                   </div>
-                  <div className="text-right">
+                  <div className="text-right flex-shrink-0">
                     <p className={`font-semibold ${isExpense ? 'text-fr-gray-900 dark:text-gray-100' : 'text-fr-secondary'}`}>
                       {isExpense ? '-' : '+'}{formatAmount(transaction.amount)}
                     </p>
-                    {transaction.percentage && (
+                    {!!transaction.percentage && (
                       <p className="text-sm text-fr-gray-500 dark:text-gray-400">
                         {formatPercentage(transaction.percentage)} del total
                       </p>

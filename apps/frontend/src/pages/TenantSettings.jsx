@@ -147,25 +147,45 @@ function GeneralTab({ tenant, onRefresh, isAdmin }) {
   );
 }
 
-// ─── Members Tab ──────────────────────────────────────────────────────────────
+// Helper: relative expiry label
+function expiryLabel(expiresAt) {
+  if (!expiresAt) return <span className="text-amber-500 dark:text-amber-400">Sin expiración</span>;
+  const diff = new Date(expiresAt) - Date.now();
+  if (diff <= 0) return <span className="text-red-500 dark:text-red-400">Expirada</span>;
+  const hours = Math.floor(diff / 3600000);
+  if (hours < 1) return <span className="text-orange-500 dark:text-orange-400">&lt;1h</span>;
+  if (hours < 24) return <span className="text-amber-600 dark:text-amber-400">Expira en {hours}h</span>;
+  const days = Math.floor(hours / 24);
+  return <span className="text-gray-500 dark:text-gray-400">Expira en {days}d</span>;
+}
 
-function MembersTab({ isAdmin, currentUserID }) {
+// ─── Members + Invitations (unified card) ─────────────────────────────────────
+
+function MembersTab({ isAdmin, currentUserID, showInvitations }) {
   const [members, setMembers] = useState([]);
+  const [invitations, setInvitations] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [creating, setCreating] = useState(false);
+  const [newRole, setNewRole] = useState('member');
+  const [copiedCode, setCopiedCode] = useState(null);
 
   const load = async () => {
     try {
       setLoading(true);
-      const data = await tenantService.listMembers();
-      setMembers(data || []);
+      const [membersData, invData] = await Promise.all([
+        tenantService.listMembers(),
+        showInvitations ? tenantService.listInvitations() : Promise.resolve([]),
+      ]);
+      setMembers(membersData || []);
+      setInvitations(invData || []);
     } catch (err) {
-      toast.error('Error cargando miembros');
+      toast.error('Error cargando datos');
     } finally {
       setLoading(false);
     }
   };
 
-  useEffect(() => { load(); }, []);
+  useEffect(() => { load(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const adminCount = members.filter(m => m.role === 'admin').length;
 
@@ -190,19 +210,56 @@ function MembersTab({ isAdmin, currentUserID }) {
     }
   };
 
+  const handleCreate = async () => {
+    try {
+      setCreating(true);
+      await tenantService.createInvitation({ role: newRole });
+      toast.success('Invitación creada (válida 24h)');
+      load();
+    } catch (err) {
+      toast.error(err.response?.data?.error || 'Error creando invitación');
+    } finally {
+      setCreating(false);
+    }
+  };
+
+  const handleRevoke = async (code) => {
+    if (!window.confirm('¿Revocar esta invitación?')) return;
+    try {
+      await tenantService.revokeInvitation(code);
+      toast.success('Invitación revocada');
+      load();
+    } catch (err) {
+      toast.error(err.response?.data?.error || 'Error revocando invitación');
+    }
+  };
+
+  const handleCopy = (code) => {
+    navigator.clipboard.writeText(code);
+    setCopiedCode(code);
+    setTimeout(() => setCopiedCode(null), 2000);
+  };
+
   if (loading) {
-    return <div className="text-center py-8 text-gray-500 dark:text-gray-400">Cargando miembros…</div>;
+    return <div className="text-center py-8 text-gray-500 dark:text-gray-400">Cargando…</div>;
   }
 
   return (
     <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 overflow-hidden">
+      {/* ── Miembros ── */}
+      <div className="px-4 py-3 border-b border-gray-100 dark:border-gray-700 bg-gray-50 dark:bg-gray-700/50">
+        <div className="flex items-center gap-2">
+          <FaUsers className="w-4 h-4 text-gray-500 dark:text-gray-400" />
+          <span className="text-sm font-semibold text-gray-900 dark:text-gray-100">Miembros</span>
+        </div>
+      </div>
       <table className="w-full text-sm">
         <thead>
-          <tr className="border-b border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-700/50">
-            <th className="text-left px-4 py-3 text-gray-600 dark:text-gray-400 font-medium">Usuario</th>
-            <th className="text-left px-4 py-3 text-gray-600 dark:text-gray-400 font-medium">Rol</th>
-            <th className="text-left px-4 py-3 text-gray-600 dark:text-gray-400 font-medium">Desde</th>
-            {isAdmin && <th className="px-4 py-3" />}
+          <tr className="border-b border-gray-200 dark:border-gray-700 bg-gray-50/50 dark:bg-gray-700/30">
+            <th className="text-left px-4 py-2.5 text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide">Usuario</th>
+            <th className="text-left px-4 py-2.5 text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide">Rol</th>
+            <th className="text-left px-4 py-2.5 text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide">Desde</th>
+            {isAdmin && <th className="px-4 py-2.5" />}
           </tr>
         </thead>
         <tbody className="divide-y divide-gray-100 dark:divide-gray-700">
@@ -239,7 +296,7 @@ function MembersTab({ isAdmin, currentUserID }) {
                     </span>
                   )}
                 </td>
-                <td className="px-4 py-3 text-gray-500 dark:text-gray-400">
+                <td className="px-4 py-3 text-gray-500 dark:text-gray-400 text-xs">
                   {m.joined_at ? new Date(m.joined_at).toLocaleDateString('es-AR') : '—'}
                 </td>
                 {isAdmin && (
@@ -260,164 +317,112 @@ function MembersTab({ isAdmin, currentUserID }) {
           })}
           {members.length === 0 && (
             <tr>
-              <td colSpan={isAdmin ? 4 : 3} className="px-4 py-8 text-center text-gray-500 dark:text-gray-400">
+              <td colSpan={isAdmin ? 4 : 3} className="px-4 py-6 text-center text-gray-500 dark:text-gray-400 text-sm">
                 No hay miembros.
               </td>
             </tr>
           )}
         </tbody>
       </table>
-    </div>
-  );
-}
 
-// ─── Invitations Tab ──────────────────────────────────────────────────────────
-
-function InvitationsTab() {
-  const [invitations, setInvitations] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [creating, setCreating] = useState(false);
-  const [newRole, setNewRole] = useState('member');
-  const [copiedCode, setCopiedCode] = useState(null);
-
-  const load = async () => {
-    try {
-      setLoading(true);
-      const data = await tenantService.listInvitations();
-      setInvitations(data || []);
-    } catch (err) {
-      toast.error('Error cargando invitaciones');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  useEffect(() => { load(); }, []);
-
-  const handleCreate = async () => {
-    try {
-      setCreating(true);
-      await tenantService.createInvitation({ role: newRole });
-      toast.success('Invitación creada');
-      load();
-    } catch (err) {
-      toast.error(err.response?.data?.error || 'Error creando invitación');
-    } finally {
-      setCreating(false);
-    }
-  };
-
-  const handleRevoke = async (code) => {
-    if (!window.confirm('¿Revocar esta invitación?')) return;
-    try {
-      await tenantService.revokeInvitation(code);
-      toast.success('Invitación revocada');
-      load();
-    } catch (err) {
-      toast.error(err.response?.data?.error || 'Error revocando invitación');
-    }
-  };
-
-  const handleCopy = (code) => {
-    navigator.clipboard.writeText(code);
-    setCopiedCode(code);
-    setTimeout(() => setCopiedCode(null), 2000);
-  };
-
-  return (
-    <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 overflow-hidden">
-      {/* Header con create inline */}
-      <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100 dark:border-gray-700 bg-gray-50 dark:bg-gray-800/50">
-        <div className="flex items-center gap-2">
-          <FaEnvelope className="w-4 h-4 text-gray-500 dark:text-gray-400" />
-          <span className="text-sm font-semibold text-gray-900 dark:text-gray-100">Invitaciones activas</span>
-        </div>
-        <div className="flex items-center gap-2">
-          <select
-            value={newRole}
-            onChange={(e) => setNewRole(e.target.value)}
-            className="px-2 py-1.5 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 text-xs"
-          >
-            {ROLES.filter(r => r !== 'owner').map(r => (
-              <option key={r} value={r}>{r}</option>
-            ))}
-          </select>
-          <button
-            onClick={handleCreate}
-            disabled={creating}
-            className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-600 text-white text-xs rounded-lg hover:bg-blue-700 disabled:opacity-50 transition-colors"
-          >
-            <FaPlus className="w-3 h-3" />
-            {creating ? 'Creando…' : 'Nuevo código'}
-          </button>
-        </div>
-      </div>
-
-      {/* List */}
-      {loading ? (
-        <div className="text-center py-8 text-gray-500 dark:text-gray-400 text-sm">Cargando…</div>
-      ) : invitations.length === 0 ? (
-        <div className="text-center py-8 text-gray-500 dark:text-gray-400 text-sm">No hay invitaciones activas.</div>
-      ) : (
-        <table className="w-full text-sm">
-          <thead>
-            <tr className="border-b border-gray-200 dark:border-gray-700 bg-gray-50/50 dark:bg-gray-700/30">
-              <th className="text-left px-4 py-2.5 text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide">Código</th>
-              <th className="text-left px-4 py-2.5 text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide">Rol</th>
-              <th className="text-left px-4 py-2.5 text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide">Estado</th>
-              <th className="px-4 py-2.5" />
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-gray-100 dark:divide-gray-700">
-            {invitations.map((inv) => (
-              <tr key={inv.code} className="hover:bg-gray-50 dark:hover:bg-gray-700/30">
-                <td className="px-4 py-3">
-                  <div className="flex items-center gap-2">
-                    <span className="font-mono text-sm text-gray-700 dark:text-gray-300">{inv.code}</span>
-                    <button
-                      onClick={() => handleCopy(inv.code)}
-                      className="p-1 text-gray-400 hover:text-blue-500 transition-colors"
-                      title="Copiar código"
-                    >
-                      {copiedCode === inv.code
-                        ? <FaCheck className="w-3 h-3 text-green-500" />
-                        : <FaCopy className="w-3 h-3" />
-                      }
-                    </button>
-                  </div>
-                </td>
-                <td className="px-4 py-3">
-                  <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${roleBadgeClass(inv.role)}`}>
-                    {inv.role}
-                  </span>
-                </td>
-                <td className="px-4 py-3 text-xs text-gray-500 dark:text-gray-400">
-                  {inv.expires_at
-                    ? new Date(inv.expires_at).toLocaleDateString('es-AR')
-                    : <span className="text-amber-600 dark:text-amber-400">Sin expiración</span>
-                  }
-                </td>
-                <td className="px-4 py-3 text-right">
-                  <button
-                    onClick={() => handleRevoke(inv.code)}
-                    className="p-1.5 text-red-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 rounded transition-colors"
-                    title="Revocar invitación"
-                  >
-                    <FaTrash className="w-3 h-3" />
-                  </button>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+      {/* ── Invitaciones ── */}
+      {showInvitations && (
+        <>
+          <div className="flex items-center justify-between px-4 py-3 border-t border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-700/50">
+            <div className="flex items-center gap-2">
+              <FaEnvelope className="w-4 h-4 text-gray-500 dark:text-gray-400" />
+              <span className="text-sm font-semibold text-gray-900 dark:text-gray-100">Invitaciones activas</span>
+              <span className="text-xs text-gray-400 dark:text-gray-500">(válidas 24h)</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <select
+                value={newRole}
+                onChange={(e) => setNewRole(e.target.value)}
+                className="px-2 py-1.5 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 text-xs"
+              >
+                {ROLES.filter(r => r !== 'owner').map(r => (
+                  <option key={r} value={r}>{r}</option>
+                ))}
+              </select>
+              <button
+                onClick={handleCreate}
+                disabled={creating}
+                className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-600 text-white text-xs rounded-lg hover:bg-blue-700 disabled:opacity-50 transition-colors"
+              >
+                <FaPlus className="w-3 h-3" />
+                {creating ? 'Creando…' : 'Nuevo código'}
+              </button>
+            </div>
+          </div>
+          {invitations.length === 0 ? (
+            <div className="px-4 py-5 text-center text-gray-500 dark:text-gray-400 text-sm border-t border-gray-100 dark:border-gray-700">
+              No hay invitaciones activas.
+            </div>
+          ) : (
+            <table className="w-full text-sm border-t border-gray-100 dark:border-gray-700">
+              <thead>
+                <tr className="border-b border-gray-200 dark:border-gray-700 bg-gray-50/50 dark:bg-gray-700/30">
+                  <th className="text-left px-4 py-2.5 text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide">Código</th>
+                  <th className="text-left px-4 py-2.5 text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide">Rol</th>
+                  <th className="text-left px-4 py-2.5 text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide">Vence</th>
+                  <th className="px-4 py-2.5" />
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-100 dark:divide-gray-700">
+                {invitations.map((inv) => (
+                  <tr key={inv.code} className="hover:bg-gray-50 dark:hover:bg-gray-700/30">
+                    <td className="px-4 py-3">
+                      <div className="flex items-center gap-2">
+                        <span className="font-mono text-sm text-gray-700 dark:text-gray-300">{inv.code}</span>
+                        <button
+                          onClick={() => handleCopy(inv.code)}
+                          className="p-1 text-gray-400 hover:text-blue-500 transition-colors"
+                          title="Copiar código"
+                        >
+                          {copiedCode === inv.code
+                            ? <FaCheck className="w-3 h-3 text-green-500" />
+                            : <FaCopy className="w-3 h-3" />
+                          }
+                        </button>
+                      </div>
+                    </td>
+                    <td className="px-4 py-3">
+                      <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${roleBadgeClass(inv.role)}`}>
+                        {inv.role}
+                      </span>
+                    </td>
+                    <td className="px-4 py-3 text-xs">
+                      {expiryLabel(inv.expires_at)}
+                    </td>
+                    <td className="px-4 py-3 text-right">
+                      <button
+                        onClick={() => handleRevoke(inv.code)}
+                        className="p-1.5 text-red-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 rounded transition-colors"
+                        title="Revocar invitación"
+                      >
+                        <FaTrash className="w-3 h-3" />
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+        </>
       )}
     </div>
   );
 }
 
+// ─── InvitationsTab (standalone, used in standalone mode) ─────────────────────
+
+function InvitationsTab() {
+  return <MembersTab isAdmin showInvitations />;
+}
+
 // ─── Danger Zone Tab ──────────────────────────────────────────────────────────
 
-function DangerZoneTab({ tenantName }) {
+export function DangerZoneTab({ tenantName }) {
   const navigate = useNavigate();
   const { refreshTenant } = useTenant();
   const [confirmName, setConfirmName] = useState('');
@@ -544,8 +549,6 @@ function JoinTenantSection() {
 const TABS = [
   { id: 'general', label: 'General', icon: FaBuilding },
   { id: 'members', label: 'Miembros', icon: FaUsers },
-  { id: 'invitations', label: 'Invitaciones', icon: FaEnvelope, permission: 'invite_members' },
-  { id: 'danger', label: 'Peligro', icon: FaExclamationTriangle, role: 'owner' },
 ];
 
 const TenantSettings = ({ widgetMode = false }) => {
@@ -580,17 +583,7 @@ const TenantSettings = ({ widgetMode = false }) => {
     return (
       <div className="space-y-4">
         <GeneralTab tenant={currentTenant} onRefresh={refreshTenant} isAdmin={isAdmin} />
-        <MembersTab isAdmin={isAdmin} currentUserID={currentUserID} />
-        {hasPermission('invite_members') && (
-          <RoleGuard permission="invite_members">
-            <InvitationsTab />
-          </RoleGuard>
-        )}
-        {myRole === 'owner' && (
-          <RoleGuard role="owner">
-            <DangerZoneTab tenantName={currentTenant.name} />
-          </RoleGuard>
-        )}
+        <MembersTab isAdmin={isAdmin} currentUserID={currentUserID} showInvitations={hasPermission('invite_members')} />
       </div>
     );
   }
@@ -638,17 +631,7 @@ const TenantSettings = ({ widgetMode = false }) => {
           <GeneralTab tenant={currentTenant} onRefresh={refreshTenant} isAdmin={isAdmin} />
         )}
         {activeTab === 'members' && (
-          <MembersTab isAdmin={isAdmin} currentUserID={currentUserID} />
-        )}
-        {activeTab === 'invitations' && (
-          <RoleGuard permission="invite_members">
-            <InvitationsTab />
-          </RoleGuard>
-        )}
-        {activeTab === 'danger' && (
-          <RoleGuard role="owner">
-            <DangerZoneTab tenantName={currentTenant.name} />
-          </RoleGuard>
+          <MembersTab isAdmin={isAdmin} currentUserID={currentUserID} showInvitations={hasPermission('invite_members')} />
         )}
       </div>
     </div>

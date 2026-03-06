@@ -34,6 +34,13 @@ type UpdateProfileRequest struct {
 	LastName  string `json:"last_name" binding:"required"`
 	Phone     string `json:"phone"`
 	Avatar    string `json:"avatar,omitempty"`
+	Email     string `json:"email,omitempty"` // optional — triggers verification flow if changed
+}
+
+// UpdateProfileResponse wraps the updated user and signals if the email was changed.
+type UpdateProfileResponse struct {
+	User         UserResponse `json:"user"`
+	EmailChanged bool         `json:"email_changed"`
 }
 
 // PasswordResetRequest is the DTO for requesting a password reset.

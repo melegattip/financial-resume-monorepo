@@ -34,6 +34,7 @@ type AuthService struct {
 	twoFAService    ports.TwoFAService
 	tenantCreator   ports.TenantCreator
 	tenantFinder    ports.TenantMemberFinder
+	tenantCleaner   ports.TenantAccountCleaner
 	emailService    ports.EmailService
 	eventBus        sharedports.EventBus
 	logger          zerolog.Logger
@@ -54,6 +55,7 @@ func NewAuthService(
 	twoFASvc ports.TwoFAService,
 	tenantCreator ports.TenantCreator,
 	tenantFinder ports.TenantMemberFinder,
+	tenantCleaner ports.TenantAccountCleaner,
 	emailSvc ports.EmailService,
 	appURL string,
 	eventBus sharedports.EventBus,
@@ -71,6 +73,7 @@ func NewAuthService(
 		twoFAService:     twoFASvc,
 		tenantCreator:    tenantCreator,
 		tenantFinder:     tenantFinder,
+		tenantCleaner:    tenantCleaner,
 		emailService:     emailSvc,
 		appURL:           appURL,
 		eventBus:         eventBus,
@@ -377,6 +380,17 @@ func (s *AuthService) Login(ctx context.Context, req *domain.LoginRequest) (*dom
 		Str("user_id", user.ID).
 		Str("email", user.Email).
 		Msg("user logged in successfully")
+
+	// Send login notification email asynchronously (best-effort).
+	go func(uid, email, firstName string, loginTime time.Time) {
+		settings, err := s.notifsRepo.FindNotificationsByUserID(ctx, uid)
+		if err != nil || settings == nil || !settings.EmailNotifications || !settings.LoginNotifications {
+			return
+		}
+		if err := s.emailService.SendLoginNotification(email, firstName, loginTime.Format("02/01/2006 15:04 UTC")); err != nil {
+			s.logger.Warn().Err(err).Str("user_id", uid).Msg("failed to send login notification email")
+		}
+	}(user.ID, user.Email, user.FirstName, now)
 
 	return &domain.AuthResponse{
 		User:   user.ToResponse(),
@@ -907,7 +921,7 @@ func (s *AuthService) GetProfile(ctx context.Context, userID string) (*domain.Us
 
 // UpdateProfile updates the user's name and phone fields and returns the
 // updated public profile. Avatar is handled separately via UploadAvatar.
-func (s *AuthService) UpdateProfile(ctx context.Context, userID string, req *domain.UpdateProfileRequest) (*domain.UserResponse, error) {
+func (s *AuthService) UpdateProfile(ctx context.Context, userID string, req *domain.UpdateProfileRequest) (*domain.UpdateProfileResponse, error) {
 	user, err := s.userRepo.FindByID(ctx, userID)
 	if err != nil {
 		s.logger.Error().
@@ -922,6 +936,27 @@ func (s *AuthService) UpdateProfile(ctx context.Context, userID string, req *dom
 	user.LastName = req.LastName
 	user.Phone = req.Phone
 
+	emailChanged := false
+	var verificationLink string
+
+	if req.Email != "" && req.Email != user.Email {
+		// Check if new email is already taken by another account.
+		existing, err := s.userRepo.FindByEmail(ctx, req.Email)
+		if err == nil && existing != nil && existing.ID != userID {
+			return nil, fmt.Errorf("email already in use")
+		}
+
+		verificationToken, err := s.jwtService.GenerateEmailVerificationToken(userID, req.Email)
+		if err != nil {
+			return nil, fmt.Errorf("failed to generate verification token: %w", err)
+		}
+
+		user.Email = req.Email
+		user.IsVerified = false
+		verificationLink = s.appURL + "/verify-email?token=" + verificationToken
+		emailChanged = true
+	}
+
 	if err := s.userRepo.Update(ctx, user); err != nil {
 		s.logger.Error().
 			Str("component", "auth").
@@ -931,13 +966,27 @@ func (s *AuthService) UpdateProfile(ctx context.Context, userID string, req *dom
 		return nil, fmt.Errorf("failed to update profile: %w", err)
 	}
 
+	if emailChanged {
+		link := verificationLink
+		go func(toEmail, firstName, lnk, uid string) {
+			if err := s.emailService.SendEmailVerification(toEmail, firstName, lnk); err != nil {
+				s.logger.Error().
+					Str("component", "auth").
+					Str("user_id", uid).
+					Err(err).
+					Msg("failed to send email verification after email change")
+			}
+		}(user.Email, user.FirstName, link, userID)
+	}
+
 	s.logger.Info().
 		Str("component", "auth").
 		Str("user_id", userID).
+		Bool("email_changed", emailChanged).
 		Msg("profile updated successfully")
 
 	resp := user.ToResponse()
-	return &resp, nil
+	return &domain.UpdateProfileResponse{User: resp, EmailChanged: emailChanged}, nil
 }
 
 // UploadAvatar sets the avatar path for the given user.
@@ -1148,6 +1197,31 @@ func (s *AuthService) ExportData(ctx context.Context, userID string) (map[string
 	return data, nil
 }
 
+// SendBudgetAlertNotification checks the user's notification preferences and
+// sends a budget alert email if email_notifications and budget_alerts are enabled.
+func (s *AuthService) SendBudgetAlertNotification(ctx context.Context, userID, categoryID, period, newStatus string, spentAmount, budgetLimit float64) error {
+	settings, err := s.notifsRepo.FindNotificationsByUserID(ctx, userID)
+	if err != nil || settings == nil {
+		return nil // best-effort: skip if settings unavailable
+	}
+	if !settings.EmailNotifications || !settings.BudgetAlerts {
+		return nil
+	}
+
+	user, err := s.userRepo.FindByID(ctx, userID)
+	if err != nil || user == nil {
+		return nil
+	}
+
+	go func(toEmail, firstName, cat, per, status string, spent, limit float64) {
+		if err := s.emailService.SendBudgetAlert(toEmail, firstName, cat, per, status, spent, limit); err != nil {
+			s.logger.Warn().Err(err).Str("user_id", userID).Msg("failed to send budget alert email")
+		}
+	}(user.Email, user.FirstName, categoryID, period, newStatus, spentAmount, budgetLimit)
+
+	return nil
+}
+
 // DeleteAccount verifies the user's password, permanently deletes the account,
 // and publishes a UserDeletedEvent.
 func (s *AuthService) DeleteAccount(ctx context.Context, userID string, password string) error {
@@ -1167,6 +1241,16 @@ func (s *AuthService) DeleteAccount(ctx context.Context, userID string, password
 			Str("user_id", userID).
 			Msg("invalid password during account deletion")
 		return ErrInvalidCredentials
+	}
+
+	// Clean up tenant memberships and ownership before removing the user.
+	if err := s.tenantCleaner.CleanupUserTenants(ctx, userID); err != nil {
+		s.logger.Error().
+			Str("component", "auth").
+			Str("user_id", userID).
+			Err(err).
+			Msg("failed to cleanup tenant memberships during account deletion")
+		return fmt.Errorf("failed to cleanup tenants: %w", err)
 	}
 
 	if err := s.userRepo.Delete(ctx, userID); err != nil {

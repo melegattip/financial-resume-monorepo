@@ -64,12 +64,16 @@ func (h *ProfileHandler) UpdateProfile(c *gin.Context) {
 	resp, err := h.authService.UpdateProfile(c.Request.Context(), userID, &req)
 	if err != nil {
 		h.logger.Error().Err(err).Str("user_id", userID).Msg("update profile failed")
+		if err.Error() == "email already in use" {
+			c.JSON(http.StatusConflict, gin.H{"error": "El email ya está en uso"})
+			return
+		}
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update profile"})
 		return
 	}
 
 	h.logger.Info().Str("user_id", userID).Msg("profile updated successfully")
-	c.JSON(http.StatusOK, resp)
+	c.JSON(http.StatusOK, gin.H{"user": resp.User, "email_changed": resp.EmailChanged})
 }
 
 // UploadAvatar handles multipart file upload for the user's avatar.

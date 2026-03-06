@@ -399,6 +399,16 @@ class AuthService {
   }
 
   /**
+   * Elimina la cuenta del usuario autenticado.
+   * El backend limpia automáticamente tenants (transfiere ownership o los elimina).
+   * @param {string} password - Contraseña actual del usuario para confirmar
+   */
+  async deleteAccount(password) {
+    const response = await authAPI.delete('/users/account', { data: { password } });
+    return response.data;
+  }
+
+  /**
    * Actualiza el perfil del usuario autenticado
    * @param {Object} profileData - { first_name, last_name, phone }
    */
@@ -406,22 +416,38 @@ class AuthService {
     try {
       console.log('🔧 [authService] Actualizando perfil con datos:', profileData);
       const response = await authAPI.put('/users/profile', profileData);
-      const user = response.data.user;
-      console.log('🔧 [authService] Respuesta del backend:', user);
-      
-      // Actualizar storage local con los datos reales del backend
-      this.user = user;
-      localStorage.setItem(USER_KEY, JSON.stringify(user));
-      console.log('✅ [authService] Usuario actualizado en localStorage:', user);
-      
-      toast.success('Perfil actualizado correctamente');
-      return user;
+      const { user, email_changed } = response.data;
+      console.log('🔧 [authService] Respuesta del backend:', user, { email_changed });
+
+      if (!email_changed) {
+        // Only persist to storage when email hasn't changed (on email change we logout)
+        this.user = user;
+        localStorage.setItem(USER_KEY, JSON.stringify(user));
+      }
+
+      return { user, emailChanged: !!email_changed };
     } catch (error) {
       console.error('❌ [authService] Error actualizando perfil:', error);
       const message = error.response?.data?.error || 'Error actualizando perfil';
-      toast.error(message);
       throw new Error(message);
     }
+  }
+
+  /**
+   * Obtiene la configuración de notificaciones del usuario autenticado
+   */
+  async getNotifications() {
+    const response = await authAPI.get('/users/notifications');
+    return response.data;
+  }
+
+  /**
+   * Actualiza la configuración de notificaciones del usuario autenticado
+   * @param {Object} settings - Campos a actualizar (partial ok)
+   */
+  async updateNotifications(settings) {
+    const response = await authAPI.put('/users/notifications', settings);
+    return response.data;
   }
 
   /**

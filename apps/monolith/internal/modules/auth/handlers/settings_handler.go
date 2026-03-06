@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"errors"
 	"net/http"
 
 	"github.com/gin-gonic/gin"
@@ -147,6 +148,10 @@ func (h *SettingsHandler) DeleteAccount(c *gin.Context) {
 	}
 
 	if err := h.authService.DeleteAccount(c.Request.Context(), userID, req.Password); err != nil {
+		if errors.Is(err, services.ErrInvalidCredentials) {
+			c.JSON(http.StatusUnauthorized, gin.H{"error": "invalid email or password"})
+			return
+		}
 		h.logger.Error().Err(err).Str("user_id", userID).Msg("delete account failed")
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to delete account"})
 		return
