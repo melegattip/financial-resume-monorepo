@@ -1,9 +1,12 @@
 package email
 
 import (
+	"bytes"
 	"crypto/tls"
+	"encoding/json"
 	"fmt"
 	"net"
+	"net/http"
 	"net/smtp"
 	"strings"
 	"time"
@@ -26,9 +29,22 @@ type SMTPConfig struct {
 	From     string
 }
 
+// ResendConfig holds Resend HTTP API settings.
+type ResendConfig struct {
+	APIKey string
+	From   string
+}
+
 // SMTPEmailService sends emails via SMTP (Gmail / Google Workspace).
 type SMTPEmailService struct {
 	cfg    SMTPConfig
+	logger zerolog.Logger
+}
+
+// ResendEmailService sends emails via Resend HTTP API (works on Render).
+type ResendEmailService struct {
+	cfg    ResendConfig
+	client *http.Client
 	logger zerolog.Logger
 }
 
@@ -38,14 +54,33 @@ type NoOpEmailService struct {
 	logger zerolog.Logger
 }
 
-// NewService returns an SMTPEmailService if SMTP credentials are configured,
-// or a NoOpEmailService otherwise.
+// NewService returns a ResendEmailService if a Resend API key is configured,
+// an SMTPEmailService if SMTP credentials are set, or a NoOpEmailService otherwise.
 func NewService(cfg SMTPConfig, logger zerolog.Logger) EmailService {
-	if cfg.User == "" || cfg.Password == "" {
-		logger.Warn().Msg("SMTP credentials not configured — using no-op email service (reset links will be logged)")
-		return &NoOpEmailService{logger: logger}
+	return newService(cfg, ResendConfig{}, logger)
+}
+
+// NewServiceWithResend is like NewService but also accepts a Resend config.
+// Resend takes priority over SMTP when an API key is present.
+func NewServiceWithResend(smtp SMTPConfig, resend ResendConfig, logger zerolog.Logger) EmailService {
+	return newService(smtp, resend, logger)
+}
+
+func newService(smtpCfg SMTPConfig, resendCfg ResendConfig, logger zerolog.Logger) EmailService {
+	if resendCfg.APIKey != "" {
+		logger.Info().Msg("email: using Resend HTTP API")
+		return &ResendEmailService{
+			cfg:    resendCfg,
+			client: &http.Client{Timeout: 15 * time.Second},
+			logger: logger,
+		}
 	}
-	return &SMTPEmailService{cfg: cfg, logger: logger}
+	if smtpCfg.User != "" && smtpCfg.Password != "" {
+		logger.Info().Msg("email: using SMTP")
+		return &SMTPEmailService{cfg: smtpCfg, logger: logger}
+	}
+	logger.Warn().Msg("email: no credentials configured — using no-op (links will be logged)")
+	return &NoOpEmailService{logger: logger}
 }
 
 const smtpDialTimeout = 15 * time.Second
@@ -129,6 +164,53 @@ func (s *SMTPEmailService) SendEmailVerification(toEmail, firstName, verificatio
 		return err
 	}
 	s.logger.Info().Str("to", toEmail).Msg("verification email sent")
+	return nil
+}
+
+// sendResend posts an email via the Resend HTTP API.
+func (s *ResendEmailService) sendResend(toEmail, subject, htmlBody string) error {
+	payload, err := json.Marshal(map[string]any{
+		"from":    s.cfg.From,
+		"to":      []string{toEmail},
+		"subject": subject,
+		"html":    htmlBody,
+	})
+	if err != nil {
+		return fmt.Errorf("resend marshal: %w", err)
+	}
+	req, err := http.NewRequest(http.MethodPost, "https://api.resend.com/emails", bytes.NewReader(payload))
+	if err != nil {
+		return fmt.Errorf("resend request: %w", err)
+	}
+	req.Header.Set("Authorization", "Bearer "+s.cfg.APIKey)
+	req.Header.Set("Content-Type", "application/json")
+
+	resp, err := s.client.Do(req)
+	if err != nil {
+		return fmt.Errorf("resend http: %w", err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode >= 300 {
+		return fmt.Errorf("resend api returned status %d", resp.StatusCode)
+	}
+	return nil
+}
+
+// SendPasswordReset sends a password-reset email via Resend.
+func (s *ResendEmailService) SendPasswordReset(toEmail, resetLink string) error {
+	if err := s.sendResend(toEmail, "Restablecer contraseña — Niloft", buildResetEmailHTML(resetLink)); err != nil {
+		return err
+	}
+	s.logger.Info().Str("to", toEmail).Msg("password reset email sent via Resend")
+	return nil
+}
+
+// SendEmailVerification sends an account verification email via Resend.
+func (s *ResendEmailService) SendEmailVerification(toEmail, firstName, verificationLink string) error {
+	if err := s.sendResend(toEmail, "Verificá tu cuenta — Niloft", buildVerificationEmailHTML(firstName, verificationLink)); err != nil {
+		return err
+	}
+	s.logger.Info().Str("to", toEmail).Msg("verification email sent via Resend")
 	return nil
 }
 
