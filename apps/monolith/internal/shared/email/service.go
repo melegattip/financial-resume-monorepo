@@ -252,8 +252,8 @@ func buildVerificationEmailHTML(firstName, verificationLink string) string {
 <body style="font-family: Arial, sans-serif; background: #f4f4f4; padding: 40px 0; margin: 0;">
   <div style="max-width: 480px; margin: 0 auto; background: #fff; border-radius: 12px; overflow: hidden; box-shadow: 0 2px 8px rgba(0,0,0,0.08);">
     <div style="background: linear-gradient(135deg, #3b82f6, #6366f1); padding: 32px; text-align: center;">
-      <h1 style="color: #fff; margin: 0; font-size: 26px; letter-spacing: -0.5px;">Niloft</h1>
-      <p style="color: rgba(255,255,255,0.8); margin: 6px 0 0; font-size: 13px;">Tu asistente financiero</p>
+      <img src="https://financial.niloft.com/logo-niloft.png" alt="Niloft" style="height: 48px; width: auto; display: block; margin: 0 auto;">
+      <p style="color: rgba(255,255,255,0.8); margin: 10px 0 0; font-size: 13px;">Tu asistente financiero</p>
     </div>
     <div style="padding: 36px 32px;">
       <h2 style="color: #1f2937; margin-top: 0; font-size: 20px;">¡Bienvenido/a, ` + firstName + `!</h2>
@@ -289,8 +289,8 @@ func buildResetEmailHTML(resetLink string) string {
 <body style="font-family: Arial, sans-serif; background: #f4f4f4; padding: 40px 0; margin: 0;">
   <div style="max-width: 480px; margin: 0 auto; background: #fff; border-radius: 12px; overflow: hidden; box-shadow: 0 2px 8px rgba(0,0,0,0.08);">
     <div style="background: linear-gradient(135deg, #3b82f6, #6366f1); padding: 32px; text-align: center;">
-      <h1 style="color: #fff; margin: 0; font-size: 26px; letter-spacing: -0.5px;">Niloft</h1>
-      <p style="color: rgba(255,255,255,0.8); margin: 6px 0 0; font-size: 13px;">Tu asistente financiero</p>
+      <img src="https://financial.niloft.com/logo-niloft.png" alt="Niloft" style="height: 48px; width: auto; display: block; margin: 0 auto;">
+      <p style="color: rgba(255,255,255,0.8); margin: 10px 0 0; font-size: 13px;">Tu asistente financiero</p>
     </div>
     <div style="padding: 36px 32px;">
       <h2 style="color: #1f2937; margin-top: 0; font-size: 20px;">Restablecer contraseña</h2>
