@@ -3,8 +3,10 @@ package email
 import (
 	"crypto/tls"
 	"fmt"
+	"net"
 	"net/smtp"
 	"strings"
+	"time"
 
 	"github.com/rs/zerolog"
 )
@@ -46,14 +48,21 @@ func NewService(cfg SMTPConfig, logger zerolog.Logger) EmailService {
 	return &SMTPEmailService{cfg: cfg, logger: logger}
 }
 
+const smtpDialTimeout = 15 * time.Second
+
 // send dials SMTP and delivers a pre-built MIME message.
 func (s *SMTPEmailService) send(toEmail, msg string) error {
 	addr := s.cfg.Host + ":" + s.cfg.Port
 	auth := smtp.PlainAuth("", s.cfg.User, s.cfg.Password, s.cfg.Host)
 
-	conn, err := smtp.Dial(addr)
+	netConn, err := net.DialTimeout("tcp", addr, smtpDialTimeout)
 	if err != nil {
 		return fmt.Errorf("smtp dial: %w", err)
+	}
+	conn, err := smtp.NewClient(netConn, s.cfg.Host)
+	if err != nil {
+		netConn.Close()
+		return fmt.Errorf("smtp new client: %w", err)
 	}
 	defer conn.Close()
 
