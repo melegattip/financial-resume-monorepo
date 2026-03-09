@@ -4,6 +4,7 @@ import { FaFolderOpen, FaBrain, FaFileAlt, FaCog, FaHome, FaStar, FaChartPie, Fa
 import Brand from '../Brand';
 import Logo from '../Logo';
 import FeatureProgressIndicator from '../FeatureProgressIndicator';
+import SidebarCalculator from './SidebarCalculator';
 
 const Sidebar = ({ isDesktopCollapsed = false, onDesktopToggle, isMobileOpen = false, onMobileClose }) => {
   const location = useLocation();
@@ -143,6 +144,7 @@ const Sidebar = ({ isDesktopCollapsed = false, onDesktopToggle, isMobileOpen = f
 
           {/* Navigation */}
           <nav className={`flex-1 overflow-y-auto transition-all duration-300 ${isDesktopCollapsed ? 'p-2' : 'p-4'}`}>
+
             {/* Grupo 1: Transacciones principales */}
             <div className="space-y-1">
               {mainMenuItems.map(renderMenuItem)}
@@ -162,6 +164,11 @@ const Sidebar = ({ isDesktopCollapsed = false, onDesktopToggle, isMobileOpen = f
               {settingsMenuItems.map(renderMenuItem)}
             </div>
           </nav>
+
+          {/* Calculator */}
+          <div className={isDesktopCollapsed ? 'p-2' : ''}>
+            <SidebarCalculator collapsed={isDesktopCollapsed} />
+          </div>
 
         </div>
       </div>
