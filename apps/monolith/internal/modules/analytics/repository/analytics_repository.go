@@ -173,10 +173,10 @@ func (r *AnalyticsRepo) GetDashboardSummary(ctx context.Context, tenantID string
 	err := r.db.WithContext(ctx).Raw(`
 		SELECT
 		  COALESCE((SELECT SUM(amount) FROM expenses
-		            WHERE tenant_id = ? AND transaction_date >= ? AND deleted_at IS NULL), 0) AS expenses,
+		            WHERE tenant_id = ? AND transaction_date >= ? AND transaction_date <= ? AND deleted_at IS NULL), 0) AS expenses,
 		  COALESCE((SELECT SUM(amount) FROM incomes
-		            WHERE tenant_id = ? AND received_date >= ? AND deleted_at IS NULL), 0) AS incomes
-	`, tenantID, monthStart, tenantID, monthStart).Scan(&mt).Error
+		            WHERE tenant_id = ? AND received_date >= ? AND received_date <= ? AND deleted_at IS NULL), 0) AS incomes
+	`, tenantID, monthStart, now, tenantID, monthStart, now).Scan(&mt).Error
 	if err != nil {
 		return nil, err
 	}

@@ -86,14 +86,18 @@ func (s *GamificationService) RecordAction(ctx context.Context, userID, actionTy
 		return nil, err
 	}
 
-	// Anti-farming: award view_dashboard XP only once per calendar day.
-	if actionType == domain.ActionViewDashboard {
+	// Anti-farming: some action types are capped at once per calendar day.
+	onceDailyActions := map[string]bool{
+		domain.ActionViewDashboard:          true,
+		domain.ActionApplyAIRecommendation: true,
+	}
+	if onceDailyActions[actionType] {
 		todaysActions, err := s.repo.FindActionsByUserIDAndDay(ctx, userID, time.Now().UTC())
 		if err != nil {
 			return nil, err
 		}
 		for _, a := range todaysActions {
-			if a.ActionType == domain.ActionViewDashboard {
+			if a.ActionType == actionType {
 				// Already recorded today — skip silently.
 				return &RecordActionResult{
 					XPEarned:     0,
