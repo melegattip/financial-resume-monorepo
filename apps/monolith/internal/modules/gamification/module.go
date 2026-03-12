@@ -66,6 +66,7 @@ func (m *Module) RegisterRoutes(r *gin.RouterGroup) {
 		gamification.GET("/challenges/weekly", m.permMW.Require("view_data"), m.handler.GetWeeklyChallenges)
 		gamification.POST("/challenges/progress", m.permMW.Require("view_data"), m.handler.ProcessChallengeProgress)
 		gamification.POST("/actions", m.permMW.Require("view_data"), m.handler.RecordAction)
+		gamification.GET("/behavior-profile", m.permMW.Require("view_data"), m.handler.GetBehaviorProfile)
 	}
 	m.logger.Info().Msg("gamification module routes registered")
 }
@@ -92,6 +93,38 @@ func (m *Module) RegisterSubscribers(bus sharedports.EventBus) {
 	bus.Subscribe("income.created", func(ctx context.Context, event sharedports.Event) error {
 		if _, err := m.svc.RecordAction(ctx, event.UserID(), "create_income", event.AggregateID()); err != nil {
 			m.logger.Warn().Err(err).Str("user_id", event.UserID()).Msg("failed to record create_income action")
+		}
+		return nil
+	})
+
+	// Award XP when a savings goal is created.
+	bus.Subscribe("savings_goal.created", func(ctx context.Context, event sharedports.Event) error {
+		if _, err := m.svc.RecordAction(ctx, event.UserID(), "create_savings_goal", event.AggregateID()); err != nil {
+			m.logger.Warn().Err(err).Str("user_id", event.UserID()).Msg("failed to record create_savings_goal action")
+		}
+		return nil
+	})
+
+	// Award XP when a savings goal is achieved (100% progress).
+	bus.Subscribe("savings_goal.achieved", func(ctx context.Context, event sharedports.Event) error {
+		if _, err := m.svc.RecordAction(ctx, event.UserID(), "achieve_savings_goal", event.AggregateID()); err != nil {
+			m.logger.Warn().Err(err).Str("user_id", event.UserID()).Msg("failed to record achieve_savings_goal action")
+		}
+		return nil
+	})
+
+	// Award XP when a budget is created.
+	bus.Subscribe("budget.created", func(ctx context.Context, event sharedports.Event) error {
+		if _, err := m.svc.RecordAction(ctx, event.UserID(), "create_budget", event.AggregateID()); err != nil {
+			m.logger.Warn().Err(err).Str("user_id", event.UserID()).Msg("failed to record create_budget action")
+		}
+		return nil
+	})
+
+	// Award XP when a recurring transaction is created.
+	bus.Subscribe("recurring.created", func(ctx context.Context, event sharedports.Event) error {
+		if _, err := m.svc.RecordAction(ctx, event.UserID(), "create_recurring_transaction", event.AggregateID()); err != nil {
+			m.logger.Warn().Err(err).Str("user_id", event.UserID()).Msg("failed to record create_recurring_transaction action")
 		}
 		return nil
 	})

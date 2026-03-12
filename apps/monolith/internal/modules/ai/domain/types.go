@@ -4,16 +4,37 @@ import "time"
 
 // FinancialAnalysisData represents the data used for financial analysis.
 type FinancialAnalysisData struct {
-	UserID             string              `json:"user_id"`
-	TotalIncome        float64             `json:"total_income"`
-	TotalExpenses      float64             `json:"total_expenses"`
-	SavingsRate        float64             `json:"savings_rate"`
-	ExpensesByCategory map[string]float64  `json:"expenses_by_category"`
-	IncomeStability    float64             `json:"income_stability"`
-	FinancialScore     int                 `json:"financial_score"`
-	Period             string              `json:"period"`
-	SavingsGoals       []SavingsGoalInfo   `json:"savings_goals,omitempty"`
-	BudgetsSummary     *BudgetsSummaryInfo `json:"budgets_summary,omitempty"`
+	UserID             string                  `json:"user_id"`
+	TotalIncome        float64                 `json:"total_income"`
+	TotalExpenses      float64                 `json:"total_expenses"`
+	SavingsRate        float64                 `json:"savings_rate"`
+	ExpensesByCategory map[string]float64      `json:"expenses_by_category"`
+	IncomeStability    float64                 `json:"income_stability"`
+	FinancialScore     int                     `json:"financial_score"`
+	Period             string                  `json:"period"`
+	SavingsGoals       []SavingsGoalInfo       `json:"savings_goals,omitempty"`
+	BudgetsSummary     *BudgetsSummaryInfo     `json:"budgets_summary,omitempty"`
+	BehaviorProfile    *BehaviorProfileContext `json:"behavior_profile,omitempty"`
+}
+
+// BehaviorProfileContext carries the user's behavioral signals into AI prompts.
+// It is a flat copy of the gamification BehaviorProfile — the AI module does NOT
+// import the gamification package to avoid circular dependencies.
+type BehaviorProfileContext struct {
+	CurrentLevel             int    `json:"current_level"`
+	LevelName                string `json:"level_name"`
+	CurrentStreak            int    `json:"current_streak"`
+	DaysActive               int    `json:"days_active"`
+	BudgetsCreated           int    `json:"budgets_created"`
+	BudgetComplianceEvents   int    `json:"budget_compliance_events"`
+	SavingsGoalsCreated      int    `json:"savings_goals_created"`
+	SavingsDeposits          int    `json:"savings_deposits"`
+	SavingsGoalsAchieved     int    `json:"savings_goals_achieved"`
+	RecurringSetups          int    `json:"recurring_setups"`
+	AIRecommendationsApplied int    `json:"ai_recommendations_applied"`
+	ConsistencyScore         int    `json:"consistency_score"`
+	DisciplineScore          int    `json:"discipline_score"`
+	EngagementScore          int    `json:"engagement_score"`
 }
 
 // BudgetsSummaryInfo represents the budget compliance summary for AI analysis.
@@ -35,6 +56,7 @@ type AIInsight struct {
 	Score       int    `json:"score"`
 	ActionType  string `json:"action_type"`
 	Category    string `json:"category"`
+	NextAction  string `json:"next_action"` // Concrete next step the user can take immediately
 }
 
 // HealthAnalysis represents the result of a financial health analysis.

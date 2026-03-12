@@ -222,6 +222,66 @@ func (s *GamificationService) GetAchievements(ctx context.Context, userID string
 	return s.repo.FindAchievementsByUserID(ctx, userID)
 }
 
+// GetBehaviorProfile builds and returns the behavioral profile for a user by
+// aggregating counts from the immutable user_actions audit trail.
+func (s *GamificationService) GetBehaviorProfile(ctx context.Context, userID string) (*domain.BehaviorProfile, error) {
+	g, err := s.GetUserGamification(ctx, userID)
+	if err != nil {
+		return nil, err
+	}
+
+	actions, err := s.repo.FindActionsByUserID(ctx, userID)
+	if err != nil {
+		return nil, err
+	}
+
+	achievements, err := s.repo.FindAchievementsByUserID(ctx, userID)
+	if err != nil {
+		return nil, err
+	}
+
+	counts := countByType(actions)
+
+	completedAchievements := 0
+	for _, a := range achievements {
+		if a.Completed {
+			completedAchievements++
+		}
+	}
+
+	daysActive := int(time.Since(g.CreatedAt).Hours() / 24)
+
+	profile := &domain.BehaviorProfile{
+		UserID:                   userID,
+		CurrentLevel:             g.CurrentLevel,
+		LevelName:                g.GetLevelName(),
+		TotalXP:                  g.TotalXP,
+		CurrentStreak:            g.CurrentStreak,
+		DaysActive:               daysActive,
+		AchievementsCompleted:    completedAchievements,
+		BudgetsCreated:           counts[domain.ActionCreateBudget],
+		BudgetComplianceEvents:   counts[domain.ActionStayWithinBudget],
+		SavingsGoalsCreated:      counts[domain.ActionCreateSavingsGoal],
+		SavingsDeposits:          counts[domain.ActionDepositSavings],
+		SavingsGoalsAchieved:     counts[domain.ActionAchieveSavingsGoal],
+		RecurringSetups:          counts[domain.ActionCreateRecurringTransaction],
+		AIRecommendationsApplied: counts[domain.ActionApplyAIRecommendation],
+		AnalyticsViewsCount:      counts[domain.ActionViewAnalytics],
+		ComputedAt:               time.Now().UTC(),
+	}
+	profile.ComputeDimensionScores()
+	return profile, nil
+}
+
+// countByType returns a map of action type → count for the given actions slice.
+func countByType(actions []domain.UserAction) map[string]int {
+	counts := make(map[string]int, len(actions))
+	for _, a := range actions {
+		counts[a.ActionType]++
+	}
+	return counts
+}
+
 // ---------------------------------------------------------------------------
 // Private helpers
 // ---------------------------------------------------------------------------
@@ -266,20 +326,15 @@ func (s *GamificationService) updateAchievementsProgress(
 	}
 
 	// Pre-compute action counts we need for multiple achievements.
-	txCount := 0        // create_expense + create_income
-	categoryCount := 0  // create_category
-	assignCount := 0    // assign_category
-
-	for _, a := range actions {
-		switch a.ActionType {
-		case domain.ActionCreateExpense, domain.ActionCreateIncome:
-			txCount++
-		case domain.ActionCreateCategory:
-			categoryCount++
-		case domain.ActionAssignCategory:
-			assignCount++
-		}
-	}
+	counts := countByType(actions)
+	txCount       := counts[domain.ActionCreateExpense] + counts[domain.ActionCreateIncome]
+	categoryCount := counts[domain.ActionCreateCategory]
+	assignCount   := counts[domain.ActionAssignCategory]
+	depositCount  := counts[domain.ActionDepositSavings] + counts[domain.ActionAchieveSavingsGoal]
+	budgetCount   := counts[domain.ActionCreateBudget]
+	complianceCount := counts[domain.ActionStayWithinBudget]
+	recurringCount  := counts[domain.ActionCreateRecurringTransaction]
+	aiAppliedCount  := counts[domain.ActionApplyAIRecommendation]
 
 	daysUsed := int(time.Since(g.CreatedAt).Hours() / 24)
 
@@ -306,6 +361,18 @@ func (s *GamificationService) updateAchievementsProgress(
 			newProgress = g.CurrentStreak
 		case "data_explorer":
 			newProgress = daysUsed
+		case "savings_starter":
+			newProgress = depositCount
+		case "savings_champion":
+			newProgress = counts[domain.ActionAchieveSavingsGoal]
+		case "planner_pro":
+			newProgress = recurringCount
+		case "budget_beginner":
+			newProgress = budgetCount
+		case "budget_disciplined":
+			newProgress = complianceCount
+		case "ai_executor":
+			newProgress = aiAppliedCount
 		default:
 			continue
 		}

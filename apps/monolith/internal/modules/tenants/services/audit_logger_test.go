@@ -82,7 +82,7 @@ func TestResolveTable(t *testing.T) {
 		{"recurring.resumed", "recurring_transactions"},
 		// user.registered resolves via tenant_members, not a table prefix
 		{"user.registered", ""},
-		{"budget.created", ""},
+		{"budget.created", "budgets"},
 		{"unknown.event", ""},
 	}
 
@@ -111,7 +111,7 @@ func TestResolveEntityType(t *testing.T) {
 		{"recurring.paused", "recurring_transaction"},
 		{"recurring.resumed", "recurring_transaction"},
 		{"user.registered", "user"},
-		{"budget.created", ""},
+		{"budget.created", "budget"},
 		{"unknown.event", ""},
 	}
 
@@ -262,10 +262,10 @@ func TestAuditLogger_Handle_UnknownEvent_Skips(t *testing.T) {
 	repo := &mockAuditRepo{}
 	al := NewAuditLogger(gormDB, repo, zerolog.Nop())
 
-	// No DB expectation — unknown events should not hit the DB
+	// No DB expectation — truly unknown events should not hit the DB
 	err := al.Handle(context.Background(), mockEvent{
-		eventType:   "budget.created",
-		aggregateID: "bud_1",
+		eventType:   "category.created",
+		aggregateID: "cat_1",
 		userID:      "u1",
 	})
 

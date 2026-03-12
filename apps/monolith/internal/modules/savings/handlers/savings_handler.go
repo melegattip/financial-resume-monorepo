@@ -477,15 +477,31 @@ func (h *SavingsHandler) AddSavings(c *gin.Context) {
 		return
 	}
 
+	wasAchieved := goal.Status == domain.SavingsGoalStatusAchieved
+
 	if err := goal.AddSavings(req.Amount); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
 
+	justAchieved := !wasAchieved && goal.Status == domain.SavingsGoalStatusAchieved
+
 	if err := h.repo.Update(c.Request.Context(), goal); err != nil {
 		h.logger.Error().Err(err).Msg("failed to update savings goal after deposit")
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to update savings goal"})
 		return
+	}
+
+	if justAchieved {
+		if err := h.eventBus.Publish(c.Request.Context(), domain.SavingsGoalAchievedEvent{
+			GoalID:    goal.ID,
+			User:      userID,
+			GoalName:  goal.Name,
+			Amount:    goal.TargetAmount,
+			Timestamp: time.Now().UTC(),
+		}); err != nil {
+			h.logger.Warn().Err(err).Msg("failed to publish SavingsGoalAchievedEvent")
+		}
 	}
 
 	tx := &domain.SavingsTransaction{

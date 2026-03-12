@@ -39,7 +39,7 @@ func (a *Achievement) UpdateProgress(newProgress int) {
 	a.UpdatedAt = time.Now().UTC()
 }
 
-// DefaultAchievements returns the 8 standard achievements every new user starts with.
+// DefaultAchievements returns the standard achievements every new user starts with.
 func DefaultAchievements(userID string) []Achievement {
 	now := time.Now().UTC()
 	defs := []struct {
@@ -57,6 +57,12 @@ func DefaultAchievements(userID string) []Achievement {
 		{"weekly_warrior", "⚡ Guerrero Semanal", "Mantén una racha de 7 días consecutivos", 7, 100},
 		{"monthly_legend", "👑 Leyenda Mensual", "Mantén una racha de 30 días consecutivos", 30, 500},
 		{"data_explorer", "🔍 Explorador de Datos", "Usa la app durante 25 días", 25, 75},
+		{"savings_starter", "🐖 Primer Ahorro", "Realiza tu primer depósito a una meta", 1, 50},
+		{"savings_champion", "🏆 Campeón del Ahorro", "Completa una meta de ahorro", 1, 300},
+		{"planner_pro", "🗓️ Planificador Pro", "Configura 3 transacciones recurrentes", 3, 150},
+		{"budget_beginner", "📋 Primer Presupuesto", "Crea tu primer presupuesto", 1, 50},
+		{"budget_disciplined", "💪 Disciplina Presupuestaria", "Cumple el presupuesto 3 meses seguidos", 3, 200},
+		{"ai_executor", "🤖 Ejecutor de IA", "Aplica 5 recomendaciones de la IA", 5, 100},
 	}
 
 	achievements := make([]Achievement, 0, len(defs))

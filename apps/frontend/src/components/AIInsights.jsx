@@ -1,9 +1,10 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { FaBrain, FaSpinner, FaRedo, FaLightbulb, FaShoppingCart, FaCheck, FaChevronRight, FaCalculator, FaExclamationTriangle, FaCheckCircle, FaChevronDown, FaChevronUp, FaBullseye } from 'react-icons/fa';
 import { aiAPI, savingsGoalsAPI, budgetsAPI, analyticsAPI, formatCurrency } from '../services/api';
 import { useAuth } from '../contexts/AuthContext';
 import { usePeriod } from '../contexts/PeriodContext';
 import { useGamification } from '../contexts/GamificationContext';
+import { getGamificationAPI } from '../services/gamificationAPI';
 
 const AIInsights = () => {
   const { user, isAuthenticated } = useAuth();
@@ -21,9 +22,10 @@ const AIInsights = () => {
   const [lastEvaluationDate, setLastEvaluationDate] = useState(null);
   const [dashboardData, setDashboardData] = useState(null);
   const [savingsGoals, setSavingsGoals] = useState([]);
+  const [behaviorProfile, setBehaviorProfile] = useState(null);
+  const behaviorProfileRef = useRef(null); // ref to avoid circular dep in loadHealthScore
+  const [appliedInsights, setAppliedInsights] = useState(new Set());
   
-  // Estados para Progressive Disclosure
-  const [showAllInsights, setShowAllInsights] = useState(false);
   const [activeTab, setActiveTab] = useState('insights'); // 'insights' | 'purchase'
   
   // Estados para el análisis de compra - ahora se inicializan dinámicamente
@@ -128,24 +130,36 @@ const AIInsights = () => {
 
   // Cache removido - el backend maneja su propio cache de 20 horas
 
-  // Función para cargar el health score
-  const loadHealthScore = useCallback(async () => {
+  // Función para cargar el health score, pasando parámetros conductuales opcionales
+  const loadHealthScore = useCallback(async (profile = null) => {
     if (!isAuthenticated) return;
 
     setHealthScoreLoading(true);
     try {
-      const response = await aiAPI.getHealthScore();
-      // Backend returns score 0-100; display uses 0-1000 scale
-      setHealthScore((response.score || response.health_score || 0) * 10);
+      // Use explicit profile arg, then ref (avoids circular dep — ref never causes re-render)
+      const bp = profile || behaviorProfileRef.current;
+      const params = bp ? {
+        streak: bp.current_streak,
+        days_active: bp.days_active,
+        budgets_created: bp.budgets_created,
+        budget_compliance: bp.budget_compliance_events,
+        savings_goals: bp.savings_goals_created,
+        savings_deposits: bp.savings_deposits,
+        recurring_setups: bp.recurring_setups,
+        ai_applied: bp.ai_recommendations_applied,
+      } : {};
+
+      const response = await aiAPI.getHealthScore(params);
+      // Backend returns score on 0-1000 scale — round to avoid floating-point display artefacts
+      setHealthScore(Math.round(response.score || response.health_score || 0));
       setHealthDetails(response);
     } catch (err) {
       console.error('Error loading health score:', err.message);
-      // Mantener el valor por defecto de 0 en caso de error
       setHealthScore(0);
     } finally {
       setHealthScoreLoading(false);
     }
-  }, [isAuthenticated, user?.email]);
+  }, [isAuthenticated]); // behaviorProfile removed — using ref instead to break the dep cycle
 
   const loadAIInsights = useCallback(async () => {
     if (!isAuthenticated) {
@@ -158,12 +172,14 @@ const AIInsights = () => {
     try {
       console.log('🔍 Cargando análisis inteligente para usuario:', user?.email);
 
-      // Fetch all financial context data in parallel for a richer AI analysis
-      const [categoriesResult, incomesResult, budgetResult, goalsResult] = await Promise.allSettled([
+      // Fetch all financial context data in parallel (including behavioral profile)
+      const gamificationAPI = getGamificationAPI();
+      const [categoriesResult, incomesResult, budgetResult, goalsResult, behaviorResult] = await Promise.allSettled([
         analyticsAPI.categories(),
         analyticsAPI.incomes(),
         budgetsAPI.getDashboard(),
         savingsGoalsAPI.list({ status: 'active' }),
+        gamificationAPI.getBehaviorProfile(),
       ]);
 
       const financialData = {};
@@ -179,9 +195,11 @@ const AIInsights = () => {
 
       // Total income from analytics summary
       if (incomesResult.status === 'fulfilled') {
-        financialData.total_income = incomesResult.value.data?.total_amount
-          || incomesResult.value.total_amount
-          || 0;
+        const incomesData = incomesResult.value.data;
+        financialData.total_income = incomesData?.total_amount || incomesData?.data?.total_amount || 0;
+        // Income stability: based on number of income sources (more sources = more stable)
+        const incomeCount = incomesData?.count || incomesData?.data?.count || 1;
+        financialData.income_stability = incomeCount >= 3 ? 0.9 : incomeCount === 2 ? 0.65 : 0.35;
       }
 
       // Savings rate
@@ -219,13 +237,42 @@ const AIInsights = () => {
         }
       }
 
-      financialData.income_stability = 0.8;
+      // Behavioral profile from gamification (best-effort)
+      let bp = null;
+      if (behaviorResult.status === 'fulfilled' && behaviorResult.value) {
+        bp = behaviorResult.value;
+        setBehaviorProfile(bp);
+        behaviorProfileRef.current = bp; // sync ref so loadHealthScore can use it immediately
+        financialData.behavior_profile = {
+          current_level: bp.current_level,
+          level_name: bp.level_name,
+          current_streak: bp.current_streak,
+          days_active: bp.days_active,
+          budgets_created: bp.budgets_created,
+          budget_compliance_events: bp.budget_compliance_events,
+          savings_goals_created: bp.savings_goals_created,
+          savings_deposits: bp.savings_deposits,
+          savings_goals_achieved: bp.savings_goals_achieved,
+          recurring_setups: bp.recurring_setups,
+          ai_recommendations_applied: bp.ai_recommendations_applied,
+          consistency_score: bp.consistency_score,
+          discipline_score: bp.discipline_score,
+          engagement_score: bp.engagement_score,
+        };
+      }
+
+      // Dynamic period: current month name + year
+      const now = new Date();
+      const monthName = now.toLocaleString('es-AR', { month: 'long', year: 'numeric' });
+      financialData.period = monthName.charAt(0).toUpperCase() + monthName.slice(1);
       financialData.financial_score = 0;
-      financialData.period = 'Mes actual';
 
       const response = await aiAPI.getInsights(financialData);
       const newInsights = response.insights || [];
       setInsights(newInsights);
+
+      // Reload health score now that we have the behavioral profile
+      loadHealthScore(bp);
 
       // Usar el timestamp del backend (generated_at)
       const backendTimestamp = response.generated_at ? new Date(response.generated_at) : new Date();
@@ -286,7 +333,7 @@ const AIInsights = () => {
     } finally {
       setLoading(false);
     }
-  }, [isAuthenticated, user?.email]);
+  }, [isAuthenticated, user?.email, loadHealthScore]);
 
   // Función simplificada - siempre llama al backend (que tiene su propio cache de 20h)
   const loadAIInsightsSimple = useCallback(async () => {
@@ -311,11 +358,10 @@ const AIInsights = () => {
     //   localStorage.removeItem('health_score_cache');
     //   console.log('🧹 Cache limpiado para desarrollo');
     // }
-    loadAIInsightsSimple();
-    loadHealthScore();
+    loadAIInsightsSimple(); // internally calls loadHealthScore(bp) after getting behavior profile
     loadDashboardData();
     loadSavingsGoals();
-  }, [isAuthenticated, loadAIInsightsSimple, loadHealthScore, loadDashboardData, loadSavingsGoals]);
+  }, [isAuthenticated, loadAIInsightsSimple, loadDashboardData, loadSavingsGoals]);
 
   // Función para filtrar metas de ahorro relevantes
   const getRelevantSavingsGoals = (itemName, description) => {
@@ -489,6 +535,17 @@ const AIInsights = () => {
     }
   };
 
+  const handleApplyInsight = async (index, insight) => {
+    if (appliedInsights.has(index)) return;
+    setAppliedInsights(prev => new Set([...prev, index]));
+    try {
+      const gamificationAPI = getGamificationAPI();
+      await gamificationAPI.recordApplyAIRecommendation(String(index), insight.next_action || insight.title);
+    } catch (err) {
+      console.warn('Error recording apply_ai_recommendation:', err);
+    }
+  };
+
   const getScoreColor = (score) => {
     if (score >= 800) return 'text-green-600 dark:text-green-400';
     if (score >= 600) return 'text-blue-600 dark:text-blue-400';
@@ -507,8 +564,8 @@ const AIInsights = () => {
     }
   };
 
-  // Progressive Disclosure: mostrar solo los primeros 3 insights
-  const displayedInsights = showAllInsights ? insights : insights.slice(0, 3);
+  // Always show exactly 3 insights (backend generates exactly 3)
+  const displayedInsights = insights.slice(0, 3);
 
   // Componente de salud financiera optimizado
   const HealthScoreDisplay = ({ score, maxScore = 1000, details = null, loading = false }) => {
@@ -532,13 +589,11 @@ const AIInsights = () => {
     const ratio = incomes > 0 ? consumptionExpenses / incomes : null;
     const savingsRate = details?.savings_rate != null ? details.savings_rate : null;
 
-    const thresholds = [
-      { range: '< 50%', pts: 1000, label: 'Excelente', active: ratio !== null && ratio < 0.5 },
-      { range: '50 – 69%', pts: 800, label: 'Excelente', active: ratio !== null && ratio >= 0.5 && ratio < 0.7 },
-      { range: '70 – 89%', pts: 600, label: 'Bueno', active: ratio !== null && ratio >= 0.7 && ratio < 0.9 },
-      { range: '90 – 99%', pts: 400, label: 'Regular', active: ratio !== null && ratio >= 0.9 && ratio < 1.0 },
-      { range: '≥ 100%', pts: 200, label: 'Mejorable', active: ratio !== null && ratio >= 1.0 },
-    ];
+    const cashFlowScore = details?.cash_flow_score ?? null;
+    const planningScore = details?.planning_score ?? null;
+    const consistencyScore = details?.consistency_score ?? null;
+    const engagementScore = details?.engagement_score ?? null;
+    const hasDimensions = cashFlowScore !== null;
 
     if (loading) {
       return (
@@ -662,30 +717,36 @@ const AIInsights = () => {
                   </div>
                 )}
 
-                {/* Tabla de umbrales */}
-                <div className="bg-white/60 dark:bg-gray-700/60 rounded-lg p-3">
-                  <div className="text-xs font-medium text-gray-600 dark:text-gray-300 mb-2">Escala de puntuación</div>
-                  <div className="space-y-1">
-                    {thresholds.map((row) => (
-                      <div
-                        key={row.range}
-                        className={`flex items-center justify-between text-xs py-1.5 px-2 rounded transition-colors ${row.active ? 'bg-current/10 font-semibold ring-1 ring-current/20' : 'text-gray-500 dark:text-gray-400'}`}
-                      >
-                        <span>Consumo: <strong>{row.range}</strong> ingresos</span>
-                        <div className="flex items-center space-x-2">
-                          <span className="text-gray-400 dark:text-gray-500">{row.pts} pts</span>
-                          <span className={row.active ? color : 'text-gray-600 dark:text-gray-300'}>{row.label}</span>
-                          {row.active && <span className="text-gray-400">← ahora</span>}
+                {/* Desglose multi-dimensional */}
+                {hasDimensions && (
+                  <div className="bg-white/60 dark:bg-gray-700/60 rounded-lg p-3">
+                    <div className="text-xs font-medium text-gray-600 dark:text-gray-300 mb-2">Desglose del puntaje</div>
+                    <div className="space-y-2">
+                      {[
+                        { label: '💵 Flujo de caja', value: cashFlowScore, weight: '40%' },
+                        { label: '🗓️ Planificación', value: planningScore, weight: '30%' },
+                        { label: '🔁 Consistencia', value: consistencyScore, weight: '20%' },
+                        { label: '🤖 Engagement IA', value: engagementScore, weight: '10%' },
+                      ].map(({ label, value, weight }) => (
+                        <div key={label}>
+                          <div className="flex items-center justify-between text-xs mb-1">
+                            <span className="text-gray-600 dark:text-gray-400">{label}</span>
+                            <span className="font-semibold text-gray-700 dark:text-gray-200">{value}/100 <span className="text-gray-400 font-normal">({weight})</span></span>
+                          </div>
+                          <div className="w-full bg-gray-200 dark:bg-gray-600 rounded-full h-1.5 overflow-hidden">
+                            <div
+                              className={`h-1.5 rounded-full transition-all duration-700 ${value >= 70 ? 'bg-green-500' : value >= 40 ? 'bg-blue-500' : 'bg-yellow-500'}`}
+                              style={{ width: `${Math.min(value, 100)}%` }}
+                            />
+                          </div>
                         </div>
-                      </div>
-                    ))}
-                    {ratio === null && (
-                      <div className="text-xs text-gray-400 dark:text-gray-500 py-1 px-2">
-                        Sin ingresos registrados este mes
-                      </div>
-                    )}
+                      ))}
+                    </div>
+                    <p className="text-xs text-gray-400 dark:text-gray-500 mt-2">
+                      El puntaje combina tu flujo de caja, planificación, consistencia de uso y engagement con IA.
+                    </p>
                   </div>
-                </div>
+                )}
 
                 {/* Tasa de ahorro real */}
                 {savingsRate !== null && (
@@ -836,13 +897,16 @@ const AIInsights = () => {
                             <p className="text-gray-600 dark:text-gray-400 text-sm leading-relaxed mb-3">
                               {insight.description}
                             </p>
+                            {insight.next_action && (
+                              <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg px-3 py-2 mb-3">
+                                <p className="text-xs font-semibold text-blue-700 dark:text-blue-300 uppercase tracking-wide mb-0.5">Acción inmediata</p>
+                                <p className="text-sm text-blue-800 dark:text-blue-200">{insight.next_action}</p>
+                              </div>
+                            )}
                             <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between space-y-2 sm:space-y-0">
                               <div className="flex items-center space-x-3">
                                 <span className="inline-flex items-center px-2 py-1 bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 rounded-lg text-xs font-medium">
                                   📊 {insight.category}
-                                </span>
-                                <span className={`text-sm font-bold ${getScoreColor(insight.score)}`}>
-                                  {insight.score} pts
                                 </span>
                               </div>
                               <div className="flex items-center space-x-2">
@@ -852,13 +916,29 @@ const AIInsights = () => {
                                     className="inline-flex items-center px-3 py-1.5 bg-blue-500 dark:bg-blue-600 text-white text-xs rounded-lg hover:bg-blue-600 dark:hover:bg-blue-700 transition-colors font-medium"
                                   >
                                     <FaCheck className="w-3 h-3 mr-1" />
-                                    Marcar como revisado
+                                    Revisado
                                   </button>
                                 )}
                                 {understoodInsights.has(index) && (
                                   <div className="inline-flex items-center px-3 py-1.5 bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300 text-xs rounded-lg font-medium">
                                     <FaCheckCircle className="w-3 h-3 mr-1" />
                                     ¡Revisado!
+                                  </div>
+                                )}
+                                {insight.next_action && !appliedInsights.has(index) && (
+                                  <button
+                                    onClick={(e) => { e.stopPropagation(); handleApplyInsight(index, insight); }}
+                                    className="inline-flex items-center px-3 py-1.5 bg-emerald-500 dark:bg-emerald-600 text-white text-xs rounded-lg hover:bg-emerald-600 dark:hover:bg-emerald-700 transition-colors font-medium"
+                                    title="Marcar que ejecutaste esta acción (+20 XP)"
+                                  >
+                                    <FaBullseye className="w-3 h-3 mr-1" />
+                                    ¡Lo hice! +20 XP
+                                  </button>
+                                )}
+                                {appliedInsights.has(index) && (
+                                  <div className="inline-flex items-center px-3 py-1.5 bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-300 text-xs rounded-lg font-medium">
+                                    <FaCheckCircle className="w-3 h-3 mr-1" />
+                                    ¡Ejecutado!
                                   </div>
                                 )}
                               </div>
@@ -869,25 +949,12 @@ const AIInsights = () => {
                     ))}
                   </div>
 
-                  {/* Progressive Disclosure */}
-                  {insights.length > 3 && (
-                    <div className="text-center pt-4">
-                      <button
-                        onClick={() => setShowAllInsights(!showAllInsights)}
-                        className="inline-flex items-center px-6 py-3 bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors font-medium"
-                      >
-                        {showAllInsights ? (
-                          <>
-                            <FaChevronUp className="w-4 h-4 mr-2" />
-                            Mostrar menos recomendaciones
-                          </>
-                        ) : (
-                          <>
-                            <FaChevronDown className="w-4 h-4 mr-2" />
-                            Ver todas las recomendaciones ({insights.length - 3} más)
-                          </>
-                        )}
-                      </button>
+                  {/* Footer informativo */}
+                  {insights.length > 0 && (
+                    <div className="pt-2 text-center">
+                      <p className="text-xs text-gray-400 dark:text-gray-500">
+                        Análisis generado con datos reales de tus transacciones · Actualización diaria
+                      </p>
                     </div>
                   )}
                 </>

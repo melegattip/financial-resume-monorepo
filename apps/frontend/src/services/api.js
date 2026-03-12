@@ -269,8 +269,9 @@ export const aiAPI = {
   },
 
   // Obtener puntuación de salud financiera
-  getHealthScore: async () => {
-    const response = await api.get('/insights/financial-health');
+  // params: optional behavioral query params { streak, days_active, budgets_created, ... }
+  getHealthScore: async (params = {}) => {
+    const response = await api.get('/insights/financial-health', { params });
     return response.data?.data || response.data;
   }
 };

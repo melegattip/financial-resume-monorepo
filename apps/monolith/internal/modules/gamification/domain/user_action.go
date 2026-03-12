@@ -28,8 +28,11 @@ const (
 	ActionCreateSavingsGoal   = "create_savings_goal"
 	ActionDepositSavings      = "deposit_savings"
 	ActionAchieveSavingsGoal  = "achieve_savings_goal"
-	ActionCreateBudget        = "create_budget"
-	ActionStayWithinBudget    = "stay_within_budget"
+	ActionCreateBudget               = "create_budget"
+	ActionStayWithinBudget           = "stay_within_budget"
+	ActionCreateRecurringTransaction = "create_recurring_transaction"
+	ActionApplyAIRecommendation      = "apply_ai_recommendation"
+	ActionCompleteMonthlyReview      = "complete_monthly_review"
 )
 
 // UserAction records a single action performed by a user.
@@ -71,8 +74,11 @@ func XPForAction(actionType string) int {
 		ActionCreateSavingsGoal:   15,
 		ActionDepositSavings:      8,
 		ActionAchieveSavingsGoal:  100,
-		ActionCreateBudget:        20,
-		ActionStayWithinBudget:    15,
+		ActionCreateBudget:               20,
+		ActionStayWithinBudget:           15,
+		ActionCreateRecurringTransaction: 30,
+		ActionApplyAIRecommendation:      20,
+		ActionCompleteMonthlyReview:      15,
 	}
 	if xp, ok := xpTable[actionType]; ok {
 		return xp

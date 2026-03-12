@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"context"
+	"math"
 	"net/http"
 	"strconv"
 	"strings"
@@ -221,10 +222,35 @@ func isProductiveCategory(name string) bool {
 	return false
 }
 
+// parseIntQuery reads an optional integer query parameter. Returns 0 when absent or invalid.
+func parseIntQuery(c *gin.Context, key string) int {
+	val := c.Query(key)
+	if val == "" {
+		return 0
+	}
+	n, err := strconv.Atoi(val)
+	if err != nil || n < 0 {
+		return 0
+	}
+	return n
+}
+
+// clamp100 constrains a float64 to [0, 100].
+func clamp100(v float64) float64 {
+	return math.Max(0, math.Min(100, v))
+}
+
 // GetFinancialHealth handles GET /insights/financial-health
-// Computes a financial health score that distinguishes consumption expenses from
-// productive expenses (investments, savings, insurance, assets). Only consumption
-// expenses are used in the ratio, so capital allocation does not penalise the score.
+//
+// Computes a multi-dimensional financial health score (0-1000):
+//   - Cash-flow dimension   (40%): consumption vs income ratio (continuous, not buckets)
+//   - Planning dimension    (30%): budgets, savings goals, recurring setups
+//   - Consistency dimension (20%): streak + days active
+//   - Engagement dimension  (10%): AI usage + analytics views
+//
+// Optional behavioral query params (sourced from the BehaviorProfile endpoint):
+// streak, days_active, budgets_created, budget_compliance, savings_goals,
+// savings_deposits, recurring_setups, ai_applied.
 func (h *AnalyticsHandler) GetFinancialHealth(c *gin.Context) {
 	tenantID := c.GetString("tenant_id")
 	ctx := c.Request.Context()
@@ -236,7 +262,7 @@ func (h *AnalyticsHandler) GetFinancialHealth(c *gin.Context) {
 		return
 	}
 
-	// Split expenses into consumption vs productive using category keyword matching.
+	// --- Split expenses into consumption vs productive ---
 	now := time.Now().UTC()
 	monthStart := time.Date(now.Year(), now.Month(), 1, 0, 0, 0, 0, time.UTC)
 	categories, _ := h.repo.GetExpensesByCategory(ctx, tenantID, monthStart, now)
@@ -252,57 +278,106 @@ func (h *AnalyticsHandler) GetFinancialHealth(c *gin.Context) {
 		consumptionExpenses = 0
 	}
 
-	// Score based on consumption ratio only (productive expenses are excluded).
-	score := 100.0
-	if summary.CurrentMonthIncomes > 0 {
-		consumptionRatio := consumptionExpenses / summary.CurrentMonthIncomes
-		switch {
-		case consumptionRatio >= 1.0:
-			score = 20.0
-		case consumptionRatio >= 0.9:
-			score = 40.0
-		case consumptionRatio >= 0.7:
-			score = 60.0
-		case consumptionRatio >= 0.5:
-			score = 80.0
+	income := summary.CurrentMonthIncomes
+
+	// --- Read optional behavioral params ---
+	streak          := parseIntQuery(c, "streak")
+	daysActive      := parseIntQuery(c, "days_active")
+	budgetsCreated  := parseIntQuery(c, "budgets_created")
+	compliance      := parseIntQuery(c, "budget_compliance")
+	savingsGoals    := parseIntQuery(c, "savings_goals")
+	savingsDeposits := parseIntQuery(c, "savings_deposits")
+	recurringSetups := parseIntQuery(c, "recurring_setups")
+	aiApplied       := parseIntQuery(c, "ai_applied")
+
+	// ================================================================
+	// Dimension 1 — Cash Flow (0-100)
+	// Continuous formula instead of 5 hard buckets.
+	// ================================================================
+	cashFlowScore := 100.0
+	if income > 0 {
+		ratio := consumptionExpenses / income
+		cashFlowScore = clamp100(100 - ratio*100)
+		// Bonus for high productive savings rate.
+		trueSavingsRate := (summary.CurrentMonthBalance + productiveExpenses) / income * 100
+		if trueSavingsRate > 20 {
+			cashFlowScore = clamp100(cashFlowScore + 10)
 		}
 	} else if summary.CurrentMonthExpenses > 0 {
-		score = 10.0
+		cashFlowScore = 5 // no income but has expenses = critical
 	}
+
+	// ================================================================
+	// Dimension 2 — Planning (0-100)
+	// Rewards intentional financial planning actions.
+	// ================================================================
+	planningScore := 0.0
+	if budgetsCreated > 0 {
+		planningScore += 25
+	}
+	planningScore += clamp100(float64(compliance) * 10)
+	if savingsGoals > 0 {
+		planningScore += 20
+	}
+	planningScore += clamp100(float64(savingsDeposits) * 5)
+	planningScore = clamp100(planningScore)
+
+	// ================================================================
+	// Dimension 3 — Consistency (0-100)
+	// Rewards regular usage and long tenure.
+	// ================================================================
+	streakFactor  := math.Min(float64(streak)/30.0, 1.0) * 60
+	tenureFactor  := math.Min(float64(daysActive)/90.0, 1.0) * 40
+	consistencyScore := streakFactor + tenureFactor
+
+	// ================================================================
+	// Dimension 4 — Engagement (0-100)
+	// Rewards use of AI and analytical tools.
+	// ================================================================
+	engagementScore := clamp100(float64(aiApplied)*20 + float64(recurringSetups)*15)
+
+	// ================================================================
+	// Weighted composite score (0-100) → display score (0-1000)
+	// ================================================================
+	finalScore := cashFlowScore*0.40 + planningScore*0.30 + consistencyScore*0.20 + engagementScore*0.10
+	displayScore := finalScore * 10 // 0-1000 scale
 
 	status := "excellent"
 	switch {
-	case score < 40:
+	case finalScore < 30:
 		status = "critical"
-	case score < 60:
+	case finalScore < 50:
 		status = "poor"
-	case score < 80:
+	case finalScore < 70:
 		status = "fair"
-	case score < 90:
+	case finalScore < 85:
 		status = "good"
 	}
 
-	// True savings rate: money NOT consumed (cash balance + money allocated to
-	// investments/assets/savings). Productive expenses are capital allocation,
-	// not spending — so they count toward savings.
+	// True savings rate for informational display.
 	trueSavingsRate := 0.0
-	if summary.CurrentMonthIncomes > 0 {
+	if income > 0 {
 		trueSavings := summary.CurrentMonthBalance + productiveExpenses
-		trueSavingsRate = trueSavings / summary.CurrentMonthIncomes * 100
+		trueSavingsRate = trueSavings / income * 100
 		if trueSavingsRate < 0 {
 			trueSavingsRate = 0
 		}
 	}
 
 	c.JSON(http.StatusOK, gin.H{
-		"score":                   score,
-		"status":                  status,
-		"savings_rate":            trueSavingsRate,
-		"current_month_expenses":  summary.CurrentMonthExpenses,
-		"current_month_incomes":   summary.CurrentMonthIncomes,
-		"current_month_balance":   summary.CurrentMonthBalance,
-		"productive_expenses":     productiveExpenses,
-		"consumption_expenses":    consumptionExpenses,
+		"score":                  displayScore,
+		"status":                 status,
+		"savings_rate":           trueSavingsRate,
+		"current_month_expenses": summary.CurrentMonthExpenses,
+		"current_month_incomes":  summary.CurrentMonthIncomes,
+		"current_month_balance":  summary.CurrentMonthBalance,
+		"productive_expenses":    productiveExpenses,
+		"consumption_expenses":   consumptionExpenses,
+		// Dimension breakdown for frontend display.
+		"cash_flow_score":    math.Round(cashFlowScore),
+		"planning_score":     math.Round(planningScore),
+		"consistency_score":  math.Round(consistencyScore),
+		"engagement_score":   math.Round(engagementScore),
 	})
 }
 

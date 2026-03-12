@@ -421,6 +421,24 @@ class GamificationAPI {
   async recordApplyAISuggestion(suggestionId, description = 'User applied AI suggestion') {
     return this.recordAction('apply_ai_suggestion', 'ai_suggestion', suggestionId, description);
   }
+
+  /**
+   * Registra que el usuario aplicó una recomendación de IA (flywheel: +20 XP)
+   * @param {string} insightId - ID o índice del insight aplicado
+   * @param {string} nextAction - Texto de la acción concreta que ejecutó
+   */
+  async recordApplyAIRecommendation(insightId, nextAction = '') {
+    return this.recordAction('apply_ai_recommendation', 'insight', insightId, nextAction);
+  }
+
+  /**
+   * Obtiene el perfil conductual del usuario derivado de sus acciones
+   * (usado por el módulo AI para personalizar análisis y score)
+   */
+  async getBehaviorProfile() {
+    const response = await apiClient.get(`${this.baseURL}/behavior-profile`);
+    return response.data?.data ?? response.data;
+  }
 }
 
 // 🌟 SINGLETON PATTERN

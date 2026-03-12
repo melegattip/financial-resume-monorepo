@@ -377,25 +377,22 @@ export const GamificationProvider = ({ children }) => {
 
   // 🔒 Funciones de Feature Gates
   const isFeatureUnlocked = useCallback((featureKey) => {
-    if (!userProfile) return false;
-    
-    // Usar datos del backend si están disponibles
+    // Primero verificar datos del backend (no depende de userProfile)
     if (features && features.unlocked_features && Array.isArray(features.unlocked_features)) {
       if (features.unlocked_features.includes(featureKey)) return true;
-      // Si aparece como bloqueada pero el backend informa trial activo, considerarla desbloqueada
+      // Trial activo también desbloquea
       if (features.locked_features && Array.isArray(features.locked_features)) {
         const lf = features.locked_features.find(f => f.feature_key === featureKey);
-        if (lf && (lf.trial_active === true)) return true;
+        if (lf && lf.trial_active === true) return true;
       }
       return false;
     }
-    
-    // Fallback usando nivel local
+
+    // Fallback local: requiere userProfile
+    if (!userProfile) return false;
     const feature = FEATURE_GATES[featureKey];
-    if (!feature) return true; // Si la feature no existe, permitir acceso
-    
-    const userLevel = userProfile.current_level || 0;
-    return userLevel >= feature.requiredLevel;
+    if (!feature) return true;
+    return (userProfile.current_level || 0) >= feature.requiredLevel;
   }, [userProfile, features]);
 
   const getFeatureAccess = useCallback(async (featureKey) => {

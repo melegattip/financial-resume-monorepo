@@ -62,19 +62,20 @@ Responde ÚNICAMENTE con un JSON válido en el formato solicitado. Sin texto adi
 
 // GenerateInsights generates personalised financial insights using AI.
 func (s *AnalysisService) GenerateInsights(ctx context.Context, data domain.FinancialAnalysisData) ([]domain.AIInsight, error) {
-	systemPrompt := `Eres un asesor financiero senior especializado en el mercado latinoamericano, con experiencia en patrimonio, inversiones y planificación financiera personal.
+	systemPrompt := `Eres un asesor financiero personal de alto valor, especializado en el mercado latinoamericano.
 
-Generas insights financieros INTELIGENTES Y CONTEXTUALES, no evaluaciones mecánicas de ratio.
+Tu misión: generar exactamente 3 recomendaciones ACCIONABLES que el usuario pueda ejecutar HOY O ESTA SEMANA.
 
-PRINCIPIOS FUNDAMENTALES:
-1. DISTINGUE siempre entre egresos de CONSUMO (alimentación, transporte, ocio, servicios) y egresos PRODUCTIVOS (inversión, ahorro, activos, seguros, educación, fondos, propiedades, cripto, plazo fijo).
-2. Los egresos productivos son señal de MADUREZ FINANCIERA. Si el usuario invierte/ahorra agresivamente, es un LOGRO a destacar explícitamente.
-3. Evalúa el CONSUMO neto (total_expenses menos egresos productivos) al analizar el ratio de gasto.
-4. Si el usuario tiene alto ratio total pero porción significativa en inversión/activos, el insight debe celebrarlo y sugerir optimización adicional, no alarmarse.
-5. Contexto latinoamericano: compra de propiedades, dolarización, plazo fijo, fondos comunes de inversión, son estrategias válidas y positivas.
-6. Usa números EXACTOS en los insights. Sé concreto: "invertiste $X en Y" es mejor que "tienes gastos en inversión".
+REGLAS ESTRICTAS:
+1. Genera EXACTAMENTE 3 insights. Ni más, ni menos.
+2. Cada insight debe tener un "next_action": una instrucción específica, concreta e inmediata. Ejemplo: "Transferir $X al fondo Y antes del viernes", NO "considera ahorrar más".
+3. DISTINGUE siempre egresos de CONSUMO vs PRODUCTIVOS (inversión, ahorro, activos, seguros, educación, propiedades, cripto, plazo fijo). Los productivos son logros a celebrar.
+4. Usa montos EXACTOS ($X) y porcentajes (X%) basados en los datos reales. Nunca generalices.
+5. Prioriza por impacto real en el patrimonio: el insight más importante va primero.
+6. Contexto latinoamericano: compra de propiedades, dolarización, plazo fijo, fondos comunes, son estrategias positivas.
+7. Si la situación financiera es buena, di exactamente qué optimizar o potenciar — no inventes problemas.
 
-Responde ÚNICAMENTE con un JSON array válido. Sin texto adicional.`
+Responde ÚNICAMENTE con un JSON array de exactamente 3 objetos. Sin texto adicional.`
 
 	userPrompt := s.buildInsightsPrompt(data)
 
@@ -158,26 +159,39 @@ Responde en JSON con este formato exacto:
 func (s *AnalysisService) buildInsightsPrompt(data domain.FinancialAnalysisData) string {
 	var sb strings.Builder
 
-	sb.WriteString(fmt.Sprintf(`Genera un análisis financiero profundo y personalizado.
+	surplus := data.TotalIncome - data.TotalExpenses
+	savingsPct := data.SavingsRate * 100
+	stabilityLabel := "baja (ingresos irregulares o de una sola fuente)"
+	if data.IncomeStability >= 0.8 {
+		stabilityLabel = "alta (ingresos regulares y diversificados)"
+	} else if data.IncomeStability >= 0.5 {
+		stabilityLabel = "media (ingresos con algo de variabilidad)"
+	}
+
+	surplusPct := 0.0
+	if data.TotalIncome > 0 {
+		surplusPct = surplus / data.TotalIncome * 100
+	}
+
+	sb.WriteString(fmt.Sprintf(`Genera 3 recomendaciones accionables para este usuario.
 
 ## FLUJO DE EFECTIVO — PERÍODO: %s
-- Ingresos totales: $%.2f
-- Egresos totales: $%.2f
-- Superávit/Déficit: $%.2f
-- Tasa de ahorro: %.1f%%
-- Estabilidad de ingresos: %.2f/1.0
-- Score financiero: %d/1000
+- Ingresos totales: $%.0f
+- Egresos totales: $%.0f
+- Superávit/Déficit: $%.0f (%.1f%% de los ingresos)
+- Tasa de ahorro neta: %.1f%%
+- Estabilidad de ingresos: %s
 
-## EGRESOS POR CATEGORÍA (evalúa cada una)
+## EGRESOS POR CATEGORÍA (monto y %% sobre ingresos)
 %s`,
 		data.Period,
 		data.TotalIncome,
 		data.TotalExpenses,
-		data.TotalIncome-data.TotalExpenses,
-		data.SavingsRate*100,
-		data.IncomeStability,
-		data.FinancialScore,
-		formatExpensesByCategory(data.ExpensesByCategory),
+		surplus,
+		surplusPct,
+		savingsPct,
+		stabilityLabel,
+		formatExpensesByCategoryWithPct(data.ExpensesByCategory, data.TotalIncome),
 	))
 
 	if len(data.SavingsGoals) > 0 {
@@ -190,27 +204,28 @@ func (s *AnalysisService) buildInsightsPrompt(data domain.FinancialAnalysisData)
 		sb.WriteString(formatBudgetsSummary(data.BudgetsSummary))
 	}
 
+	if data.BehaviorProfile != nil {
+		sb.WriteString(formatBehaviorProfile(data.BehaviorProfile))
+	}
+
 	sb.WriteString(`
 
-## INSTRUCCIONES PARA EL ANÁLISIS:
-1. PRIMERO clasifica los egresos por categoría en: CONSUMO vs PRODUCTIVOS (inversión/ahorro/activos/seguros/educación).
-2. Calcula el ratio de CONSUMO NETO (solo gastos de consumo / ingresos). Ese es el indicador real de salud.
-3. Si hay egresos productivos significativos → genera un insight destacándolos con datos exactos ($monto, % de ingresos).
-4. Identifica las 2-3 categorías de CONSUMO de mayor impacto y evalúa si son optimizables.
-5. Si hay metas de ahorro: evalúa progreso real, señala cuáles están en riesgo de no cumplirse.
-6. Si hay presupuestos: evalúa cuáles excedidos o en alerta, y qué acción concreta tomar.
-7. Usa números exactos ($montos, %) en todas las descripciones. Nunca generalices.
-8. Prioriza insights por impacto real en el patrimonio del usuario.
+## PROCESO:
+1. Clasifica los egresos: CONSUMO vs PRODUCTIVOS (inversión/ahorro/activos/seguros/educación/propiedades).
+2. Calcula ratio CONSUMO NETO / ingresos.
+3. Genera exactamente 3 insights priorizados por impacto en el patrimonio.
+4. El campo "next_action" debe ser una instrucción CONCRETA que el usuario puede ejecutar esta semana. Incluye montos o pasos específicos. Máx 120 caracteres.
 
-Genera exactamente 4 a 6 insights. Responde SOLO con el array JSON:
+Responde SOLO con el array JSON de exactamente 3 objetos:
 [
   {
     "title": "Título conciso (máx 60 caracteres)",
-    "description": "Análisis detallado con datos específicos y acción concreta recomendada",
+    "description": "Análisis con datos exactos ($montos, %) y contexto claro. Máx 200 caracteres.",
     "impact": "Positivo|Negativo|Neutro",
     "score": 0-100,
     "action_type": "maintain|improve|optimize|alert|invest",
-    "category": "savings|expenses|income|debt|investment|budget|goals"
+    "category": "savings|expenses|income|debt|investment|budget|goals",
+    "next_action": "Paso concreto e inmediato a tomar esta semana. Incluir $monto si aplica. Máx 120 caracteres."
   }
 ]`)
 
@@ -238,6 +253,24 @@ func formatExpensesByCategory(expenses map[string]float64) string {
 	return sb.String()
 }
 
+// formatExpensesByCategoryWithPct formats expenses with both absolute amount and % of total income.
+func formatExpensesByCategoryWithPct(expenses map[string]float64, totalIncome float64) string {
+	if len(expenses) == 0 {
+		return "  - Sin datos de egresos por categoría"
+	}
+
+	var sb strings.Builder
+	for category, amount := range expenses {
+		if totalIncome > 0 {
+			pct := amount / totalIncome * 100
+			sb.WriteString(fmt.Sprintf("  - %s: $%.0f (%.1f%% de ingresos)\n", category, amount, pct))
+		} else {
+			sb.WriteString(fmt.Sprintf("  - %s: $%.0f\n", category, amount))
+		}
+	}
+	return sb.String()
+}
+
 // formatSavingsGoals formats the savings goals list for prompt injection.
 func formatSavingsGoals(goals []domain.SavingsGoalInfo) string {
 	if len(goals) == 0 {
@@ -261,6 +294,62 @@ func formatSavingsGoals(goals []domain.SavingsGoalInfo) string {
 			g.Name, g.CurrentAmount, g.TargetAmount, progressPct, remaining, deadline))
 	}
 	return sb.String()
+}
+
+// formatBehaviorProfile formats the behavioral profile for prompt injection.
+func formatBehaviorProfile(b *domain.BehaviorProfileContext) string {
+	if b == nil {
+		return ""
+	}
+
+	reEngagement := ""
+	if b.CurrentStreak == 0 {
+		reEngagement = "\n  ⚠️ El usuario tiene racha en 0 — incluir una recomendación de re-engagement."
+	}
+
+	instruction := "  - Usa el nivel de sofisticación adecuado:"
+	switch {
+	case b.DisciplineScore < 30 && b.BudgetsCreated == 0:
+		instruction += " usuario BÁSICO. Prioriza crear primer presupuesto como next_action."
+	case b.DisciplineScore >= 70:
+		instruction += " usuario AVANZADO. No enseñar conceptos básicos; ir directo a optimización."
+	case b.AIRecommendationsApplied >= 3:
+		instruction += " usuario EJECUTOR. Reconocer que actúa sobre recomendaciones y reforzar ese hábito."
+	case b.SavingsGoalsAchieved > 0:
+		instruction += " usuario con capacidad de ejecución probada. Proponer siguiente meta concreta."
+	default:
+		instruction += " usuario INTERMEDIO. Equilibrar educación con acción concreta."
+	}
+
+	return fmt.Sprintf(`
+
+## PERFIL CONDUCTUAL DEL USUARIO
+- Nivel de gamificación: %d (%s)
+- Racha activa: %d días consecutivos
+- Tiempo en la plataforma: %d días
+- Presupuestos configurados: %d (meses respetados: %d)
+- Metas de ahorro creadas: %d | Depósitos realizados: %d | Metas completadas: %d
+- Transacciones recurrentes configuradas: %d
+- Recomendaciones de IA aplicadas anteriormente: %d
+- Score de consistencia: %d/100
+- Score de disciplina financiera: %d/100
+- Score de engagement: %d/100
+
+## INSTRUCCIÓN DE PERSONALIZACIÓN
+%s%s`,
+		b.CurrentLevel, b.LevelName,
+		b.CurrentStreak,
+		b.DaysActive,
+		b.BudgetsCreated, b.BudgetComplianceEvents,
+		b.SavingsGoalsCreated, b.SavingsDeposits, b.SavingsGoalsAchieved,
+		b.RecurringSetups,
+		b.AIRecommendationsApplied,
+		b.ConsistencyScore,
+		b.DisciplineScore,
+		b.EngagementScore,
+		instruction,
+		reEngagement,
+	)
 }
 
 // formatBudgetsSummary formats the budgets summary for prompt injection.

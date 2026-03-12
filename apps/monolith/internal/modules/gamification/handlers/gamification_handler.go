@@ -213,3 +213,23 @@ func (h *GamificationHandler) RecordAction(c *gin.Context) {
 		LevelUp:      result.LevelUp,
 	})
 }
+
+
+// GetBehaviorProfile handles GET /gamification/behavior-profile
+// Returns a behavioral profile derived from the user's action history.
+func (h *GamificationHandler) GetBehaviorProfile(c *gin.Context) {
+	userID, exists := c.Get("user_id")
+	if !exists {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
+		return
+	}
+
+	profile, err := h.service.GetBehaviorProfile(c.Request.Context(), userID.(string))
+	if err != nil {
+		h.logger.Error().Err(err).Str("user_id", userID.(string)).Msg("failed to get behavior profile")
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to get behavior profile"})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"success": true, "data": profile})
+}
