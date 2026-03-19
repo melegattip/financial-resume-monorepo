@@ -63,6 +63,7 @@ func DefaultAchievements(userID string) []Achievement {
 		{"budget_beginner", "📋 Primer Presupuesto", "Crea tu primer presupuesto", 1, 50},
 		{"budget_disciplined", "💪 Disciplina Presupuestaria", "Cumple el presupuesto 3 meses seguidos", 3, 200},
 		{"ai_executor", "🤖 Ejecutor de IA", "Aplica 5 recomendaciones de la IA", 5, 100},
+		{"financial_learner", "📚 Educación Financiera", "Leé 3 tarjetas de educación financiera", 3, 50},
 	}
 
 	achievements := make([]Achievement, 0, len(defs))

@@ -191,7 +191,7 @@ func (s *AuthService) Register(ctx context.Context, req *domain.RegisterRequest)
 	}
 
 	// Publish the user registered event.
-	event := domain.NewUserRegisteredEvent(user.ID, user.Email)
+	event := domain.NewUserRegisteredEvent(user.ID, user.Email, tenantID)
 	if err := s.eventBus.Publish(ctx, event); err != nil {
 		s.logger.Error().
 			Str("component", "auth").

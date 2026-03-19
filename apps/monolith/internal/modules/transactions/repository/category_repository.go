@@ -134,3 +134,59 @@ func (r *CategoryRepo) Delete(ctx context.Context, id string) error {
 		Where("id = ?", id).
 		Update("deleted_at", time.Now().UTC()).Error
 }
+
+// SeedDefaultCategories inserts the 15 most common expense categories for a
+// new user. It is idempotent: if categories already exist for the tenant it
+// skips the insert silently.
+func (r *CategoryRepo) SeedDefaultCategories(ctx context.Context, userID, tenantID string) error {
+	var count int64
+	if err := r.db.WithContext(ctx).Model(&CategoryModel{}).
+		Where("tenant_id = ? AND deleted_at IS NULL", tenantID).
+		Count(&count).Error; err != nil {
+		return err
+	}
+	if count > 0 {
+		return nil
+	}
+
+	type seed struct {
+		name  string
+		color string
+		icon  string
+	}
+	defaults := []seed{
+		{"Alimentación", "#4CAF50", "FaShoppingCart"},
+		{"Transporte", "#2196F3", "FaCar"},
+		{"Vivienda", "#FF9800", "FaHome"},
+		{"Salud", "#F44336", "FaHeartbeat"},
+		{"Entretenimiento", "#9C27B0", "FaFilm"},
+		{"Restaurantes y Cafés", "#FF5722", "FaUtensils"},
+		{"Educación", "#3F51B5", "FaGraduationCap"},
+		{"Servicios y Utilities", "#607D8B", "FaBolt"},
+		{"Ropa y Calzado", "#E91E63", "FaTshirt"},
+		{"Tecnología", "#00BCD4", "FaLaptop"},
+		{"Viajes", "#009688", "FaPlane"},
+		{"Deporte y Fitness", "#8BC34A", "FaDumbbell"},
+		{"Cuidado Personal", "#FFEB3B", "FaSpa"},
+		{"Hogar y Muebles", "#795548", "FaCouch"},
+		{"Seguros", "#9E9E9E", "FaShieldAlt"},
+	}
+
+	now := time.Now().UTC()
+	models := make([]CategoryModel, len(defaults))
+	for i, d := range defaults {
+		models[i] = CategoryModel{
+			ID:        uuid.New().String(),
+			UserID:    userID,
+			TenantID:  tenantID,
+			Name:      d.name,
+			Color:     d.color,
+			Icon:      d.icon,
+			Priority:  i + 1,
+			CreatedAt: now,
+			UpdatedAt: now,
+		}
+	}
+
+	return r.db.WithContext(ctx).Create(&models).Error
+}

@@ -67,3 +67,16 @@ func TestXPForAction_AchieveSavingsGoal_HighestReward(t *testing.T) {
 	assert.Equal(t, XPForAction(ActionAchieveSavingsGoal), XPForAction(ActionMonthlyStreak))
 	assert.Greater(t, XPForAction(ActionAchieveSavingsGoal), XPForAction(ActionCreateRecurringTransaction))
 }
+
+func TestXPForAction_ReadEducationCard(t *testing.T) {
+	assert.Equal(t, 5, XPForAction(ActionReadEducationCard))
+}
+
+func TestActionReadEducationCard_Constant(t *testing.T) {
+	assert.Equal(t, "read_education_card", ActionReadEducationCard)
+}
+
+func TestXPForAction_ReadEducationCard_LessThanCreateBudget(t *testing.T) {
+	// Education card reading gives less XP than creating a budget (exploratory vs active).
+	assert.Less(t, XPForAction(ActionReadEducationCard), XPForAction(ActionCreateBudget))
+}

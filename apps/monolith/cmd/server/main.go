@@ -34,6 +34,7 @@ import (
 	"github.com/melegattip/financial-resume-monorepo/apps/monolith/internal/modules/transactions"
 	txrepo "github.com/melegattip/financial-resume-monorepo/apps/monolith/internal/modules/transactions/repository"
 	"github.com/melegattip/financial-resume-monorepo/apps/monolith/internal/shared/events"
+	sharedemail "github.com/melegattip/financial-resume-monorepo/apps/monolith/internal/shared/email"
 )
 
 func main() {
@@ -138,8 +139,24 @@ func main() {
 	analyticsModule.RegisterRoutes(apiV1)
 	logger.Info().Msg("analytics module registered")
 
+	// Shared email service — built once and passed to modules that need it.
+	emailService := sharedemail.NewServiceWithResend(
+		sharedemail.SMTPConfig{
+			Host:     cfg.Email.Host,
+			Port:     cfg.Email.Port,
+			User:     cfg.Email.User,
+			Password: cfg.Email.Password,
+			From:     cfg.Email.From,
+		},
+		sharedemail.ResendConfig{
+			APIKey: cfg.Email.ResendAPIKey,
+			From:   cfg.Email.From,
+		},
+		logger,
+	)
+
 	// AI module
-	aiModule := ai.New(db, logger, cfg, eventBus)
+	aiModule := ai.New(db, logger, cfg, eventBus, emailService)
 	aiModule.RegisterRoutes(apiV1)
 	aiModule.RegisterSubscribers(eventBus)
 	logger.Info().Msg("ai module registered")

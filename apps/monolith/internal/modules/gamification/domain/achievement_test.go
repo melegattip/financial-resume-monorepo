@@ -9,8 +9,8 @@ import (
 
 func TestDefaultAchievements_Count(t *testing.T) {
 	achs := DefaultAchievements("user-1")
-	// 8 original + 6 new flywheel achievements = 14 total.
-	assert.Len(t, achs, 14)
+	// 8 original + 6 new flywheel + 1 education achievement = 15 total.
+	assert.Len(t, achs, 15)
 }
 
 func TestDefaultAchievements_NewFlywheelTypesPresent(t *testing.T) {
@@ -113,4 +113,20 @@ func TestAchievement_IsCompleted(t *testing.T) {
 
 	a.Progress = 4
 	assert.False(t, a.IsCompleted())
+}
+
+func TestDefaultAchievements_ContainsFinancialLearner(t *testing.T) {
+	achs := DefaultAchievements("user_test")
+	var found *Achievement
+	for i := range achs {
+		if achs[i].Type == "financial_learner" {
+			found = &achs[i]
+			break
+		}
+	}
+	require.NotNil(t, found, "financial_learner achievement should be in DefaultAchievements")
+	assert.Equal(t, 3, found.Target)
+	assert.Equal(t, 50, found.Points)
+	assert.False(t, found.Completed)
+	assert.Equal(t, "user_test", found.UserID)
 }

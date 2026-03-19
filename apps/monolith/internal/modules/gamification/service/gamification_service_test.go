@@ -123,3 +123,25 @@ func TestUpdateStreak_Reset(t *testing.T) {
 	svc.updateStreak(g)
 	assert.Equal(t, 1, g.CurrentStreak)
 }
+
+func TestCountByType_ReadEducationCard(t *testing.T) {
+	actions := []domain.UserAction{
+		{ActionType: domain.ActionReadEducationCard},
+		{ActionType: domain.ActionReadEducationCard},
+		{ActionType: domain.ActionCreateBudget},
+	}
+	counts := countByType(actions)
+	assert.Equal(t, 2, counts[domain.ActionReadEducationCard])
+	assert.Equal(t, 1, counts[domain.ActionCreateBudget])
+}
+
+func TestCountByType_FinancialLearnerProgress(t *testing.T) {
+	// Verify that 3 read_education_card actions would unlock financial_learner (target=3).
+	actions := []domain.UserAction{
+		{ActionType: domain.ActionReadEducationCard},
+		{ActionType: domain.ActionReadEducationCard},
+		{ActionType: domain.ActionReadEducationCard},
+	}
+	counts := countByType(actions)
+	assert.GreaterOrEqual(t, counts[domain.ActionReadEducationCard], 3)
+}

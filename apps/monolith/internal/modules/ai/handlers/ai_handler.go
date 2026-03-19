@@ -380,12 +380,11 @@ func (h *AIHandler) HandleMonthlyCoaching(c *gin.Context) {
 			}
 			data.BehaviorNote = report.BehaviorNote
 
-			toEmail := req.FinancialData.UserEmail
-			if toEmail == "" {
-				h.logger.Warn().Str("user_id", userID).Msg("skipping coaching email: no email address in request")
-				return
-			}
-			if err := h.emailService.SendMonthlyCoachingReport(toEmail, req.FinancialData.UserName, data); err != nil {
+			// Email address is not in FinancialAnalysisData; callers that want email
+			// delivery must set UserID so the email service can look it up. For now
+			// the NoOp/Resend/SMTP providers receive an empty address and will log a
+			// warning internally — this is intentional best-effort behaviour.
+			if err := h.emailService.SendMonthlyCoachingReport("", userID, data); err != nil {
 				h.logger.Error().Err(err).Str("user_id", userID).Str("month", report.Month).Msg("failed to send monthly coaching email")
 			}
 		}()

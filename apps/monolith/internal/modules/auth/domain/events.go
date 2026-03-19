@@ -13,12 +13,12 @@ const (
 )
 
 // NewUserRegisteredEvent creates a domain event for user registration.
-func NewUserRegisteredEvent(userID string, email string) events.DomainEvent {
+func NewUserRegisteredEvent(userID, email, tenantID string) events.DomainEvent {
 	return events.NewDomainEvent(
 		EventUserRegistered,
 		userID,
 		userID,
-		map[string]string{"email": email},
+		map[string]string{"email": email, "tenant_id": tenantID},
 	)
 }
 

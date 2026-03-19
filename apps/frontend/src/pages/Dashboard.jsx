@@ -135,9 +135,9 @@ const Resumen = () => {
     // Dashboard data will be loaded automatically when authentication state changes
   }, [isAuthenticated, user]);
 
-  const loadDashboardData = async (shouldUpdateAvailableData = true) => {
+  const loadDashboardData = async (shouldUpdateAvailableData = true, silent = false) => {
     try {
-      setLoading(true);
+      if (!silent) setLoading(true);
 
       // Obtener parámetros de filtro del contexto global
       const filterParams = getFilterParams();
@@ -218,9 +218,8 @@ const Resumen = () => {
         setRecurringTransactionsSummary(recurringRes.data);
       }
       if (healthRes) {
-        // Extraer health score - usar estructura consistente con AIInsights
-        // analytics endpoint returns { score: 0-100, status }, scale to 0-1000 for display
-        const healthScore = (healthRes.score || healthRes.health_score || 0) * 10;
+        // Extraer health score - el endpoint ya devuelve escala 0-1000
+        const healthScore = Math.round(healthRes.score || healthRes.health_score || 0);
         let healthLevel = healthRes.health_level || healthRes.data?.health_level;
 
         // Si no hay level pero hay score, calcularlo usando la misma lógica que AIInsights
@@ -2000,7 +1999,7 @@ const Resumen = () => {
       )}
 
       {/* Tab: Gastos */}
-      {activeTab === 'gastos' && <Expenses />}
+      {activeTab === 'gastos' && <Expenses onDataModified={() => { dataService.invalidateAfterMutation('expense'); loadDashboardData(false, true); }} />}
 
       {/* Tab: Ingresos */}
       {activeTab === 'ingresos' && <Incomes />}

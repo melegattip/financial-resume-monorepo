@@ -33,6 +33,7 @@ const (
 	ActionCreateRecurringTransaction = "create_recurring_transaction"
 	ActionApplyAIRecommendation      = "apply_ai_recommendation"
 	ActionCompleteMonthlyReview      = "complete_monthly_review"
+	ActionReadEducationCard          = "read_education_card"
 )
 
 // UserAction records a single action performed by a user.
@@ -79,6 +80,7 @@ func XPForAction(actionType string) int {
 		ActionCreateRecurringTransaction: 30,
 		ActionApplyAIRecommendation:      20,
 		ActionCompleteMonthlyReview:      15,
+		ActionReadEducationCard:          5,
 	}
 	if xp, ok := xpTable[actionType]; ok {
 		return xp

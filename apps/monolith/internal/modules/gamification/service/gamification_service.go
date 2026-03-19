@@ -86,26 +86,31 @@ func (s *GamificationService) RecordAction(ctx context.Context, userID, actionTy
 		return nil, err
 	}
 
-	// Anti-farming: some action types are capped at once per calendar day.
-	onceDailyActions := map[string]bool{
-		domain.ActionViewDashboard:          true,
-		domain.ActionApplyAIRecommendation: true,
+	// Anti-farming: daily caps per action type (1 = once per day, 2 = twice per day, etc.).
+	dailyCaps := map[string]int{
+		domain.ActionViewDashboard:         1,
+		domain.ActionApplyAIRecommendation: 1,
+		domain.ActionReadEducationCard:     2,
 	}
-	if onceDailyActions[actionType] {
+	if cap, capped := dailyCaps[actionType]; capped {
 		todaysActions, err := s.repo.FindActionsByUserIDAndDay(ctx, userID, time.Now().UTC())
 		if err != nil {
 			return nil, err
 		}
+		count := 0
 		for _, a := range todaysActions {
 			if a.ActionType == actionType {
-				// Already recorded today — skip silently.
-				return &RecordActionResult{
-					XPEarned:     0,
-					TotalXP:      g.TotalXP,
-					CurrentLevel: g.CurrentLevel,
-					LevelUp:      false,
-				}, nil
+				count++
 			}
+		}
+		if count >= cap {
+			// Daily cap reached — skip silently.
+			return &RecordActionResult{
+				XPEarned:     0,
+				TotalXP:      g.TotalXP,
+				CurrentLevel: g.CurrentLevel,
+				LevelUp:      false,
+			}, nil
 		}
 	}
 
@@ -377,6 +382,8 @@ func (s *GamificationService) updateAchievementsProgress(
 			newProgress = complianceCount
 		case "ai_executor":
 			newProgress = aiAppliedCount
+		case "financial_learner":
+			newProgress = counts[domain.ActionReadEducationCard]
 		default:
 			continue
 		}

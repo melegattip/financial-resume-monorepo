@@ -273,7 +273,22 @@ export const aiAPI = {
   getHealthScore: async (params = {}) => {
     const response = await api.get('/insights/financial-health', { params });
     return response.data?.data || response.data;
-  }
+  },
+
+  getMonthlyCoaching: async (financialData, previousMonth) => {
+    const response = await api.post('/ai/monthly-coaching', {
+      financial_data: financialData,
+      previous_month: previousMonth,
+    });
+    return response.data;
+  },
+
+  getEducationCards: async (financialData) => {
+    const response = await api.post('/ai/education-cards', {
+      financial_data: financialData,
+    });
+    return response.data;
+  },
 };
 
 // Servicios de Presupuestos

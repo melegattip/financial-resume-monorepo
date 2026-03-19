@@ -13,7 +13,7 @@ import ConfirmationModal from '../components/ConfirmationModal';
 import ValidatedInput from '../components/ValidatedInput';
 import { validateAmount, validateDescription, VALIDATION_RULES } from '../utils/validation';
 
-const Expenses = () => {
+const Expenses = ({ onDataModified } = {}) => {
   const location = useLocation();
   const [expenses, setExpenses] = useState([]);
   const [categories, setCategories] = useState([]);
@@ -627,7 +627,9 @@ const Expenses = () => {
       // 🎮 Registrar edición
       recordUpdateExpense(expenseId, `Campo ${field} editado inline`);
 
-      // ✅ NO recargar datos, la UI ya está actualizada
+      // ✅ NO recargar datos locales, la UI ya está actualizada
+      // Notificar al Dashboard para que actualice Resumen silenciosamente
+      onDataModified?.();
 
       // Mostrar feedback breve
       toast.success('Guardado', { duration: 1000 });

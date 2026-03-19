@@ -1,14 +1,16 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { FaBrain, FaSpinner, FaRedo, FaLightbulb, FaShoppingCart, FaCheck, FaChevronRight, FaCalculator, FaExclamationTriangle, FaCheckCircle, FaChevronDown, FaChevronUp, FaBullseye } from 'react-icons/fa';
-import { aiAPI, savingsGoalsAPI, budgetsAPI, analyticsAPI, formatCurrency } from '../services/api';
+import { aiAPI, savingsGoalsAPI, budgetsAPI, analyticsAPI, dashboardAPI, formatCurrency } from '../services/api';
 import { useAuth } from '../contexts/AuthContext';
 import { usePeriod } from '../contexts/PeriodContext';
 import { useGamification } from '../contexts/GamificationContext';
 import { getGamificationAPI } from '../services/gamificationAPI';
+import MonthlyCoachingTab from '../pages/insights/tabs/MonthlyCoachingTab';
+import EducationTab from '../pages/insights/tabs/EducationTab';
 
 const AIInsights = () => {
   const { user, isAuthenticated } = useAuth();
-  const { updateAvailableData } = usePeriod();
+  usePeriod(); // keep context subscription even if not directly used here
   const { recordInsightViewed, recordInsightUnderstood, recordSuggestionUsed } = useGamification();
   const [insights, setInsights] = useState([]);
   const [purchaseAnalysis, setPurchaseAnalysis] = useState(null);
@@ -26,7 +28,7 @@ const AIInsights = () => {
   const behaviorProfileRef = useRef(null); // ref to avoid circular dep in loadHealthScore
   const [appliedInsights, setAppliedInsights] = useState(new Set());
   
-  const [activeTab, setActiveTab] = useState('insights'); // 'insights' | 'purchase'
+  const [activeTab, setActiveTab] = useState('monthly');
   
   // Estados para el análisis de compra - ahora se inicializan dinámicamente
   const [purchaseForm, setPurchaseForm] = useState({
@@ -79,40 +81,22 @@ const AIInsights = () => {
     });
   };
 
-  // Cargar datos del dashboard para obtener información financiera real
+  // Cargar datos del dashboard directamente desde la API (campos canónicos del backend)
   const loadDashboardData = useCallback(async () => {
     try {
-      // Usar el servicio de datos para obtener información completa
-      const dataService = (await import('../services/dataService')).default;
-      const dashboardData = await dataService.loadDashboardData({}, isAuthenticated && user);
-      
-      setDashboardData(dashboardData);
-      
-      // Actualizar datos disponibles en el contexto de períodos
-      updateAvailableData(
-        dashboardData.allExpenses || dashboardData.expenses || [], 
-        dashboardData.allIncomes || dashboardData.incomes || []
-      );
-      
-      // Actualizar el formulario de compra con datos reales
-      const newFormData = {
-        currentBalance: dashboardData.balance || 0,
-        monthlyIncome: dashboardData.totalIncome || 0,
-        monthlyExpenses: dashboardData.totalExpenses || 0,
-        savingsGoal: dashboardData.savings_goal || 50000
-      };
-      
+      const response = await dashboardAPI.overview();
+      const d = response.data;
+      setDashboardData(d);
       setPurchaseForm(prev => ({
         ...prev,
-        ...newFormData
+        currentBalance: d?.current_month_balance || 0,
+        monthlyIncome: d?.current_month_incomes || 0,
+        monthlyExpenses: d?.current_month_expenses || 0,
       }));
-      
-      console.log('✅ AIInsights: Datos del dashboard y períodos actualizados');
     } catch (error) {
       console.error('Error loading dashboard data:', error);
-      // Mantener valores por defecto en caso de error
     }
-  }, [updateAvailableData, isAuthenticated, user]);
+  }, []);
 
   // Cargar metas de ahorro
   const loadSavingsGoals = useCallback(async () => {
@@ -808,21 +792,29 @@ const AIInsights = () => {
         <div className="border-b border-gray-200 dark:border-gray-700">
           <nav className="flex space-x-8 px-6" aria-label="Tabs">
             <button
-              onClick={() => setActiveTab('insights')}
+              onClick={() => setActiveTab('monthly')}
               className={`py-4 px-1 border-b-2 font-medium text-sm transition-colors ${
-                activeTab === 'insights'
-                  ? 'border-blue-500 text-blue-600 dark:text-blue-400'
+                activeTab === 'monthly'
+                  ? 'border-purple-500 text-purple-600 dark:text-purple-400'
                   : 'border-transparent text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300 hover:border-gray-300 dark:hover:border-gray-600'
               }`}
             >
               <div className="flex items-center space-x-2">
-                <FaLightbulb className="w-4 h-4" />
-                <span>Recomendaciones</span>
-                {insights.length > 0 && (
-                  <span className="bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-300 text-xs px-2 py-1 rounded-full">
-                    {insights.length}
-                  </span>
-                )}
+                <span className="text-base">📅</span>
+                <span>Reporte del Mes</span>
+              </div>
+            </button>
+            <button
+              onClick={() => setActiveTab('education')}
+              className={`py-4 px-1 border-b-2 font-medium text-sm transition-colors ${
+                activeTab === 'education'
+                  ? 'border-indigo-500 text-indigo-600 dark:text-indigo-400'
+                  : 'border-transparent text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300 hover:border-gray-300 dark:hover:border-gray-600'
+              }`}
+            >
+              <div className="flex items-center space-x-2">
+                <span className="text-base">📚</span>
+                <span>Educación</span>
               </div>
             </button>
             <button
@@ -845,359 +837,194 @@ const AIInsights = () => {
         </div>
 
         <div className="p-6">
-          {activeTab === 'insights' && (
-            <div className="space-y-6">
-              {loading ? (
-                <div className="space-y-4">
-                  {[...Array(3)].map((_, i) => (
-                    <InsightSkeleton key={i} />
-                  ))}
-                </div>
-              ) : error && insights.length === 0 ? (
-                <div className="text-center py-12">
-                  <FaSpinner className="w-16 h-16 mx-auto mb-4 text-gray-400 dark:text-gray-500" />
-                  <h3 className="text-lg font-medium text-gray-900 dark:text-gray-100 mb-2">Sin conexión</h3>
-                  <p className="text-gray-600 dark:text-gray-400 mb-6 max-w-md mx-auto">{error}</p>
-                  <button
-                    onClick={loadAIInsights}
-                    className="inline-flex items-center px-6 py-3 bg-blue-500 dark:bg-blue-600 text-white rounded-lg hover:bg-blue-600 dark:hover:bg-blue-700 transition-colors font-medium"
-                  >
-                    <FaRedo className="w-4 h-4 mr-2" />
-                    Reintentar análisis
-                  </button>
-                </div>
-              ) : insights.length === 0 ? (
-                <div className="text-center py-12">
-                  <FaBullseye className="w-16 h-16 mx-auto mb-4 text-gray-400 dark:text-gray-500" />
-                  <h3 className="text-lg font-medium text-gray-900 dark:text-gray-100 mb-2">¡Perfecto!</h3>
-                  <p className="text-gray-600 dark:text-gray-400 max-w-md mx-auto">
-                    Tu situación financiera está tan bien que no tenemos recomendaciones urgentes. 
-                    Sigue así y revisa periódicamente.
-                  </p>
-                </div>
-              ) : (
-                <>
-                  <div className="grid gap-4">
-                    {displayedInsights.map((insight, index) => (
-                      <div
-                        key={index}
-                        className="bg-gray-50 dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-xl p-4 hover:shadow-md hover:border-gray-300 dark:hover:border-gray-500 transition-all cursor-pointer group"
-                        onMouseEnter={() => {/* no-op: evitar múltiples registros por hover */}}
-                        onFocus={() => {/* no-op */}}
-                        onClick={() => handleViewInsight(index, insight.title)}
-                      >
-                        <div className="flex items-start space-x-3">
-                          <div className="text-2xl group-hover:scale-110 transition-transform">
-                            {getImpactIcon(insight.impact)}
-                          </div>
-                          <div className="flex-1 min-w-0">
-                            <h3 className="font-semibold text-gray-900 dark:text-gray-100 mb-2 group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors">
-                              {insight.title}
-                            </h3>
-                            <p className="text-gray-600 dark:text-gray-400 text-sm leading-relaxed mb-3">
-                              {insight.description}
-                            </p>
-                            {insight.next_action && (
-                              <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg px-3 py-2 mb-3">
-                                <p className="text-xs font-semibold text-blue-700 dark:text-blue-300 uppercase tracking-wide mb-0.5">Acción inmediata</p>
-                                <p className="text-sm text-blue-800 dark:text-blue-200">{insight.next_action}</p>
-                              </div>
-                            )}
-                            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between space-y-2 sm:space-y-0">
-                              <div className="flex items-center space-x-3">
-                                <span className="inline-flex items-center px-2 py-1 bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 rounded-lg text-xs font-medium">
-                                  📊 {insight.category}
-                                </span>
-                              </div>
-                              <div className="flex items-center space-x-2">
-                                {!understoodInsights.has(index) && (
-                                  <button
-                                    onClick={() => handleUnderstandInsight(index, insight.title)}
-                                    className="inline-flex items-center px-3 py-1.5 bg-blue-500 dark:bg-blue-600 text-white text-xs rounded-lg hover:bg-blue-600 dark:hover:bg-blue-700 transition-colors font-medium"
-                                  >
-                                    <FaCheck className="w-3 h-3 mr-1" />
-                                    Revisado
-                                  </button>
-                                )}
-                                {understoodInsights.has(index) && (
-                                  <div className="inline-flex items-center px-3 py-1.5 bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300 text-xs rounded-lg font-medium">
-                                    <FaCheckCircle className="w-3 h-3 mr-1" />
-                                    ¡Revisado!
-                                  </div>
-                                )}
-                                {insight.next_action && !appliedInsights.has(index) && (
-                                  <button
-                                    onClick={(e) => { e.stopPropagation(); handleApplyInsight(index, insight); }}
-                                    className="inline-flex items-center px-3 py-1.5 bg-emerald-500 dark:bg-emerald-600 text-white text-xs rounded-lg hover:bg-emerald-600 dark:hover:bg-emerald-700 transition-colors font-medium"
-                                    title="Marcar que ejecutaste esta acción (+20 XP)"
-                                  >
-                                    <FaBullseye className="w-3 h-3 mr-1" />
-                                    ¡Lo hice! +20 XP
-                                  </button>
-                                )}
-                                {appliedInsights.has(index) && (
-                                  <div className="inline-flex items-center px-3 py-1.5 bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-300 text-xs rounded-lg font-medium">
-                                    <FaCheckCircle className="w-3 h-3 mr-1" />
-                                    ¡Ejecutado!
-                                  </div>
-                                )}
-                              </div>
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-
-                  {/* Footer informativo */}
-                  {insights.length > 0 && (
-                    <div className="pt-2 text-center">
-                      <p className="text-xs text-gray-400 dark:text-gray-500">
-                        Análisis generado con datos reales de tus transacciones · Actualización diaria
-                      </p>
-                    </div>
-                  )}
-                </>
-              )}
-            </div>
-          )}
+          {activeTab === 'monthly' && <MonthlyCoachingTab />}
+          {activeTab === 'education' && <EducationTab />}
 
           {activeTab === 'purchase' && (
-            <div className="max-w-2xl mx-auto space-y-6">
-              <div className="text-center mb-6">
-                <h3 className="text-xl font-semibold text-gray-900 dark:text-gray-100 mb-2">Análisis de Compra Inteligente</h3>
-                <p className="text-gray-600 dark:text-gray-400">Te ayudamos a tomar decisiones financieras informadas</p>
-              </div>
-
-              {/* Información financiera automática */}
+            <div className="space-y-5">
+              {/* Datos financieros resumen */}
               {dashboardData ? (
-                <div className="bg-blue-50 dark:bg-blue-900/20 rounded-xl p-4 mb-4">
-                  <h4 className="font-medium text-blue-900 dark:text-blue-300 mb-3 flex items-center">
-                    <FaCalculator className="w-4 h-4 mr-2" />
-                    Datos financieros actuales (automáticos)
-                  </h4>
-                  <div className="grid grid-cols-2 gap-4 text-sm">
-                    <div>
-                      <span className="text-blue-700 dark:text-blue-400">Balance actual:</span>
-                      <p className="font-semibold text-blue-900 dark:text-blue-200">${(dashboardData?.balance || dashboardData?.Metrics?.Balance || dashboardData?.metrics?.balance || 0).toLocaleString()}</p>
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                  {[
+                    { label: 'Ingresos del mes', value: dashboardData.current_month_incomes || 0, color: 'text-green-700 dark:text-green-400' },
+                    { label: 'Gastos del mes', value: dashboardData.current_month_expenses || 0, color: 'text-red-600 dark:text-red-400' },
+                    { label: 'Balance actual', value: dashboardData.current_month_balance || 0, color: 'text-blue-700 dark:text-blue-400' },
+                    { label: 'Disponible', value: (dashboardData.current_month_incomes || 0) - (dashboardData.current_month_expenses || 0), color: 'text-indigo-700 dark:text-indigo-400' },
+                  ].map(({ label, value, color }) => (
+                    <div key={label} className="bg-gray-50 dark:bg-gray-700 rounded-xl p-3 text-center">
+                      <p className="text-xs text-gray-500 dark:text-gray-400 mb-1">{label}</p>
+                      <p className={`font-bold text-base ${color}`}>${Math.abs(value).toLocaleString()}</p>
                     </div>
-                    <div>
-                      <span className="text-blue-700 dark:text-blue-400">Ingresos mensuales:</span>
-                      <p className="font-semibold text-blue-900 dark:text-blue-200">${(dashboardData?.totalIncome || dashboardData?.Metrics?.TotalIncome || dashboardData?.metrics?.total_income || 0).toLocaleString()}</p>
-                    </div>
-                    <div>
-                      <span className="text-blue-700 dark:text-blue-400">Gastos mensuales:</span>
-                      <p className="font-semibold text-blue-900 dark:text-blue-200">${(dashboardData?.totalExpenses || dashboardData?.Metrics?.TotalExpenses || dashboardData?.metrics?.total_expenses || 0).toLocaleString()}</p>
-                    </div>
-                    <div>
-                      <span className="text-blue-700 dark:text-blue-400">Disponible/mes:</span>
-                      <p className="font-semibold text-green-700 dark:text-green-400">${((dashboardData?.totalIncome || dashboardData?.Metrics?.TotalIncome || dashboardData?.metrics?.total_income || 0) - (dashboardData?.totalExpenses || dashboardData?.Metrics?.TotalExpenses || dashboardData?.metrics?.total_expenses || 0)).toLocaleString()}</p>
-                    </div>
-                  </div>
-                  <div className="flex items-center justify-between mt-2">
-                    <p className="text-xs text-blue-600 dark:text-blue-400">
-                      💡 Estos datos se calculan automáticamente basándose en tus transacciones
-                    </p>
-                    <button
-                      onClick={loadDashboardData}
-                      className="text-xs bg-blue-500 dark:bg-blue-600 text-white px-2 py-1 rounded hover:bg-blue-600 dark:hover:bg-blue-700 transition-colors"
-                    >
-                      🔄 Actualizar
-                    </button>
-                  </div>
+                  ))}
                 </div>
               ) : (
-                <div className="bg-gray-50 dark:bg-gray-700 rounded-xl p-4 mb-4">
-                  <div className="flex items-center justify-center space-x-2 text-gray-600 dark:text-gray-400">
-                    <FaSpinner className="w-4 h-4 animate-spin" />
-                    <span className="text-sm">Cargando datos financieros...</span>
-                  </div>
+                <div className="flex items-center space-x-2 text-gray-500 dark:text-gray-400 text-sm">
+                  <FaSpinner className="w-4 h-4 animate-spin" />
+                  <span>Cargando datos financieros...</span>
                 </div>
               )}
 
-              {/* Formulario optimizado para móvil */}
-              <div className="bg-gray-50 dark:bg-gray-700 rounded-xl p-4 md:p-6 space-y-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                    ¿Qué quieres comprar? *
-                  </label>
-                  <input
-                    type="text"
-                    value={purchaseForm.itemName}
-                    onChange={(e) => setPurchaseForm({...purchaseForm, itemName: e.target.value})}
-                    placeholder="Ej: iPhone 15, Notebook, Vacaciones..."
-                    className="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-100 dark:placeholder-gray-400 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-base"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                    Monto *
-                  </label>
-                  <div className="relative">
-                    <span className="absolute left-4 top-1/2 transform -translate-y-1/2 text-gray-500 dark:text-gray-400">$</span>
+              {/* Form + Result — side by side on md+ */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                {/* Left: form */}
+                <div className="bg-gray-50 dark:bg-gray-700 rounded-xl p-5 space-y-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">
+                      ¿Qué quieres comprar? *
+                    </label>
                     <input
-                      type="number"
-                      value={purchaseForm.amount}
-                      onChange={(e) => setPurchaseForm({...purchaseForm, amount: e.target.value})}
-                      placeholder="150000"
-                      className="w-full pl-8 pr-4 py-3 border border-gray-300 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-100 dark:placeholder-gray-400 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-base"
+                      type="text"
+                      value={purchaseForm.itemName}
+                      onChange={(e) => setPurchaseForm({...purchaseForm, itemName: e.target.value})}
+                      placeholder="Ej: iPhone 15, Notebook, Vacaciones..."
+                      className="w-full px-4 py-2.5 border border-gray-300 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-100 dark:placeholder-gray-400 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm"
                     />
                   </div>
-                </div>
 
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                    Descripción (opcional)
-                  </label>
-                  <textarea
-                    value={purchaseForm.description}
-                    onChange={(e) => setPurchaseForm({...purchaseForm, description: e.target.value})}
-                    placeholder="¿Para qué lo necesitas? ¿Es urgente?"
-                    rows="3"
-                    className="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-100 dark:placeholder-gray-400 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-base resize-none"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-3">
-                    Tipo de pago (puedes seleccionar varios)
-                  </label>
-                  <div className="space-y-2">
-                    {paymentTypes.map(type => (
-                      <label key={type.value} className="flex items-center space-x-3 cursor-pointer p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-600 transition-colors">
-                        <input
-                          type="checkbox"
-                          value={type.value}
-                          checked={purchaseForm.paymentTypes.includes(type.value)}
-                          onChange={(e) => handlePaymentTypeChange(type.value, e.target.checked)}
-                          className="w-4 h-4 text-blue-500 focus:ring-blue-500 rounded"
-                        />
-                        <span className="text-sm text-gray-700 dark:text-gray-300 font-medium">{type.label}</span>
-                      </label>
-                    ))}
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">
+                      Monto *
+                    </label>
+                    <div className="relative">
+                      <span className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-500 dark:text-gray-400 text-sm">$</span>
+                      <input
+                        type="number"
+                        value={purchaseForm.amount}
+                        onChange={(e) => setPurchaseForm({...purchaseForm, amount: e.target.value})}
+                        placeholder="150000"
+                        className="w-full pl-7 pr-4 py-2.5 border border-gray-300 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-100 dark:placeholder-gray-400 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm"
+                      />
+                    </div>
                   </div>
-                  {purchaseForm.paymentTypes.length === 0 && (
-                    <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                      Selecciona al menos un tipo de pago
-                    </p>
-                  )}
-                </div>
 
-                <div className="bg-blue-50 dark:bg-blue-900/20 rounded-lg p-3">
-                  <label className="flex items-start space-x-3 cursor-pointer">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">
+                      Descripción (opcional)
+                    </label>
+                    <textarea
+                      value={purchaseForm.description}
+                      onChange={(e) => setPurchaseForm({...purchaseForm, description: e.target.value})}
+                      placeholder="¿Para qué lo necesitas? ¿Es urgente?"
+                      rows="2"
+                      className="w-full px-4 py-2.5 border border-gray-300 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-100 dark:placeholder-gray-400 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm resize-none"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                      Tipo de pago
+                    </label>
+                    <div className="space-y-1.5">
+                      {paymentTypes.map(type => (
+                        <label key={type.value} className="flex items-center space-x-2 cursor-pointer p-1.5 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-600 transition-colors">
+                          <input
+                            type="checkbox"
+                            value={type.value}
+                            checked={purchaseForm.paymentTypes.includes(type.value)}
+                            onChange={(e) => handlePaymentTypeChange(type.value, e.target.checked)}
+                            className="w-4 h-4 text-blue-500 focus:ring-blue-500 rounded"
+                          />
+                          <span className="text-sm text-gray-700 dark:text-gray-300">{type.label}</span>
+                        </label>
+                      ))}
+                    </div>
+                  </div>
+
+                  <label className="flex items-center space-x-2 cursor-pointer">
                     <input
                       type="checkbox"
                       checked={purchaseForm.isNecessary}
                       onChange={(e) => setPurchaseForm({...purchaseForm, isNecessary: e.target.checked})}
-                      className="w-4 h-4 text-blue-500 focus:ring-blue-500 rounded mt-0.5"
+                      className="w-4 h-4 text-blue-500 focus:ring-blue-500 rounded"
                     />
-                    <div>
-                      <span className="text-sm font-medium text-gray-900 dark:text-gray-100">
-                        Es una necesidad urgente
-                      </span>
-                      <p className="text-xs text-gray-600 dark:text-gray-400 mt-1">
-                        Marca esto solo si es esencial para tu trabajo, salud o seguridad
-                      </p>
-                    </div>
+                    <span className="text-sm text-gray-700 dark:text-gray-300">Es una necesidad urgente</span>
                   </label>
-                </div>
-                
-                <button
-                  onClick={analyzePurchase}
-                  disabled={purchaseLoading || !purchaseForm.itemName || !purchaseForm.amount || purchaseForm.paymentTypes.length === 0}
-                  className="w-full px-6 py-4 bg-green-500 dark:bg-green-600 text-white rounded-lg hover:bg-green-600 dark:hover:bg-green-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center space-x-2 text-base font-medium shadow-lg"
-                >
-                  {purchaseLoading ? (
-                    <>
-                      <FaSpinner className="w-5 h-5 animate-spin" />
-                      <span>Analizando con IA...</span>
-                    </>
-                  ) : (
-                    <>
-                      <FaCalculator className="w-5 h-5" />
-                      <span>Analizar compra</span>
-                    </>
-                  )}
-                </button>
-              </div>
 
-              {/* Resultado del análisis mejorado */}
-              {purchaseError && (
-                <div className="bg-red-50 dark:bg-red-900/20 border-l-4 border-red-400 dark:border-red-500 rounded-lg p-4">
-                  <div className="flex">
-                    <FaExclamationTriangle className="w-5 h-5 text-red-400 dark:text-red-500" />
-                    <div className="ml-3">
-                      <p className="text-red-700 dark:text-red-300 font-medium">Error en el análisis</p>
-                      <p className="text-red-600 dark:text-red-400 text-sm mt-1">{purchaseError}</p>
-                    </div>
-                  </div>
-                </div>
-              )}
-
-              {purchaseAnalysis && (
-                <div className={`rounded-xl p-6 border-2 shadow-lg ${
-                  purchaseAnalysis.can_buy 
-                    ? 'bg-green-50 dark:bg-green-900/20 border-green-200 dark:border-green-700' 
-                    : 'bg-red-50 dark:bg-red-900/20 border-red-200 dark:border-red-700'
-                }`}>
-                  <div className="flex items-start space-x-4 mb-4">
-                    {purchaseAnalysis.can_buy ? (
-                      <div className="p-2 bg-green-100 dark:bg-green-900/30 rounded-full">
-                        <FaCheckCircle className="w-6 h-6 text-green-600 dark:text-green-400" />
-                      </div>
+                  <button
+                    onClick={analyzePurchase}
+                    disabled={purchaseLoading || !purchaseForm.itemName || !purchaseForm.amount || purchaseForm.paymentTypes.length === 0}
+                    className="w-full px-6 py-3 bg-green-500 dark:bg-green-600 text-white rounded-lg hover:bg-green-600 dark:hover:bg-green-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center space-x-2 text-sm font-medium"
+                  >
+                    {purchaseLoading ? (
+                      <>
+                        <FaSpinner className="w-4 h-4 animate-spin" />
+                        <span>Analizando con IA...</span>
+                      </>
                     ) : (
-                      <div className="p-2 bg-red-100 dark:bg-red-900/30 rounded-full">
-                        <FaExclamationTriangle className="w-6 h-6 text-red-600 dark:text-red-400" />
-                      </div>
+                      <>
+                        <FaCalculator className="w-4 h-4" />
+                        <span>Analizar compra</span>
+                      </>
                     )}
-                    <div className="flex-1">
-                      <h4 className={`text-lg font-bold mb-1 ${
-                        purchaseAnalysis.can_buy ? 'text-green-800 dark:text-green-300' : 'text-red-800 dark:text-red-300'
-                      }`}>
-                        {purchaseAnalysis.can_buy ? '✅ ¡Puedes comprarlo!' : '❌ Te recomendamos esperar'}
-                      </h4>
-                      <p className={`text-sm ${
-                        purchaseAnalysis.can_buy ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'
-                      }`}>
-                        Confianza del análisis: {Math.round(purchaseAnalysis.confidence * 100)}%
-                      </p>
-                    </div>
-                  </div>
-                  
-                  <div className={`bg-white dark:bg-gray-800 rounded-lg p-4 mb-4 ${
-                    purchaseAnalysis.can_buy ? 'border border-green-200 dark:border-green-700' : 'border border-red-200 dark:border-red-700'
-                  }`}>
-                    <p className="text-gray-700 dark:text-gray-300 leading-relaxed">
-                      {purchaseAnalysis.reasoning}
-                    </p>
-                  </div>
-                  
-                  {purchaseAnalysis.alternatives && purchaseAnalysis.alternatives.length > 0 && (
-                    <div className="bg-white dark:bg-gray-800 rounded-lg p-4 border border-gray-200 dark:border-gray-700">
-                      <h5 className="text-sm font-semibold text-gray-900 dark:text-gray-100 mb-3 flex items-center">
-                        <FaLightbulb className="w-4 h-4 mr-2 text-yellow-500 dark:text-yellow-400" />
-                        Alternativas sugeridas
-                      </h5>
-                      <ul className="space-y-2">
-                        {purchaseAnalysis.alternatives.map((alt, index) => (
-                          <li key={index} className="flex items-center text-sm text-gray-600 dark:text-gray-400">
-                            <FaChevronRight className="w-4 h-4 mr-2 text-gray-400 dark:text-gray-500" />
-                            <span>{alt}</span>
-                          </li>
-                        ))}
-                      </ul>
+                  </button>
+                </div>
+
+                {/* Right: result */}
+                <div>
+                  {purchaseError && (
+                    <div className="bg-red-50 dark:bg-red-900/20 border-l-4 border-red-400 dark:border-red-500 rounded-lg p-4">
+                      <div className="flex">
+                        <FaExclamationTriangle className="w-5 h-5 text-red-400 dark:text-red-500 flex-shrink-0" />
+                        <div className="ml-3">
+                          <p className="text-red-700 dark:text-red-300 font-medium text-sm">Error en el análisis</p>
+                          <p className="text-red-600 dark:text-red-400 text-xs mt-1">{purchaseError}</p>
+                        </div>
+                      </div>
                     </div>
                   )}
-                  
-                  <div className="mt-4 pt-4 border-t border-gray-200 dark:border-gray-700">
-                    <div className="flex items-center justify-between text-xs text-gray-500 dark:text-gray-400">
-                      <span>Impacto en tu presupuesto</span>
-                      <span className="font-medium">{purchaseAnalysis.impact_score} pts</span>
+
+                  {!purchaseAnalysis && !purchaseError && (
+                    <div className="flex flex-col items-center justify-center h-full py-12 text-center text-gray-400 dark:text-gray-500">
+                      <FaCalculator className="w-10 h-10 mb-3 opacity-30" />
+                      <p className="text-sm">Completá el formulario y<br />analizá si podés hacer la compra</p>
                     </div>
-                  </div>
+                  )}
+
+                  {purchaseAnalysis && (
+                    <div className={`rounded-xl p-5 border-2 space-y-4 ${
+                      purchaseAnalysis.can_buy
+                        ? 'bg-green-50 dark:bg-green-900/20 border-green-200 dark:border-green-700'
+                        : 'bg-red-50 dark:bg-red-900/20 border-red-200 dark:border-red-700'
+                    }`}>
+                      <div className="flex items-center space-x-3">
+                        {purchaseAnalysis.can_buy ? (
+                          <FaCheckCircle className="w-7 h-7 text-green-600 dark:text-green-400 flex-shrink-0" />
+                        ) : (
+                          <FaExclamationTriangle className="w-7 h-7 text-red-600 dark:text-red-400 flex-shrink-0" />
+                        )}
+                        <div>
+                          <h4 className={`font-bold ${purchaseAnalysis.can_buy ? 'text-green-800 dark:text-green-300' : 'text-red-800 dark:text-red-300'}`}>
+                            {purchaseAnalysis.can_buy ? '✅ ¡Podés comprarlo!' : '❌ Te recomendamos esperar'}
+                          </h4>
+                          <p className="text-xs text-gray-500 dark:text-gray-400">
+                            Confianza: {Math.round(purchaseAnalysis.confidence * 100)}% · Impacto: {purchaseAnalysis.impact_score} pts
+                          </p>
+                        </div>
+                      </div>
+
+                      <p className="text-sm text-gray-700 dark:text-gray-300 leading-relaxed bg-white dark:bg-gray-800 rounded-lg p-3">
+                        {purchaseAnalysis.reasoning}
+                      </p>
+
+                      {purchaseAnalysis.alternatives && purchaseAnalysis.alternatives.length > 0 && (
+                        <div>
+                          <p className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-2 flex items-center">
+                            <FaLightbulb className="w-3 h-3 mr-1 text-yellow-500" /> Alternativas
+                          </p>
+                          <ul className="space-y-1.5">
+                            {purchaseAnalysis.alternatives.map((alt, index) => (
+                              <li key={index} className="flex items-start text-sm text-gray-600 dark:text-gray-400">
+                                <FaChevronRight className="w-3 h-3 mr-2 mt-0.5 text-gray-400 flex-shrink-0" />
+                                <span>{alt}</span>
+                              </li>
+                            ))}
+                          </ul>
+                        </div>
+                      )}
+                    </div>
+                  )}
                 </div>
-              )}
+              </div>
             </div>
           )}
         </div>

@@ -1,6 +1,8 @@
 package transactions
 
 import (
+	"context"
+
 	"github.com/gin-gonic/gin"
 	"github.com/rs/zerolog"
 	"gorm.io/gorm"
@@ -9,6 +11,7 @@ import (
 	"github.com/melegattip/financial-resume-monorepo/apps/monolith/internal/infrastructure/middleware"
 	"github.com/melegattip/financial-resume-monorepo/apps/monolith/internal/modules/transactions/handlers"
 	"github.com/melegattip/financial-resume-monorepo/apps/monolith/internal/modules/transactions/repository"
+	sharedevents "github.com/melegattip/financial-resume-monorepo/apps/monolith/internal/shared/events"
 	sharedports "github.com/melegattip/financial-resume-monorepo/apps/monolith/internal/shared/ports"
 )
 
@@ -17,6 +20,7 @@ type Module struct {
 	expenseHandler  *handlers.ExpenseHandler
 	incomeHandler   *handlers.IncomeHandler
 	categoryHandler *handlers.CategoryHandler
+	categoryRepo    *repository.CategoryRepo
 	logger          zerolog.Logger
 	authMW          *middleware.AuthMiddleware
 	permMW          *middleware.PermissionMiddleware
@@ -38,6 +42,7 @@ func New(db *gorm.DB, logger zerolog.Logger, cfg *config.AppConfig, eventBus sha
 		expenseHandler:  expenseHandler,
 		incomeHandler:   incomeHandler,
 		categoryHandler: categoryHandler,
+		categoryRepo:    categoryRepo,
 		logger:          logger,
 		authMW:          authMW,
 		permMW:          permMW,
@@ -74,9 +79,27 @@ func (m *Module) RegisterRoutes(r *gin.RouterGroup) {
 	m.logger.Info().Msg("transactions module routes registered")
 }
 
-// RegisterSubscribers registers event subscribers (for future use)
+// RegisterSubscribers registers event subscribers for the transactions module.
 func (m *Module) RegisterSubscribers(eventBus sharedports.EventBus) {
-	// In the future, this module could subscribe to events from other modules
-	// For example: subscribe to UserDeletedEvent to cascade delete user's expenses
+	// Seed 15 default categories when a new user registers.
+	eventBus.Subscribe("user.registered", func(ctx context.Context, event sharedports.Event) error {
+		domainEvt, ok := event.(sharedevents.DomainEvent)
+		if !ok {
+			return nil
+		}
+		data, ok := domainEvt.Data.(map[string]string)
+		if !ok {
+			return nil
+		}
+		tenantID := data["tenant_id"]
+		if tenantID == "" {
+			return nil
+		}
+		if err := m.categoryRepo.SeedDefaultCategories(ctx, event.UserID(), tenantID); err != nil {
+			m.logger.Warn().Err(err).Str("user_id", event.UserID()).Msg("failed to seed default categories for new user")
+		}
+		return nil
+	})
+
 	m.logger.Info().Msg("transactions module subscribers registered")
 }

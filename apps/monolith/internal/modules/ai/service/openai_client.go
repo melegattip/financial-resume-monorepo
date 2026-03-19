@@ -10,7 +10,9 @@ import (
 	"time"
 )
 
-const openAIURL = "https://api.openai.com/v1/chat/completions"
+// openAIURL is the OpenAI chat completions endpoint.
+// Declared as a var (not const) so that tests can redirect requests to a local httptest.Server.
+var openAIURL = "https://api.openai.com/v1/chat/completions"
 
 // OpenAIClient is a lightweight OpenAI client using only stdlib net/http.
 type OpenAIClient struct {
@@ -58,7 +60,7 @@ func (c *OpenAIClient) GenerateAnalysis(ctx context.Context, systemPrompt, userP
 	}
 
 	payload := chatRequest{
-		Model: "gpt-4o",
+		Model: "gpt-4.1",
 		Messages: []chatMessage{
 			{Role: "system", Content: systemPrompt},
 			{Role: "user", Content: userPrompt},
@@ -109,6 +111,87 @@ func (c *OpenAIClient) GenerateAnalysis(ctx context.Context, systemPrompt, userP
 // getMockResponse returns a realistic hardcoded JSON response for testing without a real API key.
 // The mock response adapts slightly based on keywords in the prompt.
 func (c *OpenAIClient) getMockResponse(userPrompt string) string {
+	// Return education cards mock.
+	if containsKeyword(userPrompt, "tarjetas educativas") {
+		return `{
+  "cards": [
+    {
+      "topic": "emergencia",
+      "title": "Tu fondo de emergencia: el primer paso",
+      "summary": "Tener 3-6 meses de gastos guardados te protege ante imprevistos. Es la base de cualquier plan financiero sólido. Sin este colchón, cualquier gasto inesperado puede desestabilizar tu situación.",
+      "key_concept": "3-6 meses de gastos = tranquilidad financiera",
+      "cta": "Crear meta de emergencia",
+      "deep_link": "/savings-goals",
+      "difficulty": "básico"
+    },
+    {
+      "topic": "presupuesto",
+      "title": "El presupuesto 50/30/20 simplificado",
+      "summary": "Dividí tus ingresos en 3 partes: 50% para necesidades, 30% para deseos y 20% para ahorro e inversión. Es el método más usado en Latinoamérica por su simplicidad. Empezá con una categoría a la vez.",
+      "key_concept": "50% necesidades · 30% deseos · 20% ahorro",
+      "cta": "Crear mi presupuesto",
+      "deep_link": "/budgets",
+      "difficulty": "básico"
+    },
+    {
+      "topic": "ahorro",
+      "title": "Págate primero: automatizá tu ahorro",
+      "summary": "Transferí a tu cuenta de ahorro el día que cobrás, antes de gastar. Así el ahorro deja de ser 'lo que sobra' y se convierte en una prioridad. Incluso el 5% de tus ingresos hace la diferencia.",
+      "key_concept": "Primero ahorrá, después gastá el resto",
+      "cta": "Ver mis metas de ahorro",
+      "deep_link": "/savings-goals",
+      "difficulty": "básico"
+    }
+  ]
+}`
+	}
+
+	// Return monthly coaching report mock.
+	if containsKeyword(userPrompt, "reporte de coaching") {
+		return `{
+  "sentiment": "neutral",
+  "summary": "Tu situación financiera este mes muestra un balance estable. Hay oportunidades de mejora en el control de gastos variables, pero también logros importantes que vale la pena reconocer.",
+  "wins": [
+    {
+      "title": "Registraste tus transacciones",
+      "description": "Mantener el registro de ingresos y gastos es el hábito más valioso. Eso ya te pone adelante de la mayoría."
+    },
+    {
+      "title": "Ingresos estables",
+      "description": "Tu flujo de ingresos se mantuvo consistente este mes, lo que te da una base sólida para planificar."
+    }
+  ],
+  "improvements": [
+    {
+      "title": "Revisá tus gastos por categoría",
+      "description": "Identificá las 2-3 categorías donde más gastás y evaluá si hay margen para reducir sin afectar tu calidad de vida."
+    },
+    {
+      "title": "Configurá un presupuesto mensual",
+      "description": "Tener límites por categoría te ayuda a tomar decisiones más conscientes antes de gastar."
+    }
+  ],
+  "actions": [
+    {
+      "title": "Revisá tus gastos de este mes",
+      "detail": "Entrá a la sección de gastos y filtrá por categoría para identificar dónde podés optimizar.",
+      "deep_link": "/expenses"
+    },
+    {
+      "title": "Creá un presupuesto",
+      "detail": "Configurá límites mensuales para tus categorías principales. 15 minutos que cambian tus hábitos.",
+      "deep_link": "/budgets"
+    },
+    {
+      "title": "Revisá tus metas de ahorro",
+      "detail": "Asegurate de que tus metas estén activas y hacé un depósito aunque sea pequeño.",
+      "deep_link": "/savings-goals"
+    }
+  ],
+  "behavior_note": "Seguís usando la app regularmente, lo que demuestra compromiso con tu salud financiera. El próximo nivel es pasar de registrar a planificar activamente."
+}`
+	}
+
 	// Return credit-score-specific mock when asked for just a score.
 	if containsKeyword(userPrompt, "score crediticio") {
 		return `{"score": 720}`

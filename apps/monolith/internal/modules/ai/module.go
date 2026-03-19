@@ -10,6 +10,7 @@ import (
 	"github.com/melegattip/financial-resume-monorepo/apps/monolith/internal/infrastructure/config"
 	"github.com/melegattip/financial-resume-monorepo/apps/monolith/internal/modules/ai/handlers"
 	"github.com/melegattip/financial-resume-monorepo/apps/monolith/internal/modules/ai/service"
+	sharedemail "github.com/melegattip/financial-resume-monorepo/apps/monolith/internal/shared/email"
 	sharedports "github.com/melegattip/financial-resume-monorepo/apps/monolith/internal/shared/ports"
 )
 
@@ -22,7 +23,7 @@ type Module struct {
 // New creates and wires the AI module.
 // db and cfg are accepted for interface consistency with other modules, but are not used
 // because the AI module is stateless (no DB access needed).
-func New(db *gorm.DB, logger zerolog.Logger, cfg *config.AppConfig, eventBus sharedports.EventBus) *Module {
+func New(db *gorm.DB, logger zerolog.Logger, cfg *config.AppConfig, eventBus sharedports.EventBus, emailService sharedemail.EmailService) *Module {
 	openaiKey := os.Getenv("OPENAI_API_KEY")
 
 	openaiClient := service.NewOpenAIClient(openaiKey)
@@ -30,7 +31,7 @@ func New(db *gorm.DB, logger zerolog.Logger, cfg *config.AppConfig, eventBus sha
 	purchaseService := service.NewPurchaseService(openaiClient)
 	creditService := service.NewCreditService(openaiClient)
 
-	aiHandler := handlers.NewAIHandler(analysisService, purchaseService, creditService, logger)
+	aiHandler := handlers.NewAIHandler(analysisService, purchaseService, creditService, logger, emailService)
 
 	if openaiKey == "" {
 		logger.Warn().Msg("OPENAI_API_KEY not set — ai module running in mock mode")
@@ -57,6 +58,10 @@ func (m *Module) RegisterRoutes(r *gin.RouterGroup) {
 		// Credit analysis
 		ai.POST("/credit-plan", m.aiHandler.GenerateCreditPlan)
 		ai.POST("/credit-score", m.aiHandler.CalculateCreditScore)
+
+		// Monthly coaching + education
+		ai.POST("/monthly-coaching", m.aiHandler.HandleMonthlyCoaching)
+		ai.POST("/education-cards", m.aiHandler.HandleEducationCards)
 	}
 
 	m.logger.Info().Msg("ai module routes registered")

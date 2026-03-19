@@ -1,10 +1,15 @@
 package service
 
 import (
+	"context"
+	"encoding/json"
+	"net/http"
+	"net/http/httptest"
 	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	"github.com/melegattip/financial-resume-monorepo/apps/monolith/internal/modules/ai/domain"
 )
@@ -247,4 +252,210 @@ func TestFormatExpensesByCategoryWithPct_WithIncome(t *testing.T) {
 	expenses := map[string]float64{"Comida": 250.0}
 	result := formatExpensesByCategoryWithPct(expenses, 1000)
 	assert.Contains(t, result, "25.0%")
+}
+
+// ---------------------------------------------------------------------------
+// detectSophistication
+// ---------------------------------------------------------------------------
+
+func TestDetectSophistication_Nil(t *testing.T) {
+	assert.Equal(t, "BÁSICO", detectSophistication(nil))
+}
+
+func TestDetectSophistication_Basic(t *testing.T) {
+	b := &domain.BehaviorProfileContext{DisciplineScore: 0}
+	assert.Equal(t, "BÁSICO", detectSophistication(b))
+}
+
+func TestDetectSophistication_Advanced(t *testing.T) {
+	b := &domain.BehaviorProfileContext{DisciplineScore: 70}
+	assert.Equal(t, "AVANZADO", detectSophistication(b))
+}
+
+func TestDetectSophistication_Executor(t *testing.T) {
+	b := &domain.BehaviorProfileContext{DisciplineScore: 50, AIRecommendationsApplied: 3}
+	assert.Equal(t, "EJECUTOR", detectSophistication(b))
+}
+
+// ---------------------------------------------------------------------------
+// buildMonthlyCoachingPrompt
+// ---------------------------------------------------------------------------
+
+func TestBuildMonthlyCoachingPrompt_ContainsPreviousMonth(t *testing.T) {
+	svc := &AnalysisService{}
+	data := domain.FinancialAnalysisData{TotalIncome: 4000, TotalExpenses: 2500}
+	prompt := svc.buildMonthlyCoachingPrompt(data, "2026-02")
+	assert.Contains(t, prompt, "2026-02")
+	assert.Contains(t, prompt, "4000")
+}
+
+func TestBuildMonthlyCoachingPrompt_WithBehaviorProfile(t *testing.T) {
+	svc := &AnalysisService{}
+	data := domain.FinancialAnalysisData{
+		BehaviorProfile: &domain.BehaviorProfileContext{DisciplineScore: 80},
+	}
+	prompt := svc.buildMonthlyCoachingPrompt(data, "2026-02")
+	assert.Contains(t, prompt, "PERFIL CONDUCTUAL")
+}
+
+// ---------------------------------------------------------------------------
+// buildEducationCardsPrompt
+// ---------------------------------------------------------------------------
+
+func TestBuildEducationCardsPrompt_ContainsFinancialScore(t *testing.T) {
+	svc := &AnalysisService{}
+	data := domain.FinancialAnalysisData{FinancialScore: 650, SavingsRate: 0.25}
+	prompt := svc.buildEducationCardsPrompt(data)
+	assert.Contains(t, prompt, "650")
+	assert.Contains(t, prompt, "25.0")
+}
+
+func TestBuildEducationCardsPrompt_WithBehaviorProfile(t *testing.T) {
+	svc := &AnalysisService{}
+	data := domain.FinancialAnalysisData{
+		BehaviorProfile: &domain.BehaviorProfileContext{DisciplineScore: 75},
+	}
+	prompt := svc.buildEducationCardsPrompt(data)
+	assert.Contains(t, prompt, "AVANZADO")
+}
+
+// ---------------------------------------------------------------------------
+// GenerateMonthlyCoaching — HTTP mock tests
+// ---------------------------------------------------------------------------
+
+func makeOpenAIResponse(t *testing.T, content string) []byte {
+	t.Helper()
+	resp := map[string]interface{}{
+		"choices": []map[string]interface{}{
+			{"message": map[string]string{"content": content}},
+		},
+	}
+	b, _ := json.Marshal(resp)
+	return b
+}
+
+func TestGenerateMonthlyCoaching_ValidResponse(t *testing.T) {
+	mockContent := `{
+      "sentiment": "positivo",
+      "summary": "Buen mes",
+      "wins": [{"title":"Ahorraste","description":"$500 al fondo"}],
+      "improvements": [{"title":"Delivery","description":"Gasto elevado"}],
+      "actions": [
+        {"title":"Crear presupuesto","detail":"Para delivery","deep_link":"/budgets"},
+        {"title":"Depositar","detail":"$500","deep_link":"/savings-goals"},
+        {"title":"Revisar","detail":"Categorías","deep_link":"/categories"}
+      ],
+      "behavior_note": "Consistencia mejoró"
+    }`
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.Write(makeOpenAIResponse(t, mockContent))
+	}))
+	defer ts.Close()
+
+	orig := openAIURL
+	openAIURL = ts.URL
+	defer func() { openAIURL = orig }()
+
+	svc := NewAnalysisService(NewOpenAIClient("test-key"))
+	report, err := svc.GenerateMonthlyCoaching(context.Background(), domain.FinancialAnalysisData{}, "2026-02")
+	require.NoError(t, err)
+	assert.Equal(t, "positivo", report.Sentiment)
+	assert.Equal(t, "2026-02", report.Month)
+	assert.Len(t, report.Wins, 1)
+	assert.Len(t, report.Actions, 3)
+	assert.False(t, report.GeneratedAt.IsZero())
+}
+
+func TestGenerateMonthlyCoaching_ParseFailure(t *testing.T) {
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.Write(makeOpenAIResponse(t, "not valid json at all"))
+	}))
+	defer ts.Close()
+
+	orig := openAIURL
+	openAIURL = ts.URL
+	defer func() { openAIURL = orig }()
+
+	svc := NewAnalysisService(NewOpenAIClient("test-key"))
+	report, err := svc.GenerateMonthlyCoaching(context.Background(), domain.FinancialAnalysisData{}, "2026-01")
+	require.NoError(t, err) // fallback, no error
+	assert.Equal(t, "neutral", report.Sentiment)
+	assert.NotEmpty(t, report.Actions) // at least one default action
+}
+
+func TestGenerateMonthlyCoaching_OpenAIError(t *testing.T) {
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusInternalServerError)
+		w.Write([]byte(`{"error":"server error"}`))
+	}))
+	defer ts.Close()
+
+	orig := openAIURL
+	openAIURL = ts.URL
+	defer func() { openAIURL = orig }()
+
+	svc := NewAnalysisService(NewOpenAIClient("test-key"))
+	_, err := svc.GenerateMonthlyCoaching(context.Background(), domain.FinancialAnalysisData{}, "2026-01")
+	assert.Error(t, err)
+}
+
+// ---------------------------------------------------------------------------
+// GenerateEducationCards — HTTP mock tests
+// ---------------------------------------------------------------------------
+
+func TestGenerateEducationCards_ValidResponse(t *testing.T) {
+	mockContent := `{"cards":[
+      {"topic":"ahorro","title":"Fondo","summary":"Ahorra 3 meses","key_concept":"Fondo de emergencia","cta":"Crear meta","deep_link":"/savings-goals","difficulty":"básico"},
+      {"topic":"presupuesto","title":"Presupuesto","summary":"Controla gastos","key_concept":"50/30/20","cta":"Crear presupuesto","deep_link":"/budgets","difficulty":"básico"},
+      {"topic":"inversión","title":"Invertir","summary":"Haz crecer","key_concept":"Interés compuesto","cta":"Explorar","deep_link":"/insights","difficulty":"avanzado"}
+    ]}`
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.Write(makeOpenAIResponse(t, mockContent))
+	}))
+	defer ts.Close()
+
+	orig := openAIURL
+	openAIURL = ts.URL
+	defer func() { openAIURL = orig }()
+
+	svc := NewAnalysisService(NewOpenAIClient("test-key"))
+	cards, err := svc.GenerateEducationCards(context.Background(), domain.FinancialAnalysisData{})
+	require.NoError(t, err)
+	assert.Len(t, cards, 3)
+	assert.Equal(t, "ahorro", cards[0].Topic)
+}
+
+func TestGenerateEducationCards_ParseFailure(t *testing.T) {
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.Write(makeOpenAIResponse(t, "invalid json"))
+	}))
+	defer ts.Close()
+
+	orig := openAIURL
+	openAIURL = ts.URL
+	defer func() { openAIURL = orig }()
+
+	svc := NewAnalysisService(NewOpenAIClient("test-key"))
+	cards, err := svc.GenerateEducationCards(context.Background(), domain.FinancialAnalysisData{})
+	assert.NoError(t, err)
+	assert.Empty(t, cards)
+}
+
+func TestGenerateEducationCards_OpenAIError(t *testing.T) {
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusInternalServerError)
+	}))
+	defer ts.Close()
+
+	orig := openAIURL
+	openAIURL = ts.URL
+	defer func() { openAIURL = orig }()
+
+	svc := NewAnalysisService(NewOpenAIClient("test-key"))
+	_, err := svc.GenerateEducationCards(context.Background(), domain.FinancialAnalysisData{})
+	assert.Error(t, err)
 }
