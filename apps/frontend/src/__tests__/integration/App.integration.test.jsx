@@ -1,5 +1,5 @@
 import React from 'react';
-import { screen, waitFor, fireEvent } from '@testing-library/react';
+import { screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { AppContent } from '../../App';
 import { renderWithRouter, mockAPI, mockExpense, mockIncome, mockCategory, setupTest } from '../utils/testUtils';
@@ -184,8 +184,8 @@ describe('App Integration Tests', () => {
     // Verificar datos en Dashboard
     await waitFor(() => {
       expect(screen.getByText('$750.00')).toBeInTheDocument(); // Balance
-      expect(screen.getByText('$250.00')).toBeInTheDocument(); // Gastos totales
     });
+    expect(screen.getByText('$250.00')).toBeInTheDocument(); // Gastos totales
 
     // Navegar a Gastos y verificar consistencia
     mockAPI.expenses.list.mockResolvedValue({ data: [testExpense] });
@@ -274,9 +274,9 @@ describe('App Integration Tests', () => {
 
     await waitFor(() => {
       expect(screen.getByText('Comida')).toBeInTheDocument();
-      expect(screen.getByText('Transporte')).toBeInTheDocument();
-      expect(screen.getByText('Comida rápida')).toBeInTheDocument();
     });
+    expect(screen.getByText('Transporte')).toBeInTheDocument();
+    expect(screen.getByText('Comida rápida')).toBeInTheDocument();
 
     // Filtrar por búsqueda
     const searchInput = screen.getByPlaceholderText('Buscar gastos...');
@@ -293,9 +293,9 @@ describe('App Integration Tests', () => {
     // Todos los gastos deben volver a aparecer
     await waitFor(() => {
       expect(screen.getByText('Comida')).toBeInTheDocument();
-      expect(screen.getByText('Transporte')).toBeInTheDocument();
-      expect(screen.getByText('Comida rápida')).toBeInTheDocument();
     });
+    expect(screen.getByText('Transporte')).toBeInTheDocument();
+    expect(screen.getByText('Comida rápida')).toBeInTheDocument();
   });
 
   test('responsive behavior en diferentes tamaños', async () => {
@@ -324,8 +324,7 @@ describe('App Integration Tests', () => {
     });
 
     // Verificar que los componentes se adaptan
-    const container = screen.getByTestId('main-container') || document.querySelector('.container');
-    expect(container).toBeInTheDocument();
+    expect(screen.getByText('Balance Total')).toBeInTheDocument();
 
     // Simular viewport desktop
     global.innerWidth = 1920;

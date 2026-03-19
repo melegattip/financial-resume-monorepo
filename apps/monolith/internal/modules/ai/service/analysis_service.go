@@ -368,3 +368,233 @@ func formatBudgetsSummary(b *domain.BudgetsSummaryInfo) string {
 		b.OnTrackCount, b.WarningCount, b.ExceededCount,
 	)
 }
+
+// detectSophistication returns the user's financial sophistication label based on their behavior profile.
+// Returns "AVANZADO", "EJECUTOR", or "BÁSICO".
+func detectSophistication(profile *domain.BehaviorProfileContext) string {
+	if profile == nil {
+		return "BÁSICO"
+	}
+	if profile.DisciplineScore >= 70 {
+		return "AVANZADO"
+	}
+	if profile.AIRecommendationsApplied >= 3 {
+		return "EJECUTOR"
+	}
+	return "BÁSICO"
+}
+
+// GenerateMonthlyCoaching generates a personalized monthly coaching report for the previous complete month.
+func (s *AnalysisService) GenerateMonthlyCoaching(ctx context.Context, data domain.FinancialAnalysisData, previousMonth string) (*domain.MonthlyCoachingReport, error) {
+	systemPrompt := `Eres un coach financiero personal especializado en el mercado latinoamericano.
+Tu rol es revisar el mes anterior del usuario y entregarle un reporte motivador, honesto y accionable.
+
+PRINCIPIOS FUNDAMENTALES:
+1. El tono debe ser cálido, directo y empático — como un mentor de confianza, no un banco.
+2. Los "wins" deben ser genuinos — no inventes logros si los números no los respaldan.
+3. Las "improvements" deben ser específicas y no punitivas.
+4. Las acciones concretas deben tener un deep_link válido de la app.
+5. El sentiment refleja el mes real: no suavices ni exageres.
+6. Usá el perfil de comportamiento para personalizar el tono del coaching.
+7. Egresos en inversión, ahorro, activos, seguros y educación son CONSTRUCCIÓN DE PATRIMONIO — son wins.
+
+DEEP-LINKS DISPONIBLES: /dashboard, /expenses, /incomes, /budgets, /savings-goals, /recurring-transactions, /categories, /reports, /insights
+
+Responde ÚNICAMENTE con un JSON válido con este formato exacto:
+{
+  "sentiment": "positivo|neutral|desafiante",
+  "summary": "2-3 oraciones resumiendo el mes, personalizadas a los datos reales",
+  "wins": [
+    {"title": "string (max 60 chars)", "description": "string (max 150 chars)"}
+  ],
+  "improvements": [
+    {"title": "string (max 60 chars)", "description": "string (max 150 chars)"}
+  ],
+  "actions": [
+    {"title": "string (max 60 chars)", "detail": "string (max 100 chars)", "deep_link": "string"}
+  ],
+  "behavior_note": "1 oración sobre el patrón de comportamiento financiero del usuario"
+}
+
+RESTRICCIONES: wins: 2-3 items | improvements: 2-3 items | actions: exactamente 3 items`
+
+	userPrompt := s.buildMonthlyCoachingPrompt(data, previousMonth)
+
+	raw, err := s.openai.GenerateAnalysis(ctx, systemPrompt, userPrompt)
+	if err != nil {
+		return nil, fmt.Errorf("error generating monthly coaching: %w", err)
+	}
+
+	raw = cleanJSONResponse(raw)
+
+	var report domain.MonthlyCoachingReport
+	if err := json.Unmarshal([]byte(raw), &report); err != nil {
+		// Return a safe default on parse failure.
+		return &domain.MonthlyCoachingReport{
+			Month:        previousMonth,
+			Sentiment:    "neutral",
+			Summary:      "No se pudo generar el análisis detallado este mes. Revisá tus transacciones en el dashboard.",
+			Wins:         []domain.CoachingPoint{},
+			Improvements: []domain.CoachingPoint{},
+			Actions: []domain.CoachingAction{
+				{Title: "Revisá tu dashboard", Detail: "Chequeá el resumen del mes anterior", DeepLink: "/dashboard"},
+				{Title: "Revisá tus gastos", Detail: "Analizá en qué categorías gastaste más", DeepLink: "/expenses"},
+				{Title: "Configurá un presupuesto", Detail: "Establecé límites para el próximo mes", DeepLink: "/budgets"},
+			},
+			GeneratedAt: time.Now(),
+		}, nil
+	}
+
+	report.Month = previousMonth
+	report.GeneratedAt = time.Now()
+	return &report, nil
+}
+
+// buildMonthlyCoachingPrompt builds the user prompt for the monthly coaching report.
+func (s *AnalysisService) buildMonthlyCoachingPrompt(data domain.FinancialAnalysisData, previousMonth string) string {
+	var sb strings.Builder
+
+	sophistication := detectSophistication(data.BehaviorProfile)
+
+	sb.WriteString(fmt.Sprintf(`Generá el reporte de coaching para el mes %s.
+
+## FLUJO DE EFECTIVO DEL MES
+- Ingresos totales: $%.2f
+- Egresos totales: $%.2f
+- Superávit/Déficit: $%.2f
+- Tasa de ahorro: %.1f%%
+- Estabilidad de ingresos: %.2f/1.0
+- Score financiero: %d/1000
+
+## EGRESOS POR CATEGORÍA
+%s`,
+		previousMonth,
+		data.TotalIncome,
+		data.TotalExpenses,
+		data.TotalIncome-data.TotalExpenses,
+		data.SavingsRate*100,
+		data.IncomeStability,
+		data.FinancialScore,
+		formatExpensesByCategory(data.ExpensesByCategory),
+	))
+
+	if len(data.SavingsGoals) > 0 {
+		sb.WriteString("\n## METAS DE AHORRO ACTIVAS\n")
+		sb.WriteString(formatSavingsGoals(data.SavingsGoals))
+	}
+
+	if data.BudgetsSummary != nil && data.BudgetsSummary.TotalBudgets > 0 {
+		sb.WriteString("\n## CUMPLIMIENTO DE PRESUPUESTOS\n")
+		sb.WriteString(formatBudgetsSummary(data.BudgetsSummary))
+	}
+
+	if data.BehaviorProfile != nil {
+		sb.WriteString(fmt.Sprintf(`
+## PERFIL CONDUCTUAL
+- Nivel: %d (%s) | Racha: %d días | Tipo de usuario: %s
+- Presupuestos: %d creados, %d meses respetados
+- Metas de ahorro: %d creadas, %d depósitos, %d completadas
+- Score disciplina: %d/100 | Score consistencia: %d/100`,
+			data.BehaviorProfile.CurrentLevel, data.BehaviorProfile.LevelName,
+			data.BehaviorProfile.CurrentStreak, sophistication,
+			data.BehaviorProfile.BudgetsCreated, data.BehaviorProfile.BudgetComplianceEvents,
+			data.BehaviorProfile.SavingsGoalsCreated, data.BehaviorProfile.SavingsDeposits, data.BehaviorProfile.SavingsGoalsAchieved,
+			data.BehaviorProfile.DisciplineScore, data.BehaviorProfile.ConsistencyScore,
+		))
+	}
+
+	sb.WriteString("\n\nGenerá el reporte de coaching mensual con datos específicos del mes. Sé honesto y accionable.")
+	return sb.String()
+}
+
+// GenerateEducationCards generates 3 personalized financial education cards for the user.
+func (s *AnalysisService) GenerateEducationCards(ctx context.Context, data domain.FinancialAnalysisData) ([]domain.EducationCard, error) {
+	systemPrompt := `Eres un educador financiero especializado en el mercado latinoamericano.
+Tu rol es generar contenido educativo personalizado y relevante para la situación financiera actual del usuario.
+
+PRINCIPIOS FUNDAMENTALES:
+1. El contenido debe ser 100% relevante a los datos reales del usuario — no genérico.
+2. El nivel de dificultad debe coincidir con el perfil del usuario.
+3. El key_concept debe ser una idea memorable y aplicable.
+4. El CTA debe dirigir al usuario a una acción concreta dentro de la app.
+5. Usá ejemplos con montos realistas del contexto del usuario.
+6. Priorizá temas donde el usuario tenga mayor oportunidad de mejora visible en sus datos.
+7. Usá "vos" (rioplatense) en el texto.
+
+TÓPICOS PERMITIDOS: emergencia, presupuesto, deuda, ahorro, inversión, impuestos
+DEEP-LINKS DISPONIBLES: /dashboard, /expenses, /incomes, /budgets, /savings-goals, /recurring-transactions, /categories, /reports, /insights
+
+Responde ÚNICAMENTE con un JSON válido con este formato exacto:
+{
+  "cards": [
+    {
+      "topic": "string",
+      "title": "string (max 60 chars)",
+      "summary": "2-3 oraciones personalizadas al contexto del usuario",
+      "key_concept": "frase memorable (max 80 chars)",
+      "cta": "etiqueta del botón (max 35 chars)",
+      "deep_link": "string",
+      "difficulty": "básico|intermedio|avanzado"
+    }
+  ]
+}
+
+RESTRICCIONES: exactamente 3 cards | 3 tópicos distintos | dificultad según perfil: BÁSICO→básico/intermedio, AVANZADO→intermedio/avanzado, EJECUTOR→avanzado`
+
+	userPrompt := s.buildEducationCardsPrompt(data)
+
+	raw, err := s.openai.GenerateAnalysis(ctx, systemPrompt, userPrompt)
+	if err != nil {
+		return nil, fmt.Errorf("error generating education cards: %w", err)
+	}
+
+	raw = cleanJSONResponse(raw)
+
+	var result struct {
+		Cards []domain.EducationCard `json:"cards"`
+	}
+	if err := json.Unmarshal([]byte(raw), &result); err != nil {
+		return []domain.EducationCard{}, nil
+	}
+	return result.Cards, nil
+}
+
+// buildEducationCardsPrompt builds the user prompt for financial education cards.
+func (s *AnalysisService) buildEducationCardsPrompt(data domain.FinancialAnalysisData) string {
+	var sb strings.Builder
+
+	sophistication := detectSophistication(data.BehaviorProfile)
+
+	budgetInfo := "Sin presupuestos configurados"
+	if data.BudgetsSummary != nil && data.BudgetsSummary.TotalBudgets > 0 {
+		budgetInfo = fmt.Sprintf("%d presupuestos activos, %d excedidos", data.BudgetsSummary.TotalBudgets, data.BudgetsSummary.ExceededCount)
+	}
+
+	goalsInfo := "Sin metas de ahorro activas"
+	if len(data.SavingsGoals) > 0 {
+		goalsInfo = fmt.Sprintf("%d meta(s) de ahorro activa(s)", len(data.SavingsGoals))
+	}
+
+	sb.WriteString(fmt.Sprintf(`Generá 3 tarjetas educativas personalizadas para este usuario.
+
+## PERFIL DEL USUARIO
+- Sofisticación financiera: %s
+- Tasa de ahorro: %.1f%%
+- Score financiero: %d/1000
+- Presupuestos: %s
+- Metas de ahorro: %s
+
+## GASTOS POR CATEGORÍA (para identificar oportunidades)
+%s
+
+Priorizá los temas donde el usuario tiene mayor oportunidad de mejora según sus datos reales.`,
+		sophistication,
+		data.SavingsRate*100,
+		data.FinancialScore,
+		budgetInfo,
+		goalsInfo,
+		formatExpensesByCategory(data.ExpensesByCategory),
+	))
+
+	return sb.String()
+}

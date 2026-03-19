@@ -14,12 +14,37 @@ import (
 	"github.com/rs/zerolog"
 )
 
+// CoachingReportEmailData holds the data for the monthly coaching report email.
+// It is defined here (not in the AI domain package) to avoid circular imports.
+type CoachingReportEmailData struct {
+	Month        string
+	Sentiment    string // "positivo|neutral|desafiante"
+	Summary      string
+	Wins         []CoachingEmailPoint
+	Improvements []CoachingEmailPoint
+	Actions      []CoachingEmailAction
+	BehaviorNote string
+}
+
+// CoachingEmailPoint is a single win or improvement item in the email.
+type CoachingEmailPoint struct {
+	Title       string
+	Description string
+}
+
+// CoachingEmailAction is a concrete action item in the email.
+type CoachingEmailAction struct {
+	Title  string
+	Detail string
+}
+
 // EmailService defines the contract for sending transactional emails.
 type EmailService interface {
 	SendPasswordReset(toEmail, resetLink string) error
 	SendEmailVerification(toEmail, firstName, verificationLink string) error
 	SendBudgetAlert(toEmail, firstName, categoryID, period, newStatus string, spentAmount, budgetLimit float64) error
 	SendLoginNotification(toEmail, firstName, loginTime string) error
+	SendMonthlyCoachingReport(toEmail, firstName string, data CoachingReportEmailData) error
 }
 
 // SMTPConfig holds SMTP connection settings.
@@ -292,6 +317,37 @@ func (s *NoOpEmailService) SendLoginNotification(toEmail, firstName, loginTime s
 	return nil
 }
 
+// SendMonthlyCoachingReport sends the monthly coaching report via SMTP.
+func (s *SMTPEmailService) SendMonthlyCoachingReport(toEmail, firstName string, data CoachingReportEmailData) error {
+	subject := "Tu resumen de " + data.Month + " — Niloft"
+	msg := buildMIMEMessage(s.cfg.From, toEmail, subject, buildMonthlyCoachingHTML(firstName, data))
+	if err := s.send(toEmail, msg); err != nil {
+		return err
+	}
+	s.logger.Info().Str("to", toEmail).Str("month", data.Month).Msg("monthly coaching report email sent")
+	return nil
+}
+
+// SendMonthlyCoachingReport sends the monthly coaching report via Resend.
+func (s *ResendEmailService) SendMonthlyCoachingReport(toEmail, firstName string, data CoachingReportEmailData) error {
+	subject := "Tu resumen de " + data.Month + " — Niloft"
+	if err := s.sendResend(toEmail, subject, buildMonthlyCoachingHTML(firstName, data)); err != nil {
+		return err
+	}
+	s.logger.Info().Str("to", toEmail).Str("month", data.Month).Msg("monthly coaching report email sent via Resend")
+	return nil
+}
+
+// SendMonthlyCoachingReport logs the coaching report (no-op mode).
+func (s *NoOpEmailService) SendMonthlyCoachingReport(toEmail, firstName string, data CoachingReportEmailData) error {
+	s.logger.Info().
+		Str("to", toEmail).
+		Str("month", data.Month).
+		Str("sentiment", data.Sentiment).
+		Msg("[NO-OP EMAIL] monthly coaching report — configure email to send real emails")
+	return nil
+}
+
 func buildMIMEMessage(from, to, subject, htmlBody string) string {
 	var sb strings.Builder
 	sb.WriteString("MIME-Version: 1.0\r\n")
@@ -444,4 +500,93 @@ func buildResetEmailHTML(resetLink string) string {
   </div>
 </body>
 </html>`
+}
+
+func buildMonthlyCoachingHTML(firstName string, data CoachingReportEmailData) string {
+	var sb strings.Builder
+
+	// Sentiment badge config
+	sentimentLabel := "Mes Neutral"
+	sentimentBg := "#fef3c7"
+	sentimentColor := "#92400e"
+	sentimentEmoji := "⚖️"
+	switch data.Sentiment {
+	case "positivo":
+		sentimentLabel = "Mes Positivo"
+		sentimentBg = "#d1fae5"
+		sentimentColor = "#065f46"
+		sentimentEmoji = "✨"
+	case "desafiante":
+		sentimentLabel = "Mes Desafiante"
+		sentimentBg = "#fee2e2"
+		sentimentColor = "#991b1b"
+		sentimentEmoji = "💪"
+	}
+
+	sb.WriteString(`<!DOCTYPE html>
+<html>
+<head><meta charset="UTF-8"></head>
+<body style="font-family: Arial, sans-serif; background: #f4f4f4; padding: 40px 0; margin: 0;">
+  <div style="max-width: 480px; margin: 0 auto; background: #fff; border-radius: 12px; overflow: hidden; box-shadow: 0 2px 8px rgba(0,0,0,0.08);">
+    <div style="background: linear-gradient(135deg, #3b82f6, #6366f1); padding: 32px; text-align: center;">
+      <img src="https://financial.niloft.com/logo-niloft.png" alt="Niloft" style="height: 48px; width: auto; display: block; margin: 0 auto;">
+      <p style="color: rgba(255,255,255,0.8); margin: 10px 0 4px; font-size: 12px; text-transform: uppercase; letter-spacing: 1px;">Reporte Mensual</p>
+      <p style="color: #fff; margin: 0; font-size: 22px; font-weight: 700;">` + data.Month + `</p>
+    </div>
+    <div style="padding: 28px 32px 0;">`)
+
+	sb.WriteString(fmt.Sprintf(
+		`<div style="display:inline-block;background:%s;color:%s;font-size:12px;font-weight:600;padding:4px 12px;border-radius:20px;margin-bottom:16px;">%s %s</div>`,
+		sentimentBg, sentimentColor, sentimentEmoji, sentimentLabel))
+
+	if firstName != "" {
+		sb.WriteString(fmt.Sprintf(
+			`<p style="color:#1f2937;font-size:15px;font-weight:600;margin:0 0 8px;">Hola, %s</p>`, firstName))
+	}
+	sb.WriteString(fmt.Sprintf(
+		`<p style="color:#374151;font-size:14px;line-height:1.7;margin:0 0 24px;">%s</p></div>`, data.Summary))
+
+	// Wins
+	if len(data.Wins) > 0 {
+		sb.WriteString(`<div style="padding:0 32px 20px;"><p style="font-size:13px;font-weight:700;color:#4f46e5;text-transform:uppercase;letter-spacing:0.8px;margin:0 0 12px;">✅ Lo que hiciste bien</p>`)
+		for _, w := range data.Wins {
+			sb.WriteString(fmt.Sprintf(
+				`<div style="background:#f0fdf4;border-left:3px solid #10b981;border-radius:0 8px 8px 0;padding:10px 14px;margin-bottom:8px;"><p style="font-size:13px;font-weight:600;color:#065f46;margin:0 0 2px;">%s</p><p style="font-size:13px;color:#374151;line-height:1.5;margin:0;">%s</p></div>`,
+				w.Title, w.Description))
+		}
+		sb.WriteString(`</div>`)
+	}
+
+	// Improvements
+	if len(data.Improvements) > 0 {
+		sb.WriteString(`<div style="padding:0 32px 20px;"><p style="font-size:13px;font-weight:700;color:#4f46e5;text-transform:uppercase;letter-spacing:0.8px;margin:0 0 12px;">🎯 Para mejorar</p>`)
+		for _, imp := range data.Improvements {
+			sb.WriteString(fmt.Sprintf(
+				`<div style="background:#fffbeb;border-left:3px solid #f59e0b;border-radius:0 8px 8px 0;padding:10px 14px;margin-bottom:8px;"><p style="font-size:13px;font-weight:600;color:#92400e;margin:0 0 2px;">%s</p><p style="font-size:13px;color:#374151;line-height:1.5;margin:0;">%s</p></div>`,
+				imp.Title, imp.Description))
+		}
+		sb.WriteString(`</div>`)
+	}
+
+	// Actions
+	if len(data.Actions) > 0 {
+		sb.WriteString(`<div style="padding:0 32px 20px;"><p style="font-size:13px;font-weight:700;color:#4f46e5;text-transform:uppercase;letter-spacing:0.8px;margin:0 0 12px;">🚀 Acciones para este mes</p>`)
+		for _, a := range data.Actions {
+			sb.WriteString(fmt.Sprintf(
+				`<div style="border:1px solid #e5e7eb;border-radius:10px;padding:12px 14px;margin-bottom:8px;"><p style="font-size:13px;font-weight:600;color:#1f2937;margin:0 0 2px;">%s</p><p style="font-size:13px;color:#6b7280;line-height:1.5;margin:0;">%s</p></div>`,
+				a.Title, a.Detail))
+		}
+		sb.WriteString(`</div>`)
+	}
+
+	// Behavior note
+	if data.BehaviorNote != "" {
+		sb.WriteString(fmt.Sprintf(
+			`<div style="padding:0 32px 24px;"><div style="background:#eef2ff;border-radius:10px;padding:14px 16px;"><p style="font-size:12px;font-weight:600;color:#4f46e5;margin:0 0 4px;">📊 Tu patrón financiero</p><p style="font-size:13px;color:#374151;line-height:1.5;margin:0;">%s</p></div></div>`,
+			data.BehaviorNote))
+	}
+
+	sb.WriteString(`<div style="padding:0 32px 32px;text-align:center;"><a href="https://financial.niloft.com/insights" style="display:inline-block;background:linear-gradient(135deg,#4f46e5,#6366f1);color:#fff;font-size:14px;font-weight:600;padding:12px 28px;border-radius:8px;text-decoration:none;margin-bottom:16px;">Ver reporte completo →</a><p style="color:#9ca3af;font-size:11px;margin:0;">© 2025 Niloft · Tu asistente financiero</p></div></div></body></html>`)
+
+	return sb.String()
 }

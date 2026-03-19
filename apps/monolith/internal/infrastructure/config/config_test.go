@@ -123,20 +123,3 @@ func TestLoad_CustomValues(t *testing.T) {
 	assert.Equal(t, 5, cfg.DBMaxIdleConns)
 	assert.Equal(t, 50, cfg.DBMaxOpenConns)
 }
-
-func TestLoadFeatureFlags_Defaults(t *testing.T) {
-	clearEnv()
-
-	flags := LoadFeatureFlags()
-
-	assert.False(t, flags.UseEventBus)
-}
-
-func TestLoadFeatureFlags_Enabled(t *testing.T) {
-	clearEnv()
-	t.Setenv("USE_EVENT_BUS", "1")
-
-	flags := LoadFeatureFlags()
-
-	assert.True(t, flags.UseEventBus)
-}

@@ -1,5 +1,5 @@
 import React from 'react';
-import { screen, waitFor, fireEvent } from '@testing-library/react';
+import { screen, waitFor } from '@testing-library/react';
 import Dashboard from '../../pages/Dashboard';
 import { renderWithRouter, mockAPI, mockDashboardData, setupTest } from '../utils/testUtils';
 import * as api from '../../services/api';
@@ -50,10 +50,10 @@ describe('Dashboard Component', () => {
 
     await waitFor(() => {
       expect(screen.getByText('Balance Total')).toBeInTheDocument();
-      expect(screen.getByText('Total Ingresos')).toBeInTheDocument();
-      expect(screen.getByText('Total Gastos')).toBeInTheDocument();
-      expect(screen.getByText('Gastos Pendientes')).toBeInTheDocument();
     });
+    expect(screen.getByText('Total Ingresos')).toBeInTheDocument();
+    expect(screen.getByText('Total Gastos')).toBeInTheDocument();
+    expect(screen.getByText('Gastos Pendientes')).toBeInTheDocument();
 
     // Verificar que los montos se muestran
     expect(screen.getByText('$400.00')).toBeInTheDocument(); // Balance
@@ -80,8 +80,8 @@ describe('Dashboard Component', () => {
 
     await waitFor(() => {
       expect(screen.getByTestId('responsive-container')).toBeInTheDocument();
-      expect(screen.getByTestId('area-chart')).toBeInTheDocument();
     });
+    expect(screen.getByTestId('area-chart')).toBeInTheDocument();
   });
 
   test('muestra mensaje cuando no hay datos para gráficos', async () => {
@@ -164,9 +164,9 @@ describe('Dashboard Component', () => {
 
     await waitFor(() => {
       expect(mockAPI.expenses.list).toHaveBeenCalled();
-      expect(mockAPI.incomes.list).toHaveBeenCalled();
-      expect(mockAPI.categories.list).toHaveBeenCalled();
     });
+    expect(mockAPI.incomes.list).toHaveBeenCalled();
+    expect(mockAPI.categories.list).toHaveBeenCalled();
   });
 
   test('muestra transacciones recientes cuando las hay', async () => {
@@ -188,9 +188,9 @@ describe('Dashboard Component', () => {
 
     await waitFor(() => {
       expect(screen.getByText('Transacciones Recientes')).toBeInTheDocument();
-      expect(screen.getByText('Gasto reciente')).toBeInTheDocument();
-      expect(screen.getByText('Ingreso reciente')).toBeInTheDocument();
     });
+    expect(screen.getByText('Gasto reciente')).toBeInTheDocument();
+    expect(screen.getByText('Ingreso reciente')).toBeInTheDocument();
   });
 
   test('ordena transacciones por fecha correctamente', async () => {

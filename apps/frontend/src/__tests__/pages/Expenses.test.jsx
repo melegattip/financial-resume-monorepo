@@ -1,5 +1,5 @@
 import React from 'react';
-import { screen, waitFor, fireEvent, act } from '@testing-library/react';
+import { screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import Expenses from '../../pages/Expenses';
 import { renderWithRouter, mockAPI, mockExpense, mockCategory, setupTest } from '../utils/testUtils';
@@ -35,8 +35,8 @@ describe('Expenses Component', () => {
 
     await waitFor(() => {
       expect(screen.getByText('Test Expense')).toBeInTheDocument();
-      expect(screen.getByText('$100.50')).toBeInTheDocument();
     });
+    expect(screen.getByText('$100.50')).toBeInTheDocument();
   });
 
   test('muestra métricas de gastos correctamente', async () => {
@@ -52,9 +52,9 @@ describe('Expenses Component', () => {
 
     await waitFor(() => {
       expect(screen.getByText('Total Gastos')).toBeInTheDocument();
-      expect(screen.getByText('Gastos Pendientes')).toBeInTheDocument();
-      expect(screen.getByText('Monto Pendiente')).toBeInTheDocument();
     });
+    expect(screen.getByText('Gastos Pendientes')).toBeInTheDocument();
+    expect(screen.getByText('Monto Pendiente')).toBeInTheDocument();
   });
 
   test('filtra gastos por búsqueda', async () => {
@@ -70,8 +70,8 @@ describe('Expenses Component', () => {
 
     await waitFor(() => {
       expect(screen.getByText('Comida')).toBeInTheDocument();
-      expect(screen.getByText('Transporte')).toBeInTheDocument();
     });
+    expect(screen.getByText('Transporte')).toBeInTheDocument();
 
     const searchInput = screen.getByPlaceholderText('Buscar gastos...');
     await user.type(searchInput, 'Comida');
@@ -207,8 +207,8 @@ describe('Expenses Component', () => {
 
     await waitFor(() => {
       expect(confirmSpy).toHaveBeenCalledWith('¿Estás seguro de que quieres eliminar este gasto?');
-      expect(mockAPI.expenses.delete).toHaveBeenCalled();
     });
+    expect(mockAPI.expenses.delete).toHaveBeenCalled();
 
     confirmSpy.mockRestore();
   });
