@@ -324,6 +324,7 @@ class DataService {
       case 'expense':
         this.clearCache('expenses');
         this.clearCache('analytics_expenses');
+        this.clearCache('analytics_categories');
         this.clearCache('dashboard');
         break;
       case 'income':

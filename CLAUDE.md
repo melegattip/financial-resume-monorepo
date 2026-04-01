@@ -1,6 +1,6 @@
 # financial-resume-monorepo Development Guidelines
 
-Last updated: 2026-03-18 — Estado actual: Phase 7 (multi-tenant) completo
+Last updated: 2026-04-01 — Estado actual: Phase 7 completo · Phase 8 (Tech Debt + Bug Fixes) en progreso
 
 ---
 
@@ -63,13 +63,15 @@ financial-resume-monorepo/
 │   │   │   │   ├── analytics/       # Dashboard + trends
 │   │   │   │   └── ai/              # OpenAI integration
 │   │   │   ├── shared/
-│   │   │   │   ├── ports/           # EventBus interface
+│   │   │   │   ├── ports/           # EventBus + Module + HealthChecker interfaces
 │   │   │   │   ├── events/          # InMemoryEventBus + DomainEvent
+│   │   │   │   ├── errors/          # Domain error types
 │   │   │   │   └── email/           # Resend/SMTP/NoOp email service
 │   │   │   └── infrastructure/
 │   │   │       ├── config/          # AppConfig + Load()
 │   │   │       ├── middleware/      # Auth, Permission, CORS, Logging
 │   │   │       ├── database/        # PostgreSQL connection + migrations
+│   │   │       ├── logging/         # Zerolog setup
 │   │   │       └── http/            # Router + Server
 │   │   ├── Dockerfile
 │   │   ├── go.mod
@@ -79,10 +81,11 @@ financial-resume-monorepo/
 │       ├── src/
 │       │   ├── App.jsx              # Routes + provider stack
 │       │   ├── contexts/            # Auth, Theme, Period, Gamification, Tenant
-│       │   ├── pages/               # 19 pages
+│       │   ├── pages/               # 18 pages + insight tabs (EducationTab, MonthlyCoachingTab)
 │       │   ├── components/          # Layout, guards, modals, widgets
 │       │   ├── services/            # API clients + service layer
 │       │   ├── hooks/               # Custom hooks
+│       │   ├── utils/               # Utility functions
 │       │   └── config/              # Environment detection
 │       ├── Dockerfile
 │       └── package.json
@@ -91,7 +94,10 @@ financial-resume-monorepo/
 │   ├── docker-rebuild.sh            # Rebuild Docker images (preserve postgres)
 │   └── dev.sh                       # Local dev without Docker
 ├── docs/03-architecture/            # DB schema docs
-├── specs/                           # Feature specs
+├── specs/
+│   ├── 001-expense-ux-fixes/        # Spec + plan + tasks para UX de gastos
+│   ├── 001-migrate-auth-module/     # Spec de migración auth
+│   └── bugfixing_ctx/               # 16 bugs reportados (ver Known Issues)
 ├── docker-compose.yml
 ├── go.work                          # Go workspace (./apps/monolith only)
 └── render.yaml                      # Render.com deployment blueprint
@@ -332,8 +338,11 @@ POST   /ai/can-i-buy
 POST   /ai/alternatives
 POST   /ai/credit-plan
 POST   /ai/credit-score
+POST   /ai/monthly-coaching
+POST   /ai/education-cards
 ```
 **Nota**: Si `OPENAI_API_KEY` no está configurado, cae en mock responses.
+**Nota**: El módulo AI recibe `emailService` en lugar de `authMW`/`permMW` — no tiene autenticación en sus rutas.
 
 ---
 
@@ -439,6 +448,7 @@ Router → ThemeProvider → AuthProvider → TenantProvider → PeriodProvider 
 | Service | Propósito |
 |---------|-----------|
 | `apiClient.js` | Base axios client — auto Bearer token + X-Caller-ID |
+| `api.js` | General API utilities y helpers |
 | `authService.js` | Login, register, 2FA, profile, tokens |
 | `tenantService.js` | Multi-tenant CRUD |
 | `gamificationAPI.js` | Gamification backend API |
@@ -496,3 +506,62 @@ localStorage keys:
 1. **lint** — `golangci-lint` con `.golangci.yml`
 2. **test** — `go test -race -coverprofile` — **falla si coverage < 80%**
 3. **build** — `CGO_ENABLED=0 GOOS=linux go build -o bin/server ./cmd/server/`
+
+---
+
+## Known Issues
+
+Ver `specs/bugfixing_ctx/bug-reports-summary.md` para el listado completo (16 bugs, fecha: 2026-02-05).
+
+### Alta Prioridad (sin resolver)
+| Bug | Módulo | Descripción |
+|-----|--------|-------------|
+| BUG-001 | Gamification | Categorización y racha de días no funcionan (progreso siempre en 0) |
+| BUG-007 | AI | IA no distingue gastos vs inversiones/ahorros |
+| BUG-008 | Recurring | Vencimientos incorrectos en recurrentes creadas en meses anteriores |
+| BUG-013 | Expenses | Edición de gasto desde dashboard es lenta (pide modal) |
+| BUG-014 | Expenses | Pago parcial no se descuenta de "gastos pendientes" |
+| BUG-015 | Expenses | No se puede crear gasto en mes anterior (falta campo de fecha) |
+| BUG-016 | Recurring | Gastos recurrentes de octubre no reconocidos |
+
+### Baja/Media Prioridad
+- BUG-003: Filtro de mes por defecto apunta al último mes del último año (debería ser mes actual)
+- BUG-012: Fecha de vencimiento muestra un día menos (bug timezone UTC vs local)
+- BUG-002: Banner de trial visible en usuarios de nivel 7+
+
+---
+
+## Claude Code Rules
+
+Estas reglas evitan errores frecuentes en este proyecto. Seguirlas siempre.
+
+### Reglas Críticas (nunca violar)
+1. **Leer antes de editar**: Usar `Read` antes de cualquier `Edit`. Sin excepción.
+2. **Soft delete correcto**: Usar `DeletedAt *time.Time` en todos los módulos EXCEPTO `auth.User` (usa `gorm.DeletedAt`). Nunca agregar `gorm.DeletedAt` en módulos nuevos.
+3. **userID siempre desde JWT**: `c.Get("user_id")` en handlers. Nunca desde query params o body.
+4. **Publicar eventos post-persist**: Llamar `eventBus.Publish()` DESPUÉS de confirmar que el DB write fue exitoso.
+5. **AutoMigrate solo en `New()`**: Nunca en `RegisterRoutes()` ni en handlers.
+6. **`main.go` es territorio del orquestador**: Agentes de implementación no deben tocar `main.go`. El registro de módulos lo hace el orquestador al final de una fase.
+7. **Verificar `go build ./...` tras cambios en Go**: Siempre confirmar que el proyecto compila antes de declarar una tarea completa.
+
+### Reglas de Proceso
+8. **Docker rebuild al terminar**: Al final de cualquier implementación significativa, recordar al usuario ejecutar `./scripts/docker-rebuild.sh`.
+9. **Módulo nuevo = patrón establecido**: Seguir exactamente la estructura `domain/repository/service/handlers/ports/module.go` con la firma de `New()` documentada arriba.
+10. **Eventos existentes primero**: Antes de crear un nuevo tipo de evento, verificar si ya existe uno compatible en la lista de eventos publicados.
+11. **No duplicar lógica entre módulos**: Los módulos se comunican via event bus, no por llamadas directas entre sí.
+12. **Tenant ID en todas las entidades nuevas**: Cualquier nueva tabla debe incluir `tenant_id` desde el inicio.
+
+### Reglas de Frontend
+13. **Provider stack es fijo**: No reordenar `Router → ThemeProvider → AuthProvider → TenantProvider → PeriodProvider → GamificationProvider`.
+14. **`useAuth()` para estado de auth**: Nunca leer `localStorage` directamente en componentes — usar el context.
+15. **Feature gates via `<FeatureGuard>`**: Para features bloqueadas por nivel, siempre usar el componente guard, nunca inline.
+16. **Axios via `apiClient.js`**: Nunca crear instancias de axios en componentes o páginas directamente.
+
+---
+
+## Active Hooks (`.claude/settings.json`)
+
+| Hook | Trigger | Acción |
+|------|---------|--------|
+| `PostToolUse` | Edit/Write en archivo `.go` | Corre `go build ./...` y muestra resultado |
+| `PreToolUse` | Edit/Write en `main.go` | Muestra aviso de que es territorio del orquestador |

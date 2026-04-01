@@ -1563,7 +1563,7 @@ const Resumen = () => {
                     </Pie>
                     <Tooltip
                       formatter={(value, name, props) => [
-                        `${value.toFixed(1)}% (${formatCurrency(props.payload.amount)})`,
+                        `${formatPercentage(value)} (${formatAmount(props.payload.amount)})`,
                         props.payload.name
                       ]}
                       contentStyle={{
@@ -1597,10 +1597,10 @@ const Resumen = () => {
                           </div>
                           <div className="flex items-center space-x-2 mt-0.5">
                             <span className="text-xs font-bold text-fr-gray-900 dark:text-gray-100">
-                              {item.value.toFixed(1)}%
+                              {formatPercentage(item.value)}
                             </span>
                             <span className="text-xs text-fr-gray-500 dark:text-gray-400">
-                              {formatCurrency(item.amount)}
+                              {formatAmount(item.amount)}
                             </span>
                           </div>
                         </div>
