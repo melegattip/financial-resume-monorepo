@@ -94,16 +94,30 @@ func (m *Module) AuthMiddleware() *middleware.AuthMiddleware {
 // RegisterRoutes adds auth endpoints to the router group.
 // The router group should be the /api/v1 group.
 func (m *Module) RegisterRoutes(router *gin.RouterGroup) {
-	if err := m.db.AutoMigrate(
+	// Migrate each model independently so a constraint warning on one table
+	// (e.g. "uni_users_email") does not abort the migration of the others,
+	// preventing new columns like date_format from being added.
+	for _, model := range []any{
 		&domain.User{},
 		&domain.Preferences{},
 		&domain.NotificationSettings{},
 		&domain.TwoFA{},
-	); err != nil {
-		// Non-fatal: AutoMigrate may fail to reconcile constraint names on existing tables
-		// (e.g. "uni_users_email" vs the name used by a previous migration).
-		// The schema is correct as long as the tables and columns exist.
-		m.logger.Warn().Err(err).Msg("auto-migrate warning (schema may already be up to date)")
+	} {
+		if err := m.db.AutoMigrate(model); err != nil {
+			m.logger.Warn().Err(err).Msg("auto-migrate warning (schema may already be up to date)")
+		}
+	}
+
+	// Targeted column patches: add missing columns that AutoMigrate may skip
+	// due to unrelated constraint errors on the users table.
+	colPatches := []string{
+		`ALTER TABLE user_preferences ADD COLUMN IF NOT EXISTS date_format VARCHAR(20) NOT NULL DEFAULT 'YYYY-MM-DD'`,
+		`ALTER TABLE user_preferences ADD COLUMN IF NOT EXISTS timezone VARCHAR(50) NOT NULL DEFAULT 'UTC'`,
+	}
+	for _, sql := range colPatches {
+		if err := m.db.Exec(sql).Error; err != nil {
+			m.logger.Warn().Err(err).Str("sql", sql).Msg("column patch warning")
+		}
 	}
 
 	// --- Public auth routes: /api/v1/auth/* ---
