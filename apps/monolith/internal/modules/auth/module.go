@@ -108,6 +108,18 @@ func (m *Module) RegisterRoutes(router *gin.RouterGroup) {
 		}
 	}
 
+	// Targeted column patches: add missing columns that AutoMigrate may skip
+	// due to unrelated constraint errors on the users table.
+	colPatches := []string{
+		`ALTER TABLE user_preferences ADD COLUMN IF NOT EXISTS date_format VARCHAR(20) NOT NULL DEFAULT 'YYYY-MM-DD'`,
+		`ALTER TABLE user_preferences ADD COLUMN IF NOT EXISTS timezone VARCHAR(50) NOT NULL DEFAULT 'UTC'`,
+	}
+	for _, sql := range colPatches {
+		if err := m.db.Exec(sql).Error; err != nil {
+			m.logger.Warn().Err(err).Str("sql", sql).Msg("column patch warning")
+		}
+	}
+
 	// --- Public auth routes: /api/v1/auth/* ---
 	auth := router.Group("/auth")
 	{
