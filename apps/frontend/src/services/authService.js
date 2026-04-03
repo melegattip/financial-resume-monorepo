@@ -252,10 +252,9 @@ class AuthService {
         throw new Error('Respuesta inválida del servidor');
       }
 
-      this.saveAuthData(authData);
-
+      // Do NOT save auth data — user must verify email before being considered authenticated.
       console.log('✅ [authService] Registro exitoso para usuario:', authData.user.first_name);
-      toast.success('¡Registro exitoso! Bienvenido');
+      toast.success('¡Registro exitoso! Revisá tu email para activar tu cuenta.');
       return { success: true, data: authData };
     } catch (error) {
       console.error('❌ Error en registro:', error.response?.data || error.message);

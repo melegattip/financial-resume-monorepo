@@ -73,14 +73,13 @@ export const AuthProvider = ({ children }) => {
 
   const register = useCallback(async (userData) => {
     try {
-      setAuthState(AUTH_STATES.LOADING);
+      // Do not set LOADING — it unmounts PublicOnlyRoute children and resets component state.
+      // Register.jsx handles its own loading indicator via isSubmitting.
       const result = await authService.register(userData);
       // Do NOT authenticate — user must verify email first.
-      setAuthState(AUTH_STATES.UNAUTHENTICATED);
       return result;
     } catch (error) {
       console.error('Registration error:', error);
-      setAuthState(AUTH_STATES.UNAUTHENTICATED);
       throw error;
     }
   }, []);
