@@ -22,8 +22,12 @@ type SecurityConfig struct {
 	LockoutDuration   time.Duration
 }
 
-// EmailConfig holds SMTP email configuration.
+// EmailConfig holds email configuration.
+// ResendAPIKey takes priority over SMTP credentials.
 type EmailConfig struct {
+	ResendAPIKey string
+	ResendFrom   string
+
 	Host     string
 	Port     string
 	User     string
@@ -94,11 +98,13 @@ func Load() (*AppConfig, error) {
 		},
 		AppURL: getEnv("APP_URL", "http://localhost:3000"),
 		Email: EmailConfig{
-			Host:     getEnv("SMTP_HOST", "smtp.gmail.com"),
-			Port:     getEnv("SMTP_PORT", "465"),
-			User:     os.Getenv("SMTP_USER"),
-			Password: os.Getenv("SMTP_PASSWORD"),
-			From:     os.Getenv("SMTP_FROM"),
+			ResendAPIKey: os.Getenv("RESEND_API_KEY"),
+			ResendFrom:   getEnv("RESEND_FROM", os.Getenv("SMTP_FROM")),
+			Host:         getEnv("SMTP_HOST", "smtp.gmail.com"),
+			Port:         getEnv("SMTP_PORT", "465"),
+			User:         os.Getenv("SMTP_USER"),
+			Password:     os.Getenv("SMTP_PASSWORD"),
+			From:         os.Getenv("SMTP_FROM"),
 		},
 	}
 

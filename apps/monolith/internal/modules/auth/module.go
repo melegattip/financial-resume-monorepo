@@ -38,11 +38,13 @@ func New(db *gorm.DB, logger zerolog.Logger, cfg *config.AppConfig, eventBus por
 	pwSvc := services.NewPasswordService(cfg.Security.PasswordMinLength)
 	twoFASvc := services.NewTwoFAService(cfg.JWT.Issuer)
 	emailSvc := sharedemail.NewService(sharedemail.SMTPConfig{
-		Host:     cfg.Email.Host,
-		Port:     cfg.Email.Port,
-		User:     cfg.Email.User,
-		Password: cfg.Email.Password,
-		From:     cfg.Email.From,
+		ResendAPIKey: cfg.Email.ResendAPIKey,
+		ResendFrom:   cfg.Email.ResendFrom,
+		Host:         cfg.Email.Host,
+		Port:         cfg.Email.Port,
+		User:         cfg.Email.User,
+		Password:     cfg.Email.Password,
+		From:         cfg.Email.From,
 	}, logger)
 
 	authSvc := services.NewAuthService(
@@ -81,16 +83,17 @@ func (m *Module) AuthMiddleware() *middleware.AuthMiddleware {
 // RegisterRoutes adds auth endpoints to the router group.
 // The router group should be the /api/v1 group.
 func (m *Module) RegisterRoutes(router *gin.RouterGroup) {
-	if err := m.db.AutoMigrate(
+	// Migrate each model independently so a constraint warning on one table
+	// does not prevent the remaining tables from receiving new columns.
+	for _, model := range []any{
 		&domain.User{},
 		&domain.Preferences{},
 		&domain.NotificationSettings{},
 		&domain.TwoFA{},
-	); err != nil {
-		// Non-fatal: AutoMigrate may fail to reconcile constraint names on existing tables
-		// (e.g. "uni_users_email" vs the name used by a previous migration).
-		// The schema is correct as long as the tables and columns exist.
-		m.logger.Warn().Err(err).Msg("auto-migrate warning (schema may already be up to date)")
+	} {
+		if err := m.db.AutoMigrate(model); err != nil {
+			m.logger.Warn().Err(err).Msg("auto-migrate warning (schema may already be up to date)")
+		}
 	}
 
 	// --- Public auth routes: /api/v1/auth/* ---

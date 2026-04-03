@@ -1,9 +1,13 @@
 package email
 
 import (
+	"bytes"
 	"crypto/tls"
+	"encoding/json"
 	"fmt"
+	"io"
 	"net"
+	"net/http"
 	"net/smtp"
 	"strings"
 	"time"
@@ -17,8 +21,14 @@ type EmailService interface {
 	SendEmailVerification(toEmail, firstName, verificationLink string) error
 }
 
-// SMTPConfig holds SMTP connection settings.
+// SMTPConfig holds email configuration.
+// If ResendAPIKey is set, Resend HTTP API is used instead of SMTP.
 type SMTPConfig struct {
+	// Resend (preferred on hosted environments like Render)
+	ResendAPIKey string
+	ResendFrom   string
+
+	// SMTP fallback
 	Host     string
 	Port     string
 	User     string
@@ -26,32 +36,106 @@ type SMTPConfig struct {
 	From     string
 }
 
-// SMTPEmailService sends emails via SMTP (Gmail / Google Workspace).
+// NewService returns the best available email service:
+//  1. ResendEmailService  — if RESEND_API_KEY is configured
+//  2. SMTPEmailService    — if SMTP credentials are configured
+//  3. NoOpEmailService    — logs links to stdout (local dev)
+func NewService(cfg SMTPConfig, logger zerolog.Logger) EmailService {
+	if cfg.ResendAPIKey != "" {
+		logger.Info().Msg("email: using Resend HTTP API")
+		return &ResendEmailService{cfg: cfg, logger: logger, client: &http.Client{Timeout: 10 * time.Second}}
+	}
+	if cfg.User != "" && cfg.Password != "" {
+		logger.Info().Msg("email: using SMTP")
+		return &SMTPEmailService{cfg: cfg, logger: logger}
+	}
+	logger.Warn().Msg("email: no credentials configured — using no-op service (links logged to stdout)")
+	return &NoOpEmailService{logger: logger}
+}
+
+// ---------------------------------------------------------------------------
+// Resend
+// ---------------------------------------------------------------------------
+
+// ResendEmailService sends emails via the Resend HTTP API (port 443).
+type ResendEmailService struct {
+	cfg    SMTPConfig
+	logger zerolog.Logger
+	client *http.Client
+}
+
+type resendPayload struct {
+	From    string   `json:"from"`
+	To      []string `json:"to"`
+	Subject string   `json:"subject"`
+	HTML    string   `json:"html"`
+}
+
+func (s *ResendEmailService) send(toEmail, subject, html string) error {
+	from := s.cfg.ResendFrom
+	if from == "" {
+		from = s.cfg.From
+	}
+
+	body, err := json.Marshal(resendPayload{
+		From:    from,
+		To:      []string{toEmail},
+		Subject: subject,
+		HTML:    html,
+	})
+	if err != nil {
+		return fmt.Errorf("resend marshal: %w", err)
+	}
+
+	req, err := http.NewRequest(http.MethodPost, "https://api.resend.com/emails", bytes.NewReader(body))
+	if err != nil {
+		return fmt.Errorf("resend request: %w", err)
+	}
+	req.Header.Set("Authorization", "Bearer "+s.cfg.ResendAPIKey)
+	req.Header.Set("Content-Type", "application/json")
+
+	resp, err := s.client.Do(req)
+	if err != nil {
+		return fmt.Errorf("resend http: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode >= 300 {
+		respBody, _ := io.ReadAll(io.LimitReader(resp.Body, 512))
+		return fmt.Errorf("resend api error %d: %s", resp.StatusCode, string(respBody))
+	}
+	return nil
+}
+
+func (s *ResendEmailService) SendPasswordReset(toEmail, resetLink string) error {
+	if err := s.send(toEmail, "Restablecer contraseña — Niloft", buildResetEmailHTML(resetLink)); err != nil {
+		return err
+	}
+	s.logger.Info().Str("to", toEmail).Msg("password reset email sent")
+	return nil
+}
+
+func (s *ResendEmailService) SendEmailVerification(toEmail, firstName, verificationLink string) error {
+	if err := s.send(toEmail, "Verificá tu cuenta — Niloft", buildVerificationEmailHTML(firstName, verificationLink)); err != nil {
+		return err
+	}
+	s.logger.Info().Str("to", toEmail).Msg("verification email sent")
+	return nil
+}
+
+// ---------------------------------------------------------------------------
+// SMTP
+// ---------------------------------------------------------------------------
+
+// SMTPEmailService sends emails via SMTP.
+// Port 465 uses implicit TLS (SMTPS); any other port uses STARTTLS.
 type SMTPEmailService struct {
 	cfg    SMTPConfig
 	logger zerolog.Logger
 }
 
-// NoOpEmailService logs reset links but does not send real emails.
-// Used when SMTP is not configured (e.g. local dev without credentials).
-type NoOpEmailService struct {
-	logger zerolog.Logger
-}
-
-// NewService returns an SMTPEmailService if SMTP credentials are configured,
-// or a NoOpEmailService otherwise.
-func NewService(cfg SMTPConfig, logger zerolog.Logger) EmailService {
-	if cfg.User == "" || cfg.Password == "" {
-		logger.Warn().Msg("SMTP credentials not configured — using no-op email service (reset links will be logged)")
-		return &NoOpEmailService{logger: logger}
-	}
-	return &SMTPEmailService{cfg: cfg, logger: logger}
-}
-
 const smtpDialTimeout = 15 * time.Second
 
-// send dials SMTP and delivers a pre-built MIME message.
-// Port 465 uses implicit TLS (SMTPS); any other port uses STARTTLS.
 func (s *SMTPEmailService) send(toEmail, msg string) error {
 	addr := s.cfg.Host + ":" + s.cfg.Port
 	auth := smtp.PlainAuth("", s.cfg.User, s.cfg.Password, s.cfg.Host)
@@ -59,11 +143,7 @@ func (s *SMTPEmailService) send(toEmail, msg string) error {
 
 	var conn *smtp.Client
 	if s.cfg.Port == "465" {
-		// Implicit TLS (SMTPS) — TLS from the very first byte.
-		tlsConn, err := tls.DialWithDialer(
-			&net.Dialer{Timeout: smtpDialTimeout},
-			"tcp", addr, tlsCfg,
-		)
+		tlsConn, err := tls.DialWithDialer(&net.Dialer{Timeout: smtpDialTimeout}, "tcp", addr, tlsCfg)
 		if err != nil {
 			return fmt.Errorf("smtp dial (tls): %w", err)
 		}
@@ -74,7 +154,6 @@ func (s *SMTPEmailService) send(toEmail, msg string) error {
 		}
 		conn = c
 	} else {
-		// STARTTLS (port 587 or other).
 		netConn, err := net.DialTimeout("tcp", addr, smtpDialTimeout)
 		if err != nil {
 			return fmt.Errorf("smtp dial: %w", err)
@@ -112,7 +191,6 @@ func (s *SMTPEmailService) send(toEmail, msg string) error {
 	return nil
 }
 
-// SendPasswordReset sends a password-reset email.
 func (s *SMTPEmailService) SendPasswordReset(toEmail, resetLink string) error {
 	msg := buildMIMEMessage(s.cfg.From, toEmail, "Restablecer contraseña — Niloft", buildResetEmailHTML(resetLink))
 	if err := s.send(toEmail, msg); err != nil {
@@ -122,7 +200,6 @@ func (s *SMTPEmailService) SendPasswordReset(toEmail, resetLink string) error {
 	return nil
 }
 
-// SendEmailVerification sends an account verification email.
 func (s *SMTPEmailService) SendEmailVerification(toEmail, firstName, verificationLink string) error {
 	msg := buildMIMEMessage(s.cfg.From, toEmail, "Verificá tu cuenta — Niloft", buildVerificationEmailHTML(firstName, verificationLink))
 	if err := s.send(toEmail, msg); err != nil {
@@ -132,24 +209,30 @@ func (s *SMTPEmailService) SendEmailVerification(toEmail, firstName, verificatio
 	return nil
 }
 
-// SendPasswordReset logs the reset link (no-op mode).
+// ---------------------------------------------------------------------------
+// NoOp
+// ---------------------------------------------------------------------------
+
+// NoOpEmailService logs links instead of sending real emails (local dev).
+type NoOpEmailService struct {
+	logger zerolog.Logger
+}
+
 func (s *NoOpEmailService) SendPasswordReset(toEmail, resetLink string) error {
-	s.logger.Info().
-		Str("to", toEmail).
-		Str("reset_link", resetLink).
-		Msg("[NO-OP EMAIL] password reset link — configure SMTP to send real emails")
+	s.logger.Info().Str("to", toEmail).Str("reset_link", resetLink).
+		Msg("[NO-OP EMAIL] password reset link — configure RESEND_API_KEY to send real emails")
 	return nil
 }
 
-// SendEmailVerification logs the verification link (no-op mode).
 func (s *NoOpEmailService) SendEmailVerification(toEmail, firstName, verificationLink string) error {
-	s.logger.Info().
-		Str("to", toEmail).
-		Str("first_name", firstName).
-		Str("verification_link", verificationLink).
-		Msg("[NO-OP EMAIL] verification link — configure SMTP to send real emails")
+	s.logger.Info().Str("to", toEmail).Str("first_name", firstName).Str("verification_link", verificationLink).
+		Msg("[NO-OP EMAIL] verification link — configure RESEND_API_KEY to send real emails")
 	return nil
 }
+
+// ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
 
 func buildMIMEMessage(from, to, subject, htmlBody string) string {
 	var sb strings.Builder
