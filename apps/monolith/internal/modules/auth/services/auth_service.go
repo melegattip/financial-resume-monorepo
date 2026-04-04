@@ -1146,6 +1146,46 @@ func (s *AuthService) VerifyEmail(ctx context.Context, token string) error {
 	return nil
 }
 
+// ResendVerificationEmail generates a fresh verification token for an unverified
+// account and sends a new email. Always returns nil to prevent email enumeration.
+func (s *AuthService) ResendVerificationEmail(ctx context.Context, email string) error {
+	user, err := s.userRepo.FindByEmail(ctx, email)
+	if err != nil || user == nil {
+		return nil // silently ignore unknown emails
+	}
+
+	if user.IsVerified {
+		return nil // nothing to do
+	}
+
+	verificationToken, err := s.jwtService.GenerateEmailVerificationToken(user.ID, user.Email)
+	if err != nil {
+		return fmt.Errorf("failed to generate verification token: %w", err)
+	}
+
+	expires := time.Now().UTC().Add(24 * time.Hour)
+	user.EmailVerificationToken = verificationToken
+	user.EmailVerificationExpires = &expires
+
+	if err := s.userRepo.Update(ctx, user); err != nil {
+		return fmt.Errorf("failed to save verification token: %w", err)
+	}
+
+	verificationLink := s.appURL + "/verify-email?token=" + verificationToken
+	go func(toEmail, firstName, link, userID string) {
+		if err := s.emailService.SendEmailVerification(toEmail, firstName, link); err != nil {
+			s.logger.Error().
+				Str("component", "auth").
+				Str("user_id", userID).
+				Err(err).
+				Msg("failed to resend verification email")
+		}
+	}(user.Email, user.FirstName, verificationLink, user.ID)
+
+	s.logger.Info().Str("component", "auth").Str("user_id", user.ID).Msg("verification email resent")
+	return nil
+}
+
 // ---------------------------------------------------------------------------
 // US6: Account Data Management
 // ---------------------------------------------------------------------------

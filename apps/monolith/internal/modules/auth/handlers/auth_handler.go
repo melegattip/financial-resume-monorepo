@@ -152,18 +152,33 @@ func (h *AuthHandler) VerifyEmail(c *gin.Context) {
 	if err := h.authService.VerifyEmail(c.Request.Context(), token); err != nil {
 		h.logger.Error().Err(err).Msg("email verification failed")
 
-		switch {
-		case strings.Contains(err.Error(), "expired"):
+		if strings.Contains(err.Error(), "token is expired") {
 			c.JSON(http.StatusGone, gin.H{"error": "Verification token has expired"})
-		case strings.Contains(err.Error(), "invalid"):
+		} else {
 			c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid verification token"})
-		default:
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Internal server error"})
 		}
 		return
 	}
 
 	c.JSON(http.StatusOK, gin.H{"message": "Email verified successfully"})
+}
+
+// ResendVerification sends a new email verification link for an unverified account.
+// Always returns 200 to prevent email enumeration.
+func (h *AuthHandler) ResendVerification(c *gin.Context) {
+	var req struct {
+		Email string `json:"email" binding:"required"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "email is required"})
+		return
+	}
+
+	if err := h.authService.ResendVerificationEmail(c.Request.Context(), req.Email); err != nil {
+		h.logger.Error().Err(err).Str("email", req.Email).Msg("resend verification failed")
+	}
+
+	c.JSON(http.StatusOK, gin.H{"message": "If that email is registered and unverified, a new verification link has been sent"})
 }
 
 // getUserID extracts the user_id (string) from the gin context (set by auth middleware).

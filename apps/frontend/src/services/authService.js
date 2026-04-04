@@ -398,6 +398,22 @@ class AuthService {
   }
 
   /**
+   * Solicita el reenvío del email de verificación para una cuenta no verificada.
+   * @param {string} email - Email de la cuenta
+   */
+  async resendVerification(email) {
+    try {
+      await authAPI.post('/auth/resend-verification', { email });
+      toast.success('Email de verificación reenviado. Revisá tu bandeja de entrada.');
+      return { success: true };
+    } catch (error) {
+      const message = error.response?.data?.error || 'Error al reenviar el email';
+      toast.error(message);
+      throw new Error(message);
+    }
+  }
+
+  /**
    * Elimina la cuenta del usuario autenticado.
    * El backend limpia automáticamente tenants (transfiere ownership o los elimina).
    * @param {string} password - Contraseña actual del usuario para confirmar

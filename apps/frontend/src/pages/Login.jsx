@@ -6,6 +6,7 @@ import { validateEmail, sanitizeText } from '../utils/validation';
 import Logo from '../components/Logo';
 import TwoFAModal from '../components/TwoFAModal';
 import environments from '../config/environments';
+import authService from '../services/authService';
 
 
 const Login = () => {
@@ -23,6 +24,8 @@ const Login = () => {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [show2FAModal, setShow2FAModal] = useState(false);
   const [twoFACredentials, setTwoFACredentials] = useState(null);
+  const [showResend, setShowResend] = useState(false);
+  const [isResending, setIsResending] = useState(false);
 
   // Redireccionar si ya está autenticado
   useEffect(() => {
@@ -131,11 +134,13 @@ const Login = () => {
     } catch (error) {
       console.error('Error en login:', error);
       const msg = error.message || '';
-      setErrors({
-        general: msg.includes('EMAIL_NOT_VERIFIED')
-          ? 'Debés verificar tu correo antes de iniciar sesión. Revisá tu bandeja de entrada.'
-          : (msg || 'Error al iniciar sesión')
-      });
+      if (msg.includes('EMAIL_NOT_VERIFIED')) {
+        setErrors({ general: 'Tu correo no ha sido verificado. Revisá tu bandeja de entrada o solicitá un nuevo enlace.' });
+        setShowResend(true);
+      } else {
+        setErrors({ general: msg || 'Error al iniciar sesión' });
+        setShowResend(false);
+      }
       // NO limpiar el formulario aquí
     } finally {
       setIsSubmitting(false);
@@ -225,8 +230,28 @@ const Login = () => {
 
             {/* Error general */}
             {errors.general && (
-              <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-fr">
-                <p className="text-red-600 text-sm">{errors.general}</p>
+              <div className="mb-6 p-4 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-fr">
+                <p className="text-red-600 dark:text-red-400 text-sm">{errors.general}</p>
+                {showResend && (
+                  <button
+                    type="button"
+                    onClick={async () => {
+                      setIsResending(true);
+                      try {
+                        await authService.resendVerification(formData.email.trim().toLowerCase());
+                      } catch (_) {
+                        // toast already shown by authService
+                      } finally {
+                        setIsResending(false);
+                      }
+                    }}
+                    disabled={isResending}
+                    className="mt-3 text-sm font-medium text-fr-primary hover:underline disabled:opacity-50 flex items-center gap-1"
+                  >
+                    {isResending ? <FaSpinner className="animate-spin" /> : null}
+                    Reenviar email de verificación
+                  </button>
+                )}
               </div>
             )}
 

@@ -128,6 +128,7 @@ func (m *Module) RegisterRoutes(router *gin.RouterGroup) {
 		auth.POST("/check-2fa", m.authHandler.Check2FA)
 		auth.POST("/refresh", m.securityHandler.Refresh)
 		auth.GET("/verify-email/:token", m.authHandler.VerifyEmail)
+		auth.POST("/resend-verification", m.authHandler.ResendVerification)
 		auth.POST("/request-password-reset", m.securityHandler.RequestPasswordReset)
 		auth.POST("/reset-password", m.securityHandler.ResetPassword)
 	}
