@@ -3,7 +3,6 @@ import { savingsGoalsAPI, formatCurrency, formatPercentage } from '../services/a
 import { usePeriod } from '../contexts/PeriodContext';
 import { formatAmount } from '../utils/formatters';
 import toast from '../utils/notifications';
-import TrialBanner from '../components/TrialBanner';
 import ConfirmationModal from '../components/ConfirmationModal';
 
 const SavingsGoals = () => {
@@ -714,8 +713,6 @@ const SavingsGoals = () => {
   return (
     <>
       <div className="min-h-[calc(100vh-4rem)] bg-gray-50 dark:bg-gray-900 px-4 sm:px-6 lg:px-8 pt-4">
-        <TrialBanner featureKey="SAVINGS_GOALS" />
-        
         {/* Contenedor principal usando todo el ancho */}
         <div className="w-full">
           {/* Título de la sección */}
