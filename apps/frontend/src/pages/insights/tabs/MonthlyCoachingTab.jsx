@@ -1,10 +1,11 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { format, subMonths, startOfMonth, endOfMonth } from 'date-fns';
+import { format, subMonths, addMonths, startOfMonth, endOfMonth } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { useNavigate } from 'react-router-dom';
 import { FaSpinner, FaRedo, FaArrowRight } from 'react-icons/fa';
 import { aiAPI, analyticsAPI, budgetsAPI, savingsGoalsAPI } from '../../../services/api';
 import { getGamificationAPI } from '../../../services/gamificationAPI';
+import { usePeriod } from '../../../contexts/PeriodContext';
 
 const sentimentConfig = {
   positivo:   { label: 'Mes Positivo',   bg: 'bg-green-50 dark:bg-green-900/20 border-green-200 dark:border-green-700', badge: 'bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-300', emoji: '✨' },
@@ -14,20 +15,24 @@ const sentimentConfig = {
 
 const MonthlyCoachingTab = () => {
   const navigate = useNavigate();
+  const { selectedMonth } = usePeriod();
   const [report, setReport] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
 
-  const previousMonth = format(subMonths(new Date(), 1), 'yyyy-MM');
-  const previousMonthLabel = format(subMonths(new Date(), 1), 'MMMM yyyy', { locale: es }).replace(/^\w/, c => c.toUpperCase());
-  const currentMonthLabel = format(new Date(), 'MMMM yyyy', { locale: es }).replace(/^\w/, c => c.toUpperCase());
+  // Use the period selected in the picker; fall back to previous complete month.
+  const analyzedMonthStr = selectedMonth || format(subMonths(new Date(), 1), 'yyyy-MM');
+  const [ymYear, ymMonth] = analyzedMonthStr.split('-');
+  const analyzedDate = new Date(parseInt(ymYear), parseInt(ymMonth) - 1, 1);
+  const analyzedMonthLabel = format(analyzedDate, 'MMMM yyyy', { locale: es }).replace(/^\w/, c => c.toUpperCase());
+  const nextMonthLabel = format(addMonths(analyzedDate, 1), 'MMMM yyyy', { locale: es }).replace(/^\w/, c => c.toUpperCase());
 
   const loadReport = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
-      const lastMonthStart = startOfMonth(subMonths(new Date(), 1));
-      const lastMonthEnd = endOfMonth(subMonths(new Date(), 1));
+      const lastMonthStart = startOfMonth(analyzedDate);
+      const lastMonthEnd = endOfMonth(analyzedDate);
       const periodParam = { from: lastMonthStart.toISOString(), to: lastMonthEnd.toISOString() };
 
       const gamAPI = getGamificationAPI();
@@ -107,10 +112,10 @@ const MonthlyCoachingTab = () => {
         };
       }
 
-      financialData.period = previousMonth;
+      financialData.period = analyzedMonthStr;
       financialData.financial_score = 0;
 
-      const res = await aiAPI.getMonthlyCoaching(financialData, previousMonth);
+      const res = await aiAPI.getMonthlyCoaching(financialData, analyzedMonthStr);
       setReport(res.report);
 
       // Record gamification action
@@ -125,7 +130,7 @@ const MonthlyCoachingTab = () => {
     } finally {
       setLoading(false);
     }
-  }, [previousMonth]);
+  }, [analyzedMonthStr]);
 
   useEffect(() => {
     loadReport();
@@ -135,7 +140,7 @@ const MonthlyCoachingTab = () => {
     return (
       <div className="flex flex-col items-center justify-center py-16 space-y-4">
         <FaSpinner className="w-10 h-10 animate-spin text-blue-500 dark:text-blue-400" />
-        <p className="text-gray-600 dark:text-gray-400">Analizando tu mes de {previousMonthLabel}...</p>
+        <p className="text-gray-600 dark:text-gray-400">Analizando tu mes de {analyzedMonthLabel}...</p>
       </div>
     );
   }
@@ -167,7 +172,7 @@ const MonthlyCoachingTab = () => {
           <span className={`inline-flex items-center px-3 py-1 rounded-full text-sm font-medium ${sentiment.badge}`}>
             {sentiment.emoji} {sentiment.label}
           </span>
-          <span className="text-xs text-gray-500 dark:text-gray-400">{previousMonthLabel}</span>
+          <span className="text-xs text-gray-500 dark:text-gray-400">{analyzedMonthLabel}</span>
         </div>
         <p className="text-gray-700 dark:text-gray-300 leading-relaxed">{report.summary}</p>
       </div>
@@ -213,7 +218,7 @@ const MonthlyCoachingTab = () => {
       {report.actions && report.actions.length > 0 && (
         <div className="bg-white dark:bg-gray-800 rounded-2xl border border-gray-100 dark:border-gray-700 p-5">
           <h3 className="text-sm font-semibold text-indigo-700 dark:text-indigo-400 mb-3 flex items-center uppercase tracking-wide">
-            <span className="mr-2">🎯</span> Tu plan para {currentMonthLabel}
+            <span className="mr-2">🎯</span> Tu plan para {nextMonthLabel}
           </h3>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
             {report.actions.map((action, i) => (
@@ -246,7 +251,7 @@ const MonthlyCoachingTab = () => {
       )}
 
       <p className="text-xs text-gray-400 dark:text-gray-500 text-center">
-        Reporte generado con tus datos reales de {previousMonthLabel} · Actualización mensual
+        Reporte generado con tus datos reales de {analyzedMonthLabel} · Actualización mensual
       </p>
     </div>
   );
