@@ -21,7 +21,7 @@ const FEATURE_GATES = {
     requiredLevel: 3,
     icon: '🎯',
     benefits: ['Objetivos personalizados', 'Seguimiento de progreso', 'Auto-ahorro'],
-    xpThreshold: 200  // ACTUALIZADO: Más fácil de alcanzar
+    xpThreshold: 100  // Level 3 threshold in 0–1000 scale
   },
   BUDGETS: {
     name: 'Presupuestos',
@@ -29,7 +29,7 @@ const FEATURE_GATES = {
     requiredLevel: 5,
     icon: '📊',
     benefits: ['Límites por categoría', 'Alertas automáticas', 'Control de gastos'],
-    xpThreshold: 700  // ACTUALIZADO: Más fácil de alcanzar
+    xpThreshold: 275  // Level 5 threshold in 0–1000 scale
   },
   AI_INSIGHTS: {
     name: 'IA Financiera',
@@ -37,22 +37,22 @@ const FEATURE_GATES = {
     requiredLevel: 7,
     icon: '🧠',
     benefits: ['Análisis de compras', 'Score crediticio', 'Insights personalizados'],
-    xpThreshold: 1800  // ACTUALIZADO: Más fácil de alcanzar
+    xpThreshold: 550  // Level 7 threshold in 0–1000 scale
   }
 };
 
-// 🏆 NIVELES DEL SISTEMA - REBALANCEADOS PARA PROGRESIÓN SIN DEPENDENCIAS
+// 🏆 NIVELES DEL SISTEMA — escala 0-1000 pts
 const LEVEL_SYSTEM = {
-  1: { name: 'Financial Newbie', minXP: 0, color: '#9CA3AF' },
-  2: { name: 'Money Tracker', minXP: 75, color: '#10B981' },      // REDUCIDO: 100 → 75
-  3: { name: 'Smart Saver', minXP: 200, color: '#3B82F6' },      // REDUCIDO: 300 → 200 🔓 METAS
-  4: { name: 'Budget Master', minXP: 400, color: '#8B5CF6' },    // REDUCIDO: 600 → 400
-  5: { name: 'Financial Planner', minXP: 700, color: '#F59E0B' }, // REDUCIDO: 1000 → 700 🔓 PRESUPUESTOS
-  6: { name: 'Investment Seeker', minXP: 1200, color: '#EF4444' }, // REDUCIDO: 1500 → 1200
-  7: { name: 'Wealth Builder', minXP: 1800, color: '#EC4899' },   // REDUCIDO: 2200 → 1800 🔓 IA
-  8: { name: 'Financial Strategist', minXP: 2600, color: '#06B6D4' },
-  9: { name: 'Money Mentor', minXP: 3600, color: '#84CC16' },
-  10: { name: 'Financial Magnate', minXP: 5000, color: '#F97316' }
+  1:  { name: 'Financial Newbie',      minXP: 0,    color: '#9CA3AF' },
+  2:  { name: 'Money Tracker',         minXP: 50,   color: '#10B981' },
+  3:  { name: 'Smart Saver',           minXP: 100,  color: '#3B82F6' },  // 🔓 METAS
+  4:  { name: 'Budget Master',         minXP: 175,  color: '#8B5CF6' },
+  5:  { name: 'Financial Planner',     minXP: 275,  color: '#F59E0B' },  // 🔓 PRESUPUESTOS
+  6:  { name: 'Investment Seeker',     minXP: 400,  color: '#EF4444' },
+  7:  { name: 'Wealth Builder',        minXP: 550,  color: '#EC4899' },  // 🔓 IA
+  8:  { name: 'Financial Strategist',  minXP: 700,  color: '#06B6D4' },
+  9:  { name: 'Money Mentor',          minXP: 850,  color: '#84CC16' },
+  10: { name: 'Financial Magnate',     minXP: 1000, color: '#F97316' }
 };
 
 const GamificationContext = createContext();
@@ -219,9 +219,7 @@ export const GamificationProvider = ({ children }) => {
         });
 
       if (result.xp_earned > 0 && actionType !== 'view_insight') {
-
-        // Mostrar notificación de XP ganado
-        showXPGained(result.xp_earned, `¡Has ganado ${result.xp_earned} XP!`);
+        showXPGained(result.xp_earned, `¡Has ganado ${result.xp_earned} pts!`);
       }
 
       // Mostrar notificación de subida de nivel
@@ -419,11 +417,12 @@ export const GamificationProvider = ({ children }) => {
     const userLevel = userProfile?.current_level || 0;
     const unlocked = userLevel >= (feature?.requiredLevel || 0);
     
+    const userScore = Math.min(userProfile?.total_xp || 0, 1000);
     return {
       unlocked,
       requiredLevel: feature?.requiredLevel || 0,
       userLevel,
-      xpNeeded: unlocked ? 0 : LEVEL_SYSTEM[feature?.requiredLevel]?.minXP - (userProfile?.total_xp || 0),
+      xpNeeded: unlocked ? 0 : (LEVEL_SYSTEM[feature?.requiredLevel]?.minXP || 0) - userScore,
       featureName: feature?.name || featureKey,
       featureIcon: feature?.icon || '🔒',
       description: feature?.description || 'Feature description',

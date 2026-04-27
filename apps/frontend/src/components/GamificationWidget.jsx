@@ -55,8 +55,7 @@ const GamificationWidget = () => {
     );
   }
 
-  // Usar valores locales que se actualizan con useEffect para mejor reactividad
-  const totalXP = localXP;
+  const score = Math.min(localXP, 1000);
   const currentLevel = localLevel;
   const levelInfo = getLevelInfo(currentLevel);
 
@@ -90,7 +89,7 @@ const GamificationWidget = () => {
           </span>
         </div>
         <span className="text-xs text-gray-500 dark:text-gray-400">
-          {totalXP.toLocaleString()} XP
+          {score.toLocaleString()} / 1000 pts
         </span>
       </div>
     </div>

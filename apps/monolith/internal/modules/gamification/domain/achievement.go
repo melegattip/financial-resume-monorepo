@@ -49,21 +49,21 @@ func DefaultAchievements(userID string) []Achievement {
 		target          int
 		points          int
 	}{
-		{"transaction_starter", "🌱 Primer Paso", "Registra tu primera transacción", 1, 25},
-		{"transaction_apprentice", "📝 Aprendiz Financiero", "Registra 10 transacciones", 10, 50},
-		{"transaction_master", "💎 Maestro de Transacciones", "Registra 100 transacciones", 100, 200},
-		{"category_creator", "🎨 Creador de Categorías", "Crea 5 categorías personalizadas", 5, 75},
-		{"organization_expert", "📊 Expert en Organización", "Asigna categorías a 50 transacciones", 50, 100},
-		{"weekly_warrior", "⚡ Guerrero Semanal", "Mantén una racha de 7 días consecutivos", 7, 100},
-		{"monthly_legend", "👑 Leyenda Mensual", "Mantén una racha de 30 días consecutivos", 30, 500},
-		{"data_explorer", "🔍 Explorador de Datos", "Usa la app durante 25 días", 25, 75},
-		{"savings_starter", "🐖 Primer Ahorro", "Realiza tu primer depósito a una meta", 1, 50},
-		{"savings_champion", "🏆 Campeón del Ahorro", "Completa una meta de ahorro", 1, 300},
-		{"planner_pro", "🗓️ Planificador Pro", "Configura 3 transacciones recurrentes", 3, 150},
-		{"budget_beginner", "📋 Primer Presupuesto", "Crea tu primer presupuesto", 1, 50},
-		{"budget_disciplined", "💪 Disciplina Presupuestaria", "Cumple el presupuesto 3 meses seguidos", 3, 200},
-		{"ai_executor", "🤖 Ejecutor de IA", "Aplica 5 recomendaciones de la IA", 5, 100},
-		{"financial_learner", "📚 Educación Financiera", "Leé 3 tarjetas de educación financiera", 3, 50},
+		{"transaction_starter", "🌱 Primer Paso", "Registra tu primera transacción", 1, 5},
+		{"transaction_apprentice", "📝 Aprendiz Financiero", "Registra 10 transacciones", 10, 9},
+		{"transaction_master", "💎 Maestro de Transacciones", "Registra 100 transacciones", 100, 35},
+		{"category_creator", "🎨 Creador de Categorías", "Crea 5 categorías personalizadas", 5, 14},
+		{"organization_expert", "📊 Expert en Organización", "Asigna categorías a 50 transacciones", 50, 18},
+		{"weekly_warrior", "⚡ Guerrero Semanal", "Mantén una racha de 7 días consecutivos", 7, 18},
+		{"monthly_legend", "👑 Leyenda Mensual", "Mantén una racha de 30 días consecutivos", 30, 90},
+		{"data_explorer", "🔍 Explorador de Datos", "Usa la app durante 25 días", 25, 14},
+		{"savings_starter", "🐖 Primer Ahorro", "Realiza tu primer depósito a una meta", 1, 9},
+		{"savings_champion", "🏆 Campeón del Ahorro", "Completa una meta de ahorro", 1, 55},
+		{"planner_pro", "🗓️ Planificador Pro", "Configura 3 transacciones recurrentes", 3, 27},
+		{"budget_beginner", "📋 Primer Presupuesto", "Crea tu primer presupuesto", 1, 9},
+		{"budget_disciplined", "💪 Disciplina Presupuestaria", "Cumple el presupuesto 3 meses seguidos", 3, 35},
+		{"ai_executor", "🤖 Ejecutor de IA", "Aplica 5 recomendaciones de la IA", 5, 18},
+		{"financial_learner", "📚 Educación Financiera", "Leé 3 tarjetas de educación financiera", 3, 9},
 	}
 
 	achievements := make([]Achievement, 0, len(defs))
