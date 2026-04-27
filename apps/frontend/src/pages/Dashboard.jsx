@@ -214,8 +214,8 @@ const Resumen = () => {
       if (savingsRes?.data) {
         setSavingsGoalsSummary(savingsRes.data);
       }
-      if (recurringRes?.data) {
-        setRecurringTransactionsSummary(recurringRes.data);
+      if (recurringRes?.data?.data) {
+        setRecurringTransactionsSummary(recurringRes.data.data);
       }
       if (healthRes) {
         // Extraer health score - el endpoint ya devuelve escala 0-1000

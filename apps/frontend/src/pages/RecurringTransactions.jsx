@@ -30,6 +30,9 @@ const RecurringTransactions = () => {
     sort_by: 'next_execution_date',
     sort_order: 'asc'
   });
+  const [selectedIds, setSelectedIds] = useState(new Set());
+  const [showBulkDeleteModal, setShowBulkDeleteModal] = useState(false);
+  const [bulkLoading, setBulkLoading] = useState(false);
 
   const getDefaultDate = () => {
     const nextMonth = new Date();
@@ -50,6 +53,7 @@ const RecurringTransactions = () => {
   });
 
   useEffect(() => {
+    setSelectedIds(new Set());
     loadData();
   }, [filters]);
 
@@ -269,6 +273,102 @@ const RecurringTransactions = () => {
     }
   };
 
+  const toggleSelect = (id) => {
+    setSelectedIds(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+
+  const toggleSelectAll = () => {
+    if (selectedIds.size === transactions.length && transactions.length > 0) {
+      setSelectedIds(new Set());
+    } else {
+      setSelectedIds(new Set(transactions.map(t => t.id)));
+    }
+  };
+
+  const handleBulkDelete = async () => {
+    setBulkLoading(true);
+    const ids = Array.from(selectedIds);
+    let success = 0, failed = 0;
+    for (const id of ids) {
+      try {
+        await recurringTransactionsAPI.delete(id);
+        success++;
+      } catch {
+        failed++;
+      }
+    }
+    if (success > 0) toast.success(`${success} transacción${success !== 1 ? 'es' : ''} eliminada${success !== 1 ? 's' : ''}`);
+    if (failed > 0) toast.error(`${failed} transacción${failed !== 1 ? 'es' : ''} fallaron`);
+    setSelectedIds(new Set());
+    setShowBulkDeleteModal(false);
+    setBulkLoading(false);
+    loadData();
+  };
+
+  const handleBulkPause = async () => {
+    setBulkLoading(true);
+    const activeSelected = transactions.filter(t => selectedIds.has(t.id) && t.is_active);
+    let success = 0, failed = 0;
+    for (const t of activeSelected) {
+      try {
+        await recurringTransactionsAPI.pause(t.id);
+        success++;
+      } catch {
+        failed++;
+      }
+    }
+    if (success > 0) toast.success(`${success} transacción${success !== 1 ? 'es' : ''} pausada${success !== 1 ? 's' : ''}`);
+    if (failed > 0) toast.error(`${failed} transacción${failed !== 1 ? 'es' : ''} fallaron`);
+    setSelectedIds(new Set());
+    setBulkLoading(false);
+    loadData();
+  };
+
+  const handleBulkResume = async () => {
+    setBulkLoading(true);
+    const pausedSelected = transactions.filter(t => selectedIds.has(t.id) && !t.is_active);
+    let success = 0, failed = 0;
+    for (const t of pausedSelected) {
+      try {
+        await recurringTransactionsAPI.resume(t.id);
+        success++;
+      } catch {
+        failed++;
+      }
+    }
+    if (success > 0) toast.success(`${success} transacción${success !== 1 ? 'es' : ''} reanudada${success !== 1 ? 's' : ''}`);
+    if (failed > 0) toast.error(`${failed} transacción${failed !== 1 ? 'es' : ''} fallaron`);
+    setSelectedIds(new Set());
+    setBulkLoading(false);
+    loadData();
+  };
+
+  const handleBulkExecute = async () => {
+    setBulkLoading(true);
+    const activeSelected = transactions.filter(t => selectedIds.has(t.id) && t.is_active);
+    let success = 0, failed = 0;
+    for (const t of activeSelected) {
+      try {
+        const body = t.next_date ? { execution_date: new Date(t.next_date).toISOString() } : {};
+        await recurringTransactionsAPI.execute(t.id, body);
+        success++;
+      } catch {
+        failed++;
+      }
+    }
+    if (success > 0) toast.success(`${success} transacción${success !== 1 ? 'es' : ''} ejecutada${success !== 1 ? 's' : ''}`);
+    if (failed > 0) toast.error(`${failed} transacción${failed !== 1 ? 'es' : ''} fallaron`);
+    setSelectedIds(new Set());
+    setBulkLoading(false);
+    await loadData();
+    dataService.invalidateAfterMutation('recurring_transaction');
+  };
+
   // Calculates upcoming occurrences for a recurring transaction starting from next_date
   const getOccurrences = (transaction, maxCount = 12) => {
     const occurrences = [];
@@ -421,6 +521,20 @@ const RecurringTransactions = () => {
   // Configuración de columnas para ResponsiveTable
   const tableColumns = [
     {
+      header: '',
+      accessor: 'id',
+      align: 'center',
+      render: (value, transaction) => (
+        <input
+          type="checkbox"
+          checked={selectedIds.has(transaction.id)}
+          onChange={() => toggleSelect(transaction.id)}
+          onClick={(e) => e.stopPropagation()}
+          className="h-4 w-4 text-blue-600 rounded border-gray-300 dark:border-gray-600 cursor-pointer"
+        />
+      )
+    },
+    {
       header: 'Transacción',
       accessor: 'description',
       render: (value) => (
@@ -570,14 +684,22 @@ const RecurringTransactions = () => {
 
   // Renderizado personalizado para cards móviles
   const renderMobileCard = (transaction, index) => (
-    <div 
+    <div
       key={index}
-      className="card border-l-4 border-fr-primary transition-all duration-200 hover:shadow-lg"
+      className={`card border-l-4 transition-all duration-200 hover:shadow-lg ${selectedIds.has(transaction.id) ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/10' : 'border-fr-primary'}`}
     >
       <div className="space-y-3">
         {/* Header de la card */}
         <div className="flex justify-between items-start">
-          <div className="flex-1 min-w-0">
+          <div className="flex items-start space-x-3 flex-1 min-w-0">
+            <input
+              type="checkbox"
+              checked={selectedIds.has(transaction.id)}
+              onChange={() => toggleSelect(transaction.id)}
+              onClick={(e) => e.stopPropagation()}
+              className="mt-0.5 h-4 w-4 text-blue-600 rounded border-gray-300 dark:border-gray-600 cursor-pointer flex-shrink-0"
+            />
+            <div className="flex-1 min-w-0">
             <h3 className="font-medium text-gray-900 dark:text-gray-100 text-sm">
               {transaction.description}
             </h3>
@@ -592,6 +714,7 @@ const RecurringTransactions = () => {
               }`}>
                 {transaction.is_active ? 'Activa' : 'Pausada'}
               </span>
+            </div>
             </div>
           </div>
           <div className="text-right">
@@ -877,6 +1000,60 @@ const RecurringTransactions = () => {
           </select>
         </div>
       </div>
+
+      {/* Bulk Actions Toolbar */}
+      {selectedIds.size > 0 && (
+        <div className="flex flex-wrap items-center justify-between gap-3 p-3 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg">
+          <div className="flex items-center space-x-3">
+            <span className="text-sm font-medium text-blue-800 dark:text-blue-300">
+              {selectedIds.size} seleccionada{selectedIds.size !== 1 ? 's' : ''}
+            </span>
+            <button
+              onClick={toggleSelectAll}
+              className="text-xs text-blue-600 dark:text-blue-400 underline hover:no-underline"
+            >
+              {selectedIds.size === transactions.length ? 'Deseleccionar todo' : 'Seleccionar todo'}
+            </button>
+          </div>
+          <div className="flex flex-wrap items-center gap-2">
+            <button
+              onClick={handleBulkExecute}
+              disabled={bulkLoading || !transactions.some(t => selectedIds.has(t.id) && t.is_active)}
+              className="px-3 py-1.5 text-xs font-medium text-purple-700 bg-purple-100 dark:text-purple-300 dark:bg-purple-900/30 rounded-lg hover:bg-purple-200 dark:hover:bg-purple-900/50 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+            >
+              ⚡ Ejecutar
+            </button>
+            <button
+              onClick={handleBulkPause}
+              disabled={bulkLoading || !transactions.some(t => selectedIds.has(t.id) && t.is_active)}
+              className="px-3 py-1.5 text-xs font-medium text-yellow-700 bg-yellow-100 dark:text-yellow-300 dark:bg-yellow-900/30 rounded-lg hover:bg-yellow-200 dark:hover:bg-yellow-900/50 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+            >
+              ⏸️ Pausar
+            </button>
+            <button
+              onClick={handleBulkResume}
+              disabled={bulkLoading || !transactions.some(t => selectedIds.has(t.id) && !t.is_active)}
+              className="px-3 py-1.5 text-xs font-medium text-green-700 bg-green-100 dark:text-green-300 dark:bg-green-900/30 rounded-lg hover:bg-green-200 dark:hover:bg-green-900/50 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+            >
+              ▶️ Reanudar
+            </button>
+            <button
+              onClick={() => setShowBulkDeleteModal(true)}
+              disabled={bulkLoading}
+              className="px-3 py-1.5 text-xs font-medium text-red-700 bg-red-100 dark:text-red-300 dark:bg-red-900/30 rounded-lg hover:bg-red-200 dark:hover:bg-red-900/50 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+            >
+              🗑️ Eliminar
+            </button>
+            <button
+              onClick={() => setSelectedIds(new Set())}
+              className="px-2 py-1.5 text-xs text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 transition-colors"
+              title="Cancelar selección"
+            >
+              ✕
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Transactions List */}
       <div className="space-y-4">
@@ -1243,6 +1420,48 @@ const RecurringTransactions = () => {
                 className="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 dark:bg-purple-700 dark:hover:bg-purple-800 transition-colors disabled:opacity-50"
               >
                 Confirmar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Bulk Delete Confirmation Modal */}
+      {showBulkDeleteModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white dark:bg-gray-800 rounded-lg p-6 w-full max-w-md">
+            <div className="flex items-center mb-4">
+              <div className="flex-shrink-0 w-10 h-10 mx-auto bg-red-100 dark:bg-red-900/30 rounded-full flex items-center justify-center">
+                <svg className="w-6 h-6 text-red-600 dark:text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.732-.833-2.5 0L4.268 18.5c-.77.833.192 2.5 1.732 2.5z" />
+                </svg>
+              </div>
+            </div>
+            <div className="text-center">
+              <h3 className="text-lg font-medium text-gray-900 dark:text-gray-100 mb-2">
+                Eliminar {selectedIds.size} transacción{selectedIds.size !== 1 ? 'es' : ''}
+              </h3>
+              <p className="text-sm text-gray-500 dark:text-gray-400 mb-6">
+                ¿Estás seguro de que quieres eliminar las {selectedIds.size} transacciones seleccionadas?
+                Esta acción no se puede deshacer.
+              </p>
+            </div>
+            <div className="flex justify-center space-x-3">
+              <button
+                type="button"
+                onClick={() => setShowBulkDeleteModal(false)}
+                disabled={bulkLoading}
+                className="btn-secondary"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                onClick={handleBulkDelete}
+                disabled={bulkLoading}
+                className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 dark:bg-red-700 dark:hover:bg-red-800 transition-colors disabled:opacity-50"
+              >
+                {bulkLoading ? 'Eliminando...' : 'Eliminar'}
               </button>
             </div>
           </div>
