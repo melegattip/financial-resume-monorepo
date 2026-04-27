@@ -173,7 +173,7 @@ func (s *SavingsGoal) UpdateCalculatedFields() {
 
 	// Days remaining
 	if !s.TargetDate.IsZero() {
-		days := int(s.TargetDate.Sub(time.Now()).Hours() / 24)
+		days := int(time.Until(s.TargetDate).Hours() / 24)
 		if days < 0 {
 			s.DaysRemaining = 0
 		} else {
@@ -300,7 +300,7 @@ func (s *SavingsGoal) GetDaysRemaining() int {
 	if s.TargetDate.IsZero() {
 		return 0
 	}
-	days := int(s.TargetDate.Sub(time.Now()).Hours() / 24)
+	days := int(time.Until(s.TargetDate).Hours() / 24)
 	if days < 0 {
 		return 0
 	}

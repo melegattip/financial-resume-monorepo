@@ -660,19 +660,3 @@ func (r *GormRepository) CleanupUserTenants(ctx context.Context, userID string) 
 
 	return nil
 }
-
-func auditModelToDomain(m *AuditLogModel) domain.AuditLog {
-	return domain.AuditLog{
-		ID:         m.ID,
-		TenantID:   m.TenantID,
-		UserID:     m.UserID,
-		Action:     m.Action,
-		EntityType: m.EntityType,
-		EntityID:   m.EntityID,
-		OldValues:  m.OldValues,
-		NewValues:  m.NewValues,
-		IPAddress:  m.IPAddress,
-		UserAgent:  m.UserAgent,
-		CreatedAt:  m.CreatedAt,
-	}
-}

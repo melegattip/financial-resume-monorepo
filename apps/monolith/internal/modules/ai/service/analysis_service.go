@@ -450,29 +450,72 @@ RESTRICCIONES: wins: 2-3 items | improvements: 2-3 items | actions: exactamente 
 	return &report, nil
 }
 
+// productiveCoachingKeywords lists substrings that identify investment/savings categories.
+// Kept in sync with analytics/handlers.isProductiveCategory.
+var productiveCoachingKeywords = []string{
+	"invers", "ahorro", "seguro", "educac", "retiro", "pension", "fondo",
+	"activo", "propiedad", "inmueble", "capital", "emerg", "patrimonio",
+	"cripto", "bitcoin", "etf", "accion", "bono", "plazo fijo",
+}
+
+func isProductiveCoachingCategory(name string) bool {
+	lower := strings.ToLower(name)
+	for _, kw := range productiveCoachingKeywords {
+		if strings.Contains(lower, kw) {
+			return true
+		}
+	}
+	return false
+}
+
 // buildMonthlyCoachingPrompt builds the user prompt for the monthly coaching report.
 func (s *AnalysisService) buildMonthlyCoachingPrompt(data domain.FinancialAnalysisData, previousMonth string) string {
 	var sb strings.Builder
 
 	sophistication := detectSophistication(data.BehaviorProfile)
 
+	// Split expenses into consumption vs wealth-building so the AI has accurate context.
+	productiveTotal := 0.0
+	for name, amount := range data.ExpensesByCategory {
+		if isProductiveCoachingCategory(name) {
+			productiveTotal += amount
+		}
+	}
+	consumptionTotal := data.TotalExpenses - productiveTotal
+	if consumptionTotal < 0 {
+		consumptionTotal = 0
+	}
+
+	// True consumption savings rate (excludes investments/assets from expenses).
+	netSavingsRate := data.SavingsRate * 100 // fallback from frontend
+	if data.TotalIncome > 0 {
+		netSavings := data.TotalIncome - consumptionTotal
+		netSavingsRate = (netSavings / data.TotalIncome) * 100
+	}
+
 	sb.WriteString(fmt.Sprintf(`Generá el reporte de coaching para el mes %s.
 
 ## FLUJO DE EFECTIVO DEL MES
 - Ingresos totales: $%.2f
 - Egresos totales: $%.2f
-- Superávit/Déficit: $%.2f
-- Tasa de ahorro: %.1f%%
+  - Consumo (gastos corrientes): $%.2f
+  - Construcción patrimonial (inversión/ahorro/activos/seguros): $%.2f
+- Superávit/Déficit bruto: $%.2f
+- Tasa de ahorro neto (ingresos - consumo): %.1f%%
 - Estabilidad de ingresos: %.2f/1.0
 - Score financiero: %d/1000
+
+IMPORTANTE: Los egresos de "Construcción patrimonial" son POSITIVOS — son un win financiero, no un problema. La tasa de ahorro neto ya los excluye.
 
 ## EGRESOS POR CATEGORÍA
 %s`,
 		previousMonth,
 		data.TotalIncome,
 		data.TotalExpenses,
+		consumptionTotal,
+		productiveTotal,
 		data.TotalIncome-data.TotalExpenses,
-		data.SavingsRate*100,
+		netSavingsRate,
 		data.IncomeStability,
 		data.FinancialScore,
 		formatExpensesByCategory(data.ExpensesByCategory),

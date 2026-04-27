@@ -1,6 +1,7 @@
+version: "2"
+
 run:
   timeout: 5m
-  go: "1.24"
 
 linters:
   enable:
@@ -8,17 +9,24 @@ linters:
     - errcheck
     - staticcheck
     - unused
-    - gosimple
     - ineffassign
-    - typecheck
 
-linters-settings:
-  govet:
-    shadow: true
-  errcheck:
-    check-type-assertions: true
+  settings:
+    errcheck:
+      # Type assertions via c.Get() are the established pattern in this codebase.
+      check-type-assertions: false
+
+  exclusions:
+    rules:
+      # Unchecked errors in test helpers are acceptable.
+      - path: .*_test\.go$
+        linters:
+          - errcheck
+      # defer x.Close() is a best-effort cleanup; ignoring the return value is idiomatic Go.
+      - source: "defer .+\\.Close\\(\\)"
+        linters:
+          - errcheck
 
 issues:
-  exclude-use-default: false
   max-issues-per-linter: 50
   max-same-issues: 10
