@@ -305,13 +305,13 @@ func (s *GamificationService) updateStreak(g *domain.UserGamification) {
 
 	daysDiff := int(today.Sub(lastDay).Hours() / 24)
 
-	switch {
-	case daysDiff == 0:
+	switch daysDiff {
+	case 0:
 		// Same day — do not change the streak.
-	case daysDiff == 1:
+	case 1:
 		// Consecutive day — extend the streak.
 		g.CurrentStreak++
-	case daysDiff == 2:
+	case 2:
 		// 1-day grace period: user missed one day but streak is preserved.
 		// We still increment because today counts as the next active day.
 		g.CurrentStreak++

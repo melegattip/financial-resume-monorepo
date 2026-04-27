@@ -459,3 +459,51 @@ func TestGenerateEducationCards_OpenAIError(t *testing.T) {
 	_, err := svc.GenerateEducationCards(context.Background(), domain.FinancialAnalysisData{})
 	assert.Error(t, err)
 }
+
+// ---------------------------------------------------------------------------
+// isProductiveCoachingCategory
+// ---------------------------------------------------------------------------
+
+func TestIsProductiveCoachingCategory_Productive(t *testing.T) {
+	cases := []string{
+		"Inversiones", "Ahorro emergencia", "Seguro de vida",
+		"Educación", "Fondo retiro", "Pension plan",
+		"Activos fijos", "Propiedad", "Inmueble",
+		"Capital de trabajo", "Patrimonio neto",
+		"Cripto", "Bitcoin", "ETF", "Acciones", "Bono",
+		"Plazo fijo",
+	}
+	for _, name := range cases {
+		assert.True(t, isProductiveCoachingCategory(name), "expected productive: %s", name)
+	}
+}
+
+func TestIsProductiveCoachingCategory_NonProductive(t *testing.T) {
+	cases := []string{
+		"Comida", "Transporte", "Entretenimiento", "Ropa", "Salud",
+		"Servicios", "Alquiler", "Restaurantes",
+	}
+	for _, name := range cases {
+		assert.False(t, isProductiveCoachingCategory(name), "expected non-productive: %s", name)
+	}
+}
+
+func TestBuildMonthlyCoachingPrompt_SeparatesProductiveExpenses(t *testing.T) {
+	svc := &AnalysisService{}
+	data := domain.FinancialAnalysisData{
+		TotalIncome:   10000,
+		TotalExpenses: 7000,
+		SavingsRate:   0.30,
+		ExpensesByCategory: map[string]float64{
+			"Comida":      3000,
+			"Inversiones": 4000, // productive — should NOT count as consumption
+		},
+	}
+	prompt := svc.buildMonthlyCoachingPrompt(data, "2026-04")
+
+	// The prompt must call out the productive/consumption split.
+	assert.Contains(t, prompt, "Construcción patrimonial")
+	assert.Contains(t, prompt, "Consumo")
+	// True consumption is 3000, so savings rate from income(10000) - consumption(3000) = 70%.
+	assert.Contains(t, prompt, "70.0%")
+}

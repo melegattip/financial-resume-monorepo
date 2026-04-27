@@ -131,7 +131,7 @@ func (s *SMTPEmailService) send(toEmail, msg string) error {
 		}
 		c, err := smtp.NewClient(tlsConn, s.cfg.Host)
 		if err != nil {
-			tlsConn.Close()
+			_ = tlsConn.Close()
 			return fmt.Errorf("smtp new client: %w", err)
 		}
 		conn = c
@@ -143,11 +143,11 @@ func (s *SMTPEmailService) send(toEmail, msg string) error {
 		}
 		c, err := smtp.NewClient(netConn, s.cfg.Host)
 		if err != nil {
-			netConn.Close()
+			_ = netConn.Close()
 			return fmt.Errorf("smtp new client: %w", err)
 		}
 		if err := c.StartTLS(tlsCfg); err != nil {
-			c.Close()
+			_ = c.Close()
 			return fmt.Errorf("smtp starttls: %w", err)
 		}
 		conn = c
