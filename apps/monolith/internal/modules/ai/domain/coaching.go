@@ -32,4 +32,5 @@ type CoachingAction struct {
 type MonthlyCoachingRequest struct {
 	FinancialData FinancialAnalysisData `json:"financial_data"`
 	PreviousMonth string                `json:"previous_month"` // "YYYY-MM"
+	Force         bool                  `json:"force"`          // bypass cache and regenerate
 }

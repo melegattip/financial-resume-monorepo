@@ -19,6 +19,7 @@ const MonthlyCoachingTab = () => {
   const [report, setReport] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
+  const [isForced, setIsForced] = useState(false);
 
   // Use the period selected in the picker; fall back to previous complete month.
   const analyzedMonthStr = selectedMonth || format(subMonths(new Date(), 1), 'yyyy-MM');
@@ -27,7 +28,7 @@ const MonthlyCoachingTab = () => {
   const analyzedMonthLabel = format(analyzedDate, 'MMMM yyyy', { locale: es }).replace(/^\w/, c => c.toUpperCase());
   const nextMonthLabel = format(addMonths(analyzedDate, 1), 'MMMM yyyy', { locale: es }).replace(/^\w/, c => c.toUpperCase());
 
-  const loadReport = useCallback(async () => {
+  const loadReport = useCallback(async (force = false) => {
     setLoading(true);
     setError(null);
     try {
@@ -114,7 +115,7 @@ const MonthlyCoachingTab = () => {
 
       financialData.period = analyzedMonthStr;
 
-      const res = await aiAPI.getMonthlyCoaching(financialData, analyzedMonthStr);
+      const res = await aiAPI.getMonthlyCoaching(financialData, analyzedMonthStr, force);
       setReport(res.report);
 
       // Record gamification action
@@ -131,7 +132,14 @@ const MonthlyCoachingTab = () => {
     }
   }, [analyzedMonthStr]);
 
+  const handleRegenerate = useCallback(() => {
+    if (!window.confirm(`¿Regenerar el análisis de ${analyzedMonthLabel}?\nEsto consume crédito de IA y reemplaza el reporte actual.`)) return;
+    setIsForced(true);
+    loadReport(true);
+  }, [loadReport, analyzedMonthLabel]);
+
   useEffect(() => {
+    setIsForced(false);
     loadReport();
   }, [loadReport]);
 
@@ -171,7 +179,18 @@ const MonthlyCoachingTab = () => {
           <span className={`inline-flex items-center px-3 py-1 rounded-full text-sm font-medium ${sentiment.badge}`}>
             {sentiment.emoji} {sentiment.label}
           </span>
-          <span className="text-xs text-gray-500 dark:text-gray-400">{analyzedMonthLabel}</span>
+          <div className="flex items-center gap-3">
+            <span className="text-xs text-gray-500 dark:text-gray-400">{analyzedMonthLabel}</span>
+            <button
+              onClick={handleRegenerate}
+              disabled={loading}
+              title="Regenerar reporte (consume crédito IA)"
+              className="inline-flex items-center gap-1 text-xs text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300 transition-colors disabled:opacity-40"
+            >
+              <FaRedo className={`w-3 h-3 ${loading && isForced ? 'animate-spin' : ''}`} />
+              Regenerar
+            </button>
+          </div>
         </div>
         <p className="text-gray-700 dark:text-gray-300 leading-relaxed">{report.summary}</p>
       </div>

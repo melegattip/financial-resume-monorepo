@@ -275,10 +275,11 @@ export const aiAPI = {
     return response.data?.data || response.data;
   },
 
-  getMonthlyCoaching: async (financialData, previousMonth) => {
+  getMonthlyCoaching: async (financialData, previousMonth, force = false) => {
     const response = await api.post('/ai/monthly-coaching', {
       financial_data: financialData,
       previous_month: previousMonth,
+      force,
     });
     return response.data;
   },
