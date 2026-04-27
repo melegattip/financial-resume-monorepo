@@ -81,7 +81,7 @@ const MonthlyCoachingTab = () => {
       }
 
       if (goalsRes.status === 'fulfilled') {
-        const goals = goalsRes.value.data?.data?.goals || [];
+        const goals = goalsRes.value.data?.data || [];
         if (goals.length > 0) {
           financialData.savings_goals = goals.map(g => ({
             name: g.name,
@@ -113,7 +113,6 @@ const MonthlyCoachingTab = () => {
       }
 
       financialData.period = analyzedMonthStr;
-      financialData.financial_score = 0;
 
       const res = await aiAPI.getMonthlyCoaching(financialData, analyzedMonthStr);
       setReport(res.report);

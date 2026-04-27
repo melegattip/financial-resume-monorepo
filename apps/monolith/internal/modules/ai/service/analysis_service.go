@@ -397,6 +397,8 @@ PRINCIPIOS FUNDAMENTALES:
 5. El sentiment refleja el mes real: no suavices ni exageres.
 6. Usá el perfil de comportamiento para personalizar el tono del coaching.
 7. Egresos en inversión, ahorro, activos, seguros y educación son CONSTRUCCIÓN DE PATRIMONIO — son wins.
+8. PRIORIDAD DE DATOS: Las secciones "CUMPLIMIENTO DE PRESUPUESTOS" y "METAS DE AHORRO ACTIVAS" contienen datos REALES directos de la base de datos. Si están presentes, el usuario SÍ tiene presupuestos y/o metas activas, independientemente de los contadores en "PERFIL CONDUCTUAL".
+9. El campo "Balance neto del mes" indica explícitamente SUPERÁVIT o DÉFICIT — nunca invertir esta conclusión. No inventes ni recalcules montos distintos a los provistos.
 
 DEEP-LINKS DISPONIBLES: /dashboard, /expenses, /incomes, /budgets, /savings-goals, /recurring-transactions, /categories, /reports, /insights
 
@@ -493,6 +495,13 @@ func (s *AnalysisService) buildMonthlyCoachingPrompt(data domain.FinancialAnalys
 		netSavingsRate = (netSavings / data.TotalIncome) * 100
 	}
 
+	// Explicit surplus/deficit label avoids AI misinterpretation.
+	netBalance := data.TotalIncome - data.TotalExpenses
+	balanceLabel := fmt.Sprintf("SUPERÁVIT de $%.2f", netBalance)
+	if netBalance < 0 {
+		balanceLabel = fmt.Sprintf("DÉFICIT de $%.2f", -netBalance)
+	}
+
 	sb.WriteString(fmt.Sprintf(`Generá el reporte de coaching para el mes %s.
 
 ## FLUJO DE EFECTIVO DEL MES
@@ -500,10 +509,9 @@ func (s *AnalysisService) buildMonthlyCoachingPrompt(data domain.FinancialAnalys
 - Egresos totales: $%.2f
   - Consumo (gastos corrientes): $%.2f
   - Construcción patrimonial (inversión/ahorro/activos/seguros): $%.2f
-- Superávit/Déficit bruto: $%.2f
+- Balance neto del mes: %s
 - Tasa de ahorro neto (ingresos - consumo): %.1f%%
 - Estabilidad de ingresos: %.2f/1.0
-- Score financiero: %d/1000
 
 IMPORTANTE: Los egresos de "Construcción patrimonial" son POSITIVOS — son un win financiero, no un problema. La tasa de ahorro neto ya los excluye.
 
@@ -514,10 +522,9 @@ IMPORTANTE: Los egresos de "Construcción patrimonial" son POSITIVOS — son un 
 		data.TotalExpenses,
 		consumptionTotal,
 		productiveTotal,
-		data.TotalIncome-data.TotalExpenses,
+		balanceLabel,
 		netSavingsRate,
 		data.IncomeStability,
-		data.FinancialScore,
 		formatExpensesByCategory(data.ExpensesByCategory),
 	))
 

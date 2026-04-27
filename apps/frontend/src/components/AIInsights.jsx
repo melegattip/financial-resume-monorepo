@@ -209,7 +209,7 @@ const AIInsights = () => {
 
       // Active savings goals
       if (goalsResult.status === 'fulfilled') {
-        const goals = goalsResult.value.data?.data?.goals || [];
+        const goals = goalsResult.value.data?.data || [];
         if (goals.length > 0) {
           financialData.savings_goals = goals.map(g => ({
             name: g.name,
