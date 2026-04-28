@@ -27,8 +27,7 @@ jobs:
         uses: golangci/golangci-lint-action@v6
         with:
           version: v2.5.0
-          working-directory: apps/monolith
-          args: --config .golangci.yml
+          args: --config apps/monolith/.golangci.yml ./apps/monolith/...
 
   test:
     name: Test
