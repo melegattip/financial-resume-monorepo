@@ -36,6 +36,7 @@ type RecordActionRequest struct {
 type RecordActionResponse struct {
 	XPEarned     int  `json:"xp_earned"`
 	TotalXP      int  `json:"total_xp"`
+	Score        int  `json:"score"` // display score clamped to 0–1000
 	CurrentLevel int  `json:"current_level"`
 	LevelUp      bool `json:"level_up"`
 }
@@ -209,6 +210,7 @@ func (h *GamificationHandler) RecordAction(c *gin.Context) {
 	c.JSON(http.StatusOK, RecordActionResponse{
 		XPEarned:     result.XPEarned,
 		TotalXP:      result.TotalXP,
+		Score:        result.Score,
 		CurrentLevel: result.CurrentLevel,
 		LevelUp:      result.LevelUp,
 	})

@@ -24,11 +24,10 @@ jobs:
           go-version: '1.24'
 
       - name: golangci-lint
-        uses: golangci/golangci-lint-action@v6
+        uses: golangci/golangci-lint-action@v7
         with:
           version: v2.5.0
-          working-directory: apps/monolith
-          args: --config .golangci.yml
+          args: --config apps/monolith/.golangci.yml ./apps/monolith/...
 
   test:
     name: Test

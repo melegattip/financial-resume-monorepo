@@ -15,6 +15,7 @@ import (
 type GamificationStats struct {
 	UserID                string    `json:"user_id"`
 	TotalXP               int       `json:"total_xp"`
+	Score                 int       `json:"score"` // display score clamped to 0–1000
 	CurrentLevel          int       `json:"current_level"`
 	LevelName             string    `json:"level_name"`
 	XPToNextLevel         int       `json:"xp_to_next_level"`
@@ -30,6 +31,7 @@ type GamificationStats struct {
 type RecordActionResult struct {
 	XPEarned     int
 	TotalXP      int
+	Score        int // display score clamped to 0–1000
 	CurrentLevel int
 	LevelUp      bool
 }
@@ -169,6 +171,7 @@ func (s *GamificationService) RecordAction(ctx context.Context, userID, actionTy
 	return &RecordActionResult{
 		XPEarned:     xp,
 		TotalXP:      g.TotalXP,
+		Score:        g.Score(),
 		CurrentLevel: g.CurrentLevel,
 		LevelUp:      g.CurrentLevel > previousLevel,
 	}, nil
@@ -215,6 +218,7 @@ func (s *GamificationService) GetGamificationStats(ctx context.Context, userID s
 	return &GamificationStats{
 		UserID:                userID,
 		TotalXP:               g.TotalXP,
+		Score:                 g.Score(),
 		CurrentLevel:          g.CurrentLevel,
 		LevelName:             g.GetLevelName(),
 		XPToNextLevel:         g.XPToNextLevel(),

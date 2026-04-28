@@ -2,8 +2,12 @@ package domain
 
 import "time"
 
-// xpThresholds defines the cumulative XP required to reach each level (index = level - 1).
-var xpThresholds = []int{0, 75, 200, 400, 700, 1200, 1800, 2600, 3600, 5500}
+// xpThresholds defines the cumulative points required to reach each level (index = level - 1).
+// The scale runs 0–1000: Level 1 starts at 0, Level 10 (max) is reached at 1000 points.
+var xpThresholds = []int{0, 50, 100, 175, 275, 400, 550, 700, 850, 1000}
+
+// maxScore is the maximum score a user can display (Level 10 cap).
+const maxScore = 1000
 
 // levelNames maps level number (1-based) to its display name.
 var levelNames = []string{
@@ -110,4 +114,14 @@ func (g *UserGamification) GetLevelName() string {
 		idx = len(levelNames) - 1
 	}
 	return levelNames[idx]
+}
+
+// Score returns the display score clamped to the 0–1000 range.
+// Users who accumulated XP before the rescale may have TotalXP > 1000;
+// this method ensures the displayed value never exceeds the max.
+func (g *UserGamification) Score() int {
+	if g.TotalXP > maxScore {
+		return maxScore
+	}
+	return g.TotalXP
 }
