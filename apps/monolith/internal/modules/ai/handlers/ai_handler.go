@@ -333,6 +333,10 @@ func (h *AIHandler) HandleMonthlyCoaching(c *gin.Context) {
 
 	h.monthlyMu.Lock()
 	cached, hit := h.monthlyCache[cacheKey]
+	if hit && req.Force {
+		delete(h.monthlyCache, cacheKey)
+		hit = false
+	}
 	h.monthlyMu.Unlock()
 
 	if hit {
