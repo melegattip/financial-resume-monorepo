@@ -107,6 +107,8 @@ const Resumen = () => {
   const {
     selectedYear,
     selectedMonth,
+    selectedMonths,
+    isMultiMonth,
     hasActiveFilters,
     balancesHidden,
     getFilterParams,
@@ -281,6 +283,14 @@ const Resumen = () => {
     });
   };
 
+  const filterForMonth = (arr, month) => {
+    if (!Array.isArray(arr)) return [];
+    return arr.filter(item => {
+      const d = item.due_date || item.transaction_date || item.received_date || item.created_at;
+      return d && d.slice(0, 7) === month;
+    });
+  };
+
   const formatMonthLabel = (monthString) => {
     // Evitar problemas de zona horaria usando constructor numérico
     const [year, month] = monthString.split('-');
@@ -410,10 +420,10 @@ const Resumen = () => {
   // Recargar datos cuando cambien los filtros
   useEffect(() => {
     if (selectedMonth !== null || selectedYear !== null) {
-      loadDashboardData(false); // false = no recalcular meses disponibles
+      loadDashboardData(false);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedMonth, selectedYear]);
+  }, [selectedMonth, selectedYear, selectedMonths]);
 
   // Función para ordenar transacciones
   const sortTransactions = (transactions, sortType, sortOrder = 'asc') => {
@@ -1064,8 +1074,110 @@ const Resumen = () => {
         )}
       </div>
 
+      {/* Vista multi-mes: scroll horizontal con una tarjeta por mes */}
+      {isMultiMonth && activeTab === 'resumen' && (
+        <div className="overflow-x-auto pb-2">
+          <div className="flex gap-3" style={{ minWidth: 'max-content' }}>
+            {selectedMonths.map(month => {
+              const mExp = filterForMonth(data.allExpenses || [], month);
+              const mInc = filterForMonth(data.allIncomes || [], month);
+              const mTotalExp = mExp.reduce((s, e) => s + e.amount, 0);
+              const mTotalInc = mInc.reduce((s, i) => s + i.amount, 0);
+              const mBalance = mTotalInc - mTotalExp;
+              const mLabel = formatMonthLabel(month);
+              return (
+                <div key={month} className="card flex-shrink-0 w-[420px]">
+                  {/* Encabezado del mes */}
+                  <div className="flex items-center justify-between mb-3 pb-2 border-b border-gray-100 dark:border-gray-700">
+                    <h3 className="font-semibold text-gray-900 dark:text-gray-100 text-sm">{mLabel}</h3>
+                    <div className="flex items-center gap-2 text-xs font-medium">
+                      <span className="text-green-600 dark:text-green-400">+{formatAmount(mTotalInc)}</span>
+                      <span className="text-gray-300 dark:text-gray-600">|</span>
+                      <span className="text-gray-800 dark:text-gray-200">-{formatAmount(mTotalExp)}</span>
+                      <span className={`font-bold ${mBalance >= 0 ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}`}>
+                        = {mBalance >= 0 ? '+' : ''}{formatAmount(mBalance)}
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* Filtros compartidos */}
+                  <div className="flex gap-1 mb-2">
+                    {[['all', 'Todos'], ['unpaid', 'Pendientes'], ['paid', 'Pagados']].map(([val, label]) => (
+                      <button key={val} onClick={() => setFilterExpenseStatus(val)}
+                        className={`px-2 py-0.5 rounded-full text-xs font-medium transition-colors ${filterExpenseStatus === val ? 'bg-gray-800 dark:bg-gray-200 text-white dark:text-gray-900' : 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-600'}`}>
+                        {label}
+                      </button>
+                    ))}
+                  </div>
+
+                  {/* 2 columnas: Gastos | Ingresos */}
+                  <div className="grid grid-cols-2 gap-2 divide-x divide-gray-100 dark:divide-gray-700">
+                    {/* Gastos */}
+                    <div className="pr-2">
+                      <div className="flex items-center justify-between mb-1.5">
+                        <span className="text-xs font-semibold text-gray-700 dark:text-gray-300 flex items-center gap-1">
+                          <FaArrowDown className="w-2.5 h-2.5" /> Gastos ({mExp.length})
+                        </span>
+                        <span className="text-xs font-bold text-gray-900 dark:text-gray-100">-{formatAmount(mTotalExp)}</span>
+                      </div>
+                      <div className="space-y-0.5 max-h-80 overflow-y-auto">
+                        {sortTransactions(mExp, expenseSortBy, expenseSortOrder)
+                          .filter(e => filterExpenseStatus === 'all' ? true : filterExpenseStatus === 'paid' ? e.paid : !e.paid)
+                          .map((expense, idx) => (
+                            <div key={expense.id || idx} className="flex items-center gap-1.5 py-0.5 px-1 rounded hover:bg-gray-50 dark:hover:bg-gray-700/50 group">
+                              <button onClick={(ev) => { ev.stopPropagation(); togglePaid(expense); }}
+                                className={`flex-shrink-0 w-4 h-4 rounded flex items-center justify-center ${expense.paid ? 'bg-green-100 dark:bg-green-900/30 text-green-600' : 'bg-red-100 dark:bg-red-900/30 text-red-500'}`}>
+                                {expense.paid ? <FaCheckCircle className="w-2.5 h-2.5" /> : <FaTimesCircle className="w-2.5 h-2.5" />}
+                              </button>
+                              <span className="flex-1 text-xs text-gray-800 dark:text-gray-200 truncate" title={expense.description}>{expense.description}</span>
+                              <span className="text-xs font-semibold text-gray-900 dark:text-gray-100 whitespace-nowrap">-{formatAmount(expense.amount)}</span>
+                            </div>
+                          ))}
+                        {mExp.length === 0 && <p className="text-xs text-gray-400 text-center py-3">Sin gastos</p>}
+                      </div>
+                      {mExp.length > 0 && (
+                        <div className="mt-2 pt-1.5 border-t border-gray-100 dark:border-gray-700 text-xs font-semibold text-right text-gray-700 dark:text-gray-300">
+                          Total: -{formatAmount(mTotalExp)}
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Ingresos */}
+                    <div className="pl-2">
+                      <div className="flex items-center justify-between mb-1.5">
+                        <span className="text-xs font-semibold text-green-600 dark:text-green-400 flex items-center gap-1">
+                          <FaArrowUp className="w-2.5 h-2.5" /> Ingresos ({mInc.length})
+                        </span>
+                        <span className="text-xs font-bold text-green-600 dark:text-green-400">+{formatAmount(mTotalInc)}</span>
+                      </div>
+                      <div className="space-y-0.5 max-h-80 overflow-y-auto">
+                        {sortTransactions(mInc, incomeSortBy, incomeSortOrder).map((income, idx) => (
+                          <div key={income.id || idx} className="flex items-center gap-1.5 py-0.5 px-1 rounded hover:bg-gray-50 dark:hover:bg-gray-700/50">
+                            <div className="flex-shrink-0 w-4 h-4 rounded bg-green-100 dark:bg-green-900/30 flex items-center justify-center">
+                              <FaArrowUp className="w-2.5 h-2.5 text-green-600 dark:text-green-400" />
+                            </div>
+                            <span className="flex-1 text-xs text-gray-800 dark:text-gray-200 truncate" title={income.description}>{income.description}</span>
+                            <span className="text-xs font-semibold text-green-600 dark:text-green-400 whitespace-nowrap">+{formatAmount(income.amount)}</span>
+                          </div>
+                        ))}
+                        {mInc.length === 0 && <p className="text-xs text-gray-400 text-center py-3">Sin ingresos</p>}
+                      </div>
+                      {mInc.length > 0 && (
+                        <div className="mt-2 pt-1.5 border-t border-gray-100 dark:border-gray-700 text-xs font-semibold text-right text-green-600 dark:text-green-400">
+                          Total: +{formatAmount(mTotalInc)}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
       {/* Transacciones por mes - Dos columnas */}
-      {(data.expenses.length > 0 || data.incomes.length > 0) && (
+      {!isMultiMonth && (data.expenses.length > 0 || data.incomes.length > 0) && (
         <div className={activeTab !== 'resumen' ? 'hidden' : 'card'}>
           <div className="flex items-center justify-between mb-3 sticky top-0 z-10 bg-white/90 dark:bg-gray-800/90 backdrop-blur rounded-t-lg px-3 py-2 -mx-3 border-b border-gray-100 dark:border-gray-700">
             <h3 className="text-base font-semibold text-gray-900 dark:text-gray-100">

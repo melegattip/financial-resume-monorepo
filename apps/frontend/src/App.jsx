@@ -13,7 +13,6 @@ import FinancialInsights from './pages/FinancialInsights';
 import Expenses from './pages/Expenses';
 import Incomes from './pages/Incomes';
 import Categories from './pages/Categories';
-import Reports from './pages/Reports';
 import Settings from './pages/Settings';
 
 // Nuevas páginas de funcionalidades avanzadas
@@ -83,7 +82,6 @@ export function AppContent() {
           <Route path="expenses" element={<Expenses />} />
           <Route path="incomes" element={<Incomes />} />
           <Route path="categories" element={<Categories />} />
-          <Route path="reports" element={<Reports />} />
           <Route 
             path="budgets" 
             element={

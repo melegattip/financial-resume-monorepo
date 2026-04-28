@@ -142,11 +142,23 @@ func (r *ExpenseRepo) FindByTenantID(ctx context.Context, tenantID string, limit
 }
 
 func (r *ExpenseRepo) Update(ctx context.Context, expense *domain.Expense) error {
-	model := FromExpense(expense)
+	// Use map to ensure zero-values (paid=false, amount_paid=0) are persisted.
+	updates := map[string]interface{}{
+		"category_id":      expense.CategoryID,
+		"amount":           expense.Amount,
+		"description":      expense.Description,
+		"transaction_date": expense.TransactionDate,
+		"payment_method":   expense.PaymentMethod,
+		"notes":            expense.Notes,
+		"paid":             expense.Paid,
+		"amount_paid":      expense.AmountPaid,
+		"pending_amount":   expense.PendingAmount,
+		"updated_at":       time.Now().UTC(),
+	}
 	return r.db.WithContext(ctx).
 		Model(&ExpenseModel{}).
 		Where("id = ? AND deleted_at IS NULL", expense.ID).
-		Updates(model).Error
+		Updates(updates).Error
 }
 
 func (r *ExpenseRepo) Delete(ctx context.Context, id string) error {

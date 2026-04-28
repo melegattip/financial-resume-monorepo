@@ -1,6 +1,6 @@
 import React from 'react';
 import { Link, useLocation } from 'react-router-dom';
-import { FaFolderOpen, FaBrain, FaFileAlt, FaCog, FaHome, FaStar, FaChartPie, FaBullseye, FaRedo, FaTrophy, FaChevronLeft, FaChevronRight } from 'react-icons/fa';
+import { FaFolderOpen, FaBrain, FaCog, FaHome, FaStar, FaChartPie, FaBullseye, FaRedo, FaTrophy, FaChevronLeft, FaChevronRight } from 'react-icons/fa';
 import Brand from '../Brand';
 import Logo from '../Logo';
 import FeatureProgressIndicator from '../FeatureProgressIndicator';
@@ -21,8 +21,7 @@ const Sidebar = ({ isDesktopCollapsed = false, onDesktopToggle, isMobileOpen = f
     { path: '/insights', icon: FaBrain, label: 'Asesor IA', hasSparkles: true, feature: 'AI_INSIGHTS' },
     { path: '/budgets', icon: FaChartPie, label: 'Presupuestos', feature: 'BUDGETS' },
     { path: '/savings-goals', icon: FaBullseye, label: 'Objetivos Financieros', feature: 'SAVINGS_GOALS' },
-    { path: '/achievements', icon: FaTrophy, label: 'Logros' },
-    { path: '/reports', icon: FaFileAlt, label: 'Reportes' }
+    { path: '/achievements', icon: FaTrophy, label: 'Logros' }
   ];
 
   // Grupo 3: Configuración
