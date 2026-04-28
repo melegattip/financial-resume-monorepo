@@ -1,9 +1,7 @@
 import React, { createContext, useContext, useState, useCallback, useRef } from 'react';
 
-// Crear el contexto
 const PeriodContext = createContext();
 
-// Hook personalizado para usar el contexto
 export const usePeriod = () => {
   const context = useContext(PeriodContext);
   if (!context) {
@@ -12,21 +10,18 @@ export const usePeriod = () => {
   return context;
 };
 
-// Provider del contexto
 export const PeriodProvider = ({ children }) => {
   const [selectedYear, setSelectedYear] = useState('');
+  // selectedMonth: kept for single-month compat (last toggled month or '')
   const [selectedMonth, setSelectedMonth] = useState('');
+  // selectedMonths: array of 'YYYY-MM' strings for multi-month mode
+  const [selectedMonths, setSelectedMonths] = useState([]);
   const [availableYears, setAvailableYears] = useState([]);
   const [availableMonths, setAvailableMonths] = useState([]);
   const [balancesHidden, setBalancesHidden] = useState(false);
 
-  // Ref para garantizar que la auto-selección inicial ocurra solo una vez,
-  // independientemente de cuántas páginas llamen a updateAvailableData.
   const hasAutoSelected = useRef(false);
 
-  // Función para actualizar los datos disponibles.
-  // Acumula los meses/años por UNION (no reemplaza) para que navegar entre
-  // páginas no achique las opciones del filtro ni resetee la selección activa.
   const updateAvailableData = useCallback((expenses = [], incomes = []) => {
     const newYears = new Set();
     const newMonths = new Set();
@@ -40,18 +35,13 @@ export const PeriodProvider = ({ children }) => {
       }
     };
 
-    // Expenses: use transaction_date (business date), fallback to created_at (audit only)
     expenses.forEach(item => addDate(item.due_date || item.transaction_date || item.created_at));
-
-    // Incomes: use received_date (business date), fallback to created_at (audit only)
     incomes.forEach(item => addDate(item.received_date || item.created_at));
 
-    // Siempre incluir el año y mes actual
     const currentDate = new Date();
     newYears.add(currentDate.getFullYear().toString());
     newMonths.add(currentDate.toISOString().slice(0, 7));
 
-    // Acumular con los valores previos (UNION) para no perder períodos de otras páginas
     setAvailableYears(prevYears => {
       const merged = Array.from(new Set([...prevYears, ...newYears])).sort().reverse();
       return JSON.stringify(prevYears) !== JSON.stringify(merged) ? merged : prevYears;
@@ -62,9 +52,6 @@ export const PeriodProvider = ({ children }) => {
       return JSON.stringify(prevMonths) !== JSON.stringify(merged) ? merged : prevMonths;
     });
 
-    // Auto-seleccionar el mes más reciente SOLO la primera vez (carga inicial).
-    // No seleccionar meses futuros: usar el mes más reciente ≤ mes actual.
-    // Usar ref en lugar de leer selectedMonth para evitar stale closure.
     if (!hasAutoSelected.current && newMonths.size > 0) {
       hasAutoSelected.current = true;
       const currentMonth = new Date().toISOString().slice(0, 7);
@@ -75,81 +62,98 @@ export const PeriodProvider = ({ children }) => {
           .reverse()[0] || currentMonth;
       const [latestYear] = latestMonth.split('-');
       setSelectedMonth(latestMonth);
+      setSelectedMonths([latestMonth]);
       setSelectedYear(latestYear);
     }
-  }, []); // sin dependencias: usa ref + updater functions para evitar stale closures
+  }, []);
 
-  // Función para obtener meses disponibles para el año seleccionado
   const getMonthsForSelectedYear = useCallback(() => {
     if (!selectedYear) return availableMonths;
-    
     return availableMonths.filter(month => {
       const [year] = month.split('-');
       return year === selectedYear;
     });
   }, [selectedYear, availableMonths]);
 
-  // Función para limpiar filtros
+  // Toggle a month in/out of selectedMonths (multi-select)
+  const toggleMonth = useCallback((month) => {
+    const [year] = month.split('-');
+    setSelectedYear(year);
+    setSelectedMonth(month);
+    setSelectedMonths(prev => {
+      if (prev.includes(month)) {
+        const next = prev.filter(m => m !== month);
+        // If all deselected, keep the last one to avoid empty state
+        return next.length === 0 ? [month] : next;
+      }
+      return [...prev, month].sort();
+    });
+  }, []);
+
   const clearFilters = useCallback(() => {
     setSelectedYear('');
     setSelectedMonth('');
+    setSelectedMonths([]);
   }, []);
 
-  // Función para obtener parámetros de filtro para las APIs
+  // Returns filter params. For multi-month, returns the first month (legacy compat).
+  // Components that support multi-month use selectedMonths directly.
   const getFilterParams = useCallback(() => {
     const params = {};
-    
     if (selectedYear) params.year = selectedYear;
     if (selectedMonth) {
       const [year, month] = selectedMonth.split('-');
       params.year = year;
       params.month = month;
     }
-    
     return params;
   }, [selectedYear, selectedMonth]);
 
-  // Función para obtener el título del período seleccionado
   const getPeriodTitle = useCallback(() => {
+    if (selectedMonths.length > 1) {
+      const names = selectedMonths.map(m => {
+        const [year, month] = m.split('-');
+        const date = new Date(parseInt(year), parseInt(month) - 1, 1);
+        return date.toLocaleDateString('es-AR', { month: 'short' });
+      });
+      return `${names.join(', ')} ${selectedYear}`;
+    }
     if (selectedMonth) {
       const [year, month] = selectedMonth.split('-');
       const date = new Date(parseInt(year), parseInt(month) - 1, 1);
-      const formatted = date.toLocaleDateString('es-AR', { 
-        year: 'numeric', 
-        month: 'long' 
-      });
+      const formatted = date.toLocaleDateString('es-AR', { year: 'numeric', month: 'long' });
       return formatted.charAt(0).toUpperCase() + formatted.slice(1);
     } else if (selectedYear) {
       return `Año ${selectedYear}`;
     }
     return 'Todos los períodos';
-  }, [selectedMonth, selectedYear]);
+  }, [selectedMonth, selectedMonths, selectedYear]);
 
-  // Verificar si hay filtros activos
   const hasActiveFilters = selectedMonth || selectedYear;
+  const isMultiMonth = selectedMonths.length > 1;
 
-  // Función para alternar visibilidad de saldos
   const toggleBalancesVisibility = useCallback(() => {
-    setBalancesHidden(!balancesHidden);
-  }, [balancesHidden]);
+    setBalancesHidden(prev => !prev);
+  }, []);
 
   const value = {
-    // Estado
     selectedYear,
     selectedMonth,
+    selectedMonths,
     availableYears,
     availableMonths,
     hasActiveFilters,
+    isMultiMonth,
     balancesHidden,
-    
-    // Acciones
+
     setSelectedYear,
     setSelectedMonth,
+    setSelectedMonths,
     updateAvailableData,
     clearFilters,
+    toggleMonth,
     toggleBalancesVisibility,
-    
-    // Utilidades
+
     getFilterParams,
     getPeriodTitle,
     getMonthsForSelectedYear,
@@ -160,4 +164,4 @@ export const PeriodProvider = ({ children }) => {
       {children}
     </PeriodContext.Provider>
   );
-}; 
+};

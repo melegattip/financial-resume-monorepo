@@ -1,6 +1,6 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { createPortal } from 'react-dom';
-import { FaPlus, FaSearch, FaArrowUp, FaEdit, FaTrash, FaDollarSign } from 'react-icons/fa';
+import { FaPlus, FaSearch, FaArrowUp, FaEdit, FaTrash, FaDollarSign, FaDownload, FaUpload } from 'react-icons/fa';
 import { formatCurrency } from '../services/api';
 import dataService from '../services/dataService';
 import { usePeriod } from '../contexts/PeriodContext';
@@ -41,6 +41,7 @@ const Incomes = () => {
   const {
     selectedYear,
     selectedMonth,
+    selectedMonths,
     balancesHidden,
     updateAvailableData,
   } = usePeriod();
@@ -129,6 +130,95 @@ const Incomes = () => {
 
   // Hook para refrescar automáticamente cuando cambian los datos
   useDataRefresh(loadData, ['income', 'recurring_transaction']);
+
+  // ===== CSV Export/Import =====
+  const importIncomeRef = useRef(null);
+
+  const exportCSV = useCallback((toExport) => {
+    const rows = [['Descripcion', 'Monto', 'Categoria', 'Fecha_Recepcion']];
+    toExport.forEach(inc => {
+      const cat = categories.find(c => c.id === inc.category_id);
+      rows.push([
+        `"${(inc.description || '').replace(/"/g, '""')}"`,
+        inc.amount,
+        `"${(cat?.name || '').replace(/"/g, '""')}"`,
+        inc.received_date ? inc.received_date.split('T')[0] : '',
+      ]);
+    });
+    const csv = rows.map(r => r.join(',')).join('\n');
+    const blob = new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `ingresos-${new Date().toISOString().slice(0, 10)}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+    toast.success('CSV exportado');
+  }, [categories]);
+
+  const handleImportCSV = useCallback((e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = async (ev) => {
+      const text = ev.target.result.replace(/^﻿/, '');
+      const lines = text.split(/\r?\n/).filter(Boolean);
+      if (lines.length < 2) { toast.error('CSV vacío o sin datos'); return; }
+
+      const header = lines[0].split(',').map(h => h.trim().toLowerCase().replace(/"/g, ''));
+      const colIdx = (names) => names.reduce((found, n) => found !== -1 ? found : header.indexOf(n), -1);
+      const descIdx = colIdx(['descripcion', 'description', 'descripción']);
+      const amtIdx  = colIdx(['monto', 'amount', 'importe']);
+      const catIdx  = colIdx(['categoria', 'category']);
+      const dateIdx = colIdx(['fecha_recepcion', 'fecha', 'date', 'received_date']);
+
+      if (descIdx === -1 || amtIdx === -1) {
+        toast.error('El CSV debe tener columnas "Descripcion" y "Monto"');
+        return;
+      }
+
+      const parseRow = (line) => {
+        const result = [];
+        let cur = '', inQuote = false;
+        for (const ch of line) {
+          if (ch === '"') { inQuote = !inQuote; }
+          else if (ch === ',' && !inQuote) { result.push(cur); cur = ''; }
+          else { cur += ch; }
+        }
+        result.push(cur);
+        return result;
+      };
+
+      let created = 0, failed = 0;
+      const toastId = toast.loading('Importando...');
+      for (let i = 1; i < lines.length; i++) {
+        const cols = parseRow(lines[i]);
+        const desc = (cols[descIdx] || '').trim();
+        const amt  = parseFloat((cols[amtIdx] || '0').replace(/[^0-9.,-]/g, '').replace(',', '.'));
+        if (!desc || isNaN(amt) || amt <= 0) { failed++; continue; }
+
+        const catName = catIdx !== -1 ? (cols[catIdx] || '').trim() : '';
+        const cat = categories.find(c => c.name.toLowerCase() === catName.toLowerCase());
+        const dateStr = dateIdx !== -1 ? (cols[dateIdx] || '').trim() : '';
+
+        try {
+          await incomesAPI.create({
+            description: desc,
+            amount: amt,
+            category_id: cat?.id || '',
+            received_date: dateStr ? `${dateStr}T00:00:00Z` : '',
+          });
+          created++;
+        } catch { failed++; }
+      }
+      toast.dismiss(toastId);
+      if (created > 0) toast.success(`${created} ingresos importados${failed > 0 ? `, ${failed} fallidos` : ''}`);
+      else toast.error(`No se pudo importar ningún ingreso (${failed} fallidos)`);
+      await loadData();
+    };
+    reader.readAsText(file, 'UTF-8');
+    e.target.value = '';
+  }, [categories, incomesAPI, loadData]);
 
   // Validar formulario completo
   const validateForm = useCallback(() => {
@@ -250,7 +340,9 @@ const Incomes = () => {
         const rcvDate = income.received_date || income.created_at;
         const incomeDate = new Date(rcvDate);
         const matchesYear = !selectedYear || incomeDate.getFullYear().toString() === selectedYear;
-        const matchesMonth = !selectedMonth || rcvDate.slice(0, 7) === selectedMonth;
+        const matchesMonth = selectedMonths.length === 0
+          ? true
+          : selectedMonths.includes(rcvDate.slice(0, 7));
         
         return matchesSearch && matchesYear && matchesMonth;
       })
@@ -362,6 +454,30 @@ const Incomes = () => {
             <option value="desc">↓ Desc</option>
             <option value="asc">↑ Asc</option>
           </select>
+          {/* Import / Export CSV */}
+          <input
+            type="file"
+            accept=".csv"
+            ref={importIncomeRef}
+            onChange={handleImportCSV}
+            className="hidden"
+          />
+          <button
+            onClick={() => importIncomeRef.current?.click()}
+            className="flex items-center gap-1.5 py-1.5 px-2.5 text-sm border border-gray-200 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-600 transition-colors"
+            title="Importar CSV"
+          >
+            <FaUpload className="w-3 h-3" />
+            <span className="hidden sm:inline">Importar</span>
+          </button>
+          <button
+            onClick={() => exportCSV(filteredIncomes)}
+            className="flex items-center gap-1.5 py-1.5 px-2.5 text-sm border border-gray-200 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-600 transition-colors"
+            title="Exportar CSV"
+          >
+            <FaDownload className="w-3 h-3" />
+            <span className="hidden sm:inline">Exportar</span>
+          </button>
           <button
             onClick={() => setShowModal(true)}
             className="ml-auto btn-secondary flex items-center gap-1.5 py-1.5 px-3 text-sm"
@@ -371,7 +487,17 @@ const Incomes = () => {
           </button>
         </div>
 
-        {/* Lista de ingresos - estilo Gmail */}
+        {/* Cabecera tipo hoja de cálculo */}
+        <div className="flex items-center gap-3 px-3 py-1 bg-gray-100 dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 text-xs font-semibold text-gray-500 dark:text-gray-400 sticky top-0 z-10 select-none">
+          <div className="flex-shrink-0 w-6" />
+          <div className="flex-1 min-w-0">Descripción</div>
+          <div className="flex-shrink-0 hidden sm:block w-[120px]">Categoría</div>
+          <div className="flex-shrink-0 hidden md:block w-[80px] text-right">Fecha</div>
+          <div className="flex-shrink-0 text-right min-w-[90px]">Monto</div>
+          <div className="flex-shrink-0 w-[52px]" />
+        </div>
+
+        {/* Lista de ingresos - estilo hoja de cálculo */}
         <div className="divide-y divide-gray-100 dark:divide-gray-700/50">
           {filteredIncomes.length === 0 ? (
             <div className="text-center py-12">
@@ -380,82 +506,103 @@ const Incomes = () => {
               <p className="text-fr-gray-500 dark:text-gray-400">Comienza agregando tu primer ingreso</p>
             </div>
           ) : (
-            filteredIncomes.map((income) => {
-              const category = categories.find(c => c.id === income.category_id);
-              const color = getCategoryColor(income.category_id);
-              
-              return (
-                <div key={income.id} className="flex items-center gap-3 py-2 px-3 hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors">
-                  {/* Icono de ingreso */}
-                  <div className="flex-shrink-0 w-6 h-6">
-                    <div className="w-full h-full rounded-md bg-green-100 dark:bg-green-900/30 flex items-center justify-center">
-                      <FaArrowUp className="w-3 h-3 text-green-600 dark:text-green-400" />
+            <>
+              {filteredIncomes.map((income, idx) => {
+                const category = categories.find(c => c.id === income.category_id);
+                const color = getCategoryColor(income.category_id);
+
+                return (
+                  <div
+                    key={income.id}
+                    className={`flex items-center gap-3 py-1.5 px-3 hover:bg-blue-50/50 dark:hover:bg-blue-900/10 transition-colors ${
+                      idx % 2 === 1 ? 'bg-gray-50/60 dark:bg-gray-800/30' : ''
+                    }`}
+                  >
+                    {/* Icono de ingreso */}
+                    <div className="flex-shrink-0 w-6 h-6">
+                      <div className="w-full h-full rounded-md bg-green-100 dark:bg-green-900/30 flex items-center justify-center">
+                        <FaArrowUp className="w-3 h-3 text-green-600 dark:text-green-400" />
+                      </div>
                     </div>
-                  </div>
 
-                  {/* Descripción */}
-                  <div className="flex-1 min-w-0">
-                    <h3 className="font-medium text-fr-gray-900 dark:text-gray-100 text-sm truncate">
-                      {income.description}
-                    </h3>
-                  </div>
+                    {/* Descripción */}
+                    <div className="flex-1 min-w-0">
+                      <h3 className="font-medium text-fr-gray-900 dark:text-gray-100 text-sm truncate">
+                        {income.description}
+                      </h3>
+                    </div>
 
-                  {/* Categoría */}
-                  <div className="flex-shrink-0 hidden sm:flex items-center gap-1 w-[120px] overflow-hidden">
-                    {category && (
-                      <>
-                        <span className={`px-1.5 py-0.5 rounded-full text-xs font-medium ${color.bg} ${color.text} border ${color.border}`}>
-                          {category.name}
-                        </span>
-                        {category.priority > 0 && (
-                          <span className="text-xs font-mono text-blue-500 dark:text-blue-400 bg-blue-50 dark:bg-blue-900/30 px-1 py-0.5 rounded">
-                            #{category.priority}
+                    {/* Categoría */}
+                    <div className="flex-shrink-0 hidden sm:flex items-center gap-1 w-[120px] overflow-hidden">
+                      {category && (
+                        <>
+                          <span className={`px-1.5 py-0.5 rounded-full text-xs font-medium ${color.bg} ${color.text} border ${color.border}`}>
+                            {category.name}
                           </span>
-                        )}
-                      </>
-                    )}
-                  </div>
+                          {category.priority > 0 && (
+                            <span className="text-xs font-mono text-blue-500 dark:text-blue-400 bg-blue-50 dark:bg-blue-900/30 px-1 py-0.5 rounded">
+                              #{category.priority}
+                            </span>
+                          )}
+                        </>
+                      )}
+                    </div>
 
-                  {/* Fecha del ingreso */}
-                  <div className="flex-shrink-0 hidden md:block w-[80px] text-right">
-                    <span className="text-xs text-gray-500 dark:text-gray-400">
-                      {income.received_date ? new Date(income.received_date).toLocaleDateString('es-AR', { day: '2-digit', month: 'short', year: 'numeric' }) : '—'}
-                    </span>
-                  </div>
+                    {/* Fecha del ingreso */}
+                    <div className="flex-shrink-0 hidden md:block w-[80px] text-right">
+                      <span className="text-xs text-gray-500 dark:text-gray-400">
+                        {income.received_date ? new Date(income.received_date).toLocaleDateString('es-AR', { day: '2-digit', month: 'short', year: 'numeric' }) : '—'}
+                      </span>
+                    </div>
 
-                  {/* Monto */}
-                  <div className="flex-shrink-0 text-right min-w-[90px]">
-                    <div className="font-semibold text-green-600 dark:text-green-400 text-sm">
-                      +{formatAmount(income.amount)}
+                    {/* Monto */}
+                    <div className="flex-shrink-0 text-right min-w-[90px]">
+                      <div className="font-semibold text-green-600 dark:text-green-400 text-sm">
+                        +{formatAmount(income.amount)}
+                      </div>
+                    </div>
+
+                    {/* Botones de acción compactos */}
+                    <div className="flex space-x-0.5 flex-shrink-0">
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleEdit(income);
+                        }}
+                        className="w-6 h-6 bg-gray-100 dark:bg-gray-700 rounded-md flex items-center justify-center hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors"
+                        title="Editar"
+                      >
+                        <FaEdit className="w-3 h-3 text-gray-600 dark:text-gray-400" />
+                      </button>
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleDelete(income);
+                        }}
+                        className="w-6 h-6 bg-red-100 dark:bg-red-900/30 rounded-md flex items-center justify-center hover:bg-red-200 dark:hover:bg-red-900/50 transition-colors"
+                        title="Eliminar"
+                      >
+                        <FaTrash className="w-3 h-3 text-red-600 dark:text-red-400" />
+                      </button>
                     </div>
                   </div>
-                  
-                  {/* Botones de acción compactos */}
-                  <div className="flex space-x-0.5 flex-shrink-0">
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        handleEdit(income);
-                      }}
-                      className="w-6 h-6 bg-gray-100 dark:bg-gray-700 rounded-md flex items-center justify-center hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors"
-                      title="Editar"
-                    >
-                      <FaEdit className="w-3 h-3 text-gray-600 dark:text-gray-400" />
-                    </button>
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        handleDelete(income);
-                      }}
-                      className="w-6 h-6 bg-red-100 dark:bg-red-900/30 rounded-md flex items-center justify-center hover:bg-red-200 dark:hover:bg-red-900/50 transition-colors"
-                      title="Eliminar"
-                    >
-                      <FaTrash className="w-3 h-3 text-red-600 dark:text-red-400" />
-                    </button>
-                  </div>
+                );
+              })}
+
+              {/* Fila de totales */}
+              <div className="flex items-center gap-3 px-3 py-1.5 bg-green-50 dark:bg-green-900/10 border-t border-green-200 dark:border-green-800 font-semibold text-sm">
+                <div className="flex-shrink-0 w-6" />
+                <div className="flex-1 text-gray-600 dark:text-gray-400 text-xs">
+                  {filteredIncomes.length} ingreso{filteredIncomes.length !== 1 ? 's' : ''}
                 </div>
-              );
-            })
+                <div className="flex-shrink-0 hidden sm:block w-[120px]" />
+                <div className="flex-shrink-0 hidden md:block w-[80px]" />
+                <div className="flex-shrink-0 text-right min-w-[90px] text-green-700 dark:text-green-400">
+                  +{formatAmount(totalIncomes)}
+                </div>
+                <div className="flex-shrink-0 w-[52px]" />
+              </div>
+            </>
           )}
         </div>
       </div>

@@ -176,7 +176,7 @@ func (h *ExpenseHandler) List(c *gin.Context) {
 	tenantID := c.GetString("tenant_id")
 
 	// Pagination
-	limit, _ := strconv.Atoi(c.DefaultQuery("limit", "50"))
+	limit, _ := strconv.Atoi(c.DefaultQuery("limit", "0"))
 	offset, _ := strconv.Atoi(c.DefaultQuery("offset", "0"))
 
 	expenses, err := h.repo.FindByTenantID(c.Request.Context(), tenantID, limit, offset)

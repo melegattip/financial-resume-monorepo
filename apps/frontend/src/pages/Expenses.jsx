@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { useLocation } from 'react-router-dom';
-import { FaPlus, FaSearch, FaArrowDown, FaCalendar, FaEdit, FaTrash, FaCheckCircle, FaTimesCircle, FaDollarSign } from 'react-icons/fa';
+import { FaPlus, FaSearch, FaArrowDown, FaCalendar, FaEdit, FaTrash, FaCheckCircle, FaTimesCircle, FaDollarSign, FaDownload, FaUpload } from 'react-icons/fa';
 import { formatCurrency, formatPercentage, expensesAPI as expensesAPIraw } from '../services/api';
 import { usePeriod } from '../contexts/PeriodContext';
 import { useGamification } from '../contexts/GamificationContext';
@@ -57,6 +57,7 @@ const Expenses = ({ onDataModified } = {}) => {
   const {
     selectedYear,
     selectedMonth,
+    selectedMonths,
     balancesHidden,
     updateAvailableData,
   } = usePeriod();
@@ -131,6 +132,36 @@ const Expenses = ({ onDataModified } = {}) => {
     return formatPercentage(percentage);
   };
 
+  // ===== CSV Export/Import =====
+  const importCSVRef = useRef(null);
+
+  const exportCSV = useCallback((toExport) => {
+    const rows = [
+      ['Descripcion', 'Monto', 'Categoria', 'Fecha', 'Pagado', 'Monto_Pagado', 'Pendiente'],
+    ];
+    toExport.forEach(exp => {
+      const cat = categories.find(c => c.id === exp.category_id);
+      rows.push([
+        `"${(exp.description || '').replace(/"/g, '""')}"`,
+        exp.amount,
+        `"${(cat?.name || '').replace(/"/g, '""')}"`,
+        exp.transaction_date ? exp.transaction_date.split('T')[0] : '',
+        exp.paid ? 'SI' : 'NO',
+        exp.amount_paid || 0,
+        exp.pending_amount || 0,
+      ]);
+    });
+    const csv = rows.map(r => r.join(',')).join('\n');
+    const blob = new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `gastos-${new Date().toISOString().slice(0, 10)}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+    toast.success('CSV exportado');
+  }, [categories]);
+
   const loadData = useCallback(async () => {
     try {
       setLoading(true);
@@ -176,6 +207,74 @@ const Expenses = ({ onDataModified } = {}) => {
 
   // Hook para refrescar automáticamente cuando cambian los datos
   useDataRefresh(loadData, ['expense', 'recurring_transaction']);
+
+  // ===== CSV Import (necesita loadData, por eso va después) =====
+  const handleImportCSV = useCallback((e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = async (ev) => {
+      const text = ev.target.result.replace(/^﻿/, '');
+      const lines = text.split(/\r?\n/).filter(Boolean);
+      if (lines.length < 2) { toast.error('CSV vacío o sin datos'); return; }
+
+      const header = lines[0].split(',').map(h => h.trim().toLowerCase().replace(/"/g, ''));
+      const colIdx = (names) => names.reduce((found, n) => found !== -1 ? found : header.indexOf(n), -1);
+      const descIdx = colIdx(['descripcion', 'description', 'descripción']);
+      const amtIdx  = colIdx(['monto', 'amount', 'importe']);
+      const catIdx  = colIdx(['categoria', 'category', 'categoría']);
+      const dateIdx = colIdx(['fecha', 'date', 'transaction_date']);
+      const paidIdx = colIdx(['pagado', 'paid']);
+
+      if (descIdx === -1 || amtIdx === -1) {
+        toast.error('El CSV debe tener columnas "Descripcion" y "Monto"');
+        return;
+      }
+
+      const parseRow = (line) => {
+        const result = [];
+        let cur = '', inQuote = false;
+        for (const ch of line) {
+          if (ch === '"') { inQuote = !inQuote; }
+          else if (ch === ',' && !inQuote) { result.push(cur); cur = ''; }
+          else { cur += ch; }
+        }
+        result.push(cur);
+        return result;
+      };
+
+      let created = 0, failed = 0;
+      const toastId = toast.loading('Importando...');
+      for (let i = 1; i < lines.length; i++) {
+        const cols = parseRow(lines[i]);
+        const desc = (cols[descIdx] || '').trim();
+        const amt  = parseFloat((cols[amtIdx] || '0').replace(/[^0-9.,-]/g, '').replace(',', '.'));
+        if (!desc || isNaN(amt) || amt <= 0) { failed++; continue; }
+
+        const catName = catIdx !== -1 ? (cols[catIdx] || '').trim() : '';
+        const cat = categories.find(c => c.name.toLowerCase() === catName.toLowerCase());
+        const dateStr = dateIdx !== -1 ? (cols[dateIdx] || '').trim() : '';
+        const paid = paidIdx !== -1 ? ['si', 'yes', 'true', '1'].includes((cols[paidIdx] || '').trim().toLowerCase()) : false;
+
+        try {
+          await expensesAPI.create({
+            description: desc,
+            amount: amt,
+            category_id: cat?.id || '',
+            due_date: dateStr ? `${dateStr}T00:00:00Z` : '',
+            paid,
+          });
+          created++;
+        } catch { failed++; }
+      }
+      toast.dismiss(toastId);
+      if (created > 0) toast.success(`${created} gastos importados${failed > 0 ? `, ${failed} fallidos` : ''}`);
+      else toast.error(`No se pudo importar ningún gasto (${failed} fallidos)`);
+      await loadData();
+    };
+    reader.readAsText(file, 'UTF-8');
+    e.target.value = '';
+  }, [categories, expensesAPI, loadData]);
 
   // Validar formulario completo
   const validateForm = useCallback(() => {
@@ -674,7 +773,9 @@ const Expenses = ({ onDataModified } = {}) => {
       // Filtros de fecha — usar transaction_date (fecha funcional del gasto)
       const txDate = expense.due_date || expense.transaction_date || expense.created_at;
       const matchesYear = !selectedYear || txDate.slice(0, 4) === selectedYear;
-      const matchesMonth = !selectedMonth || txDate.slice(0, 7) === selectedMonth;
+      const matchesMonth = selectedMonths.length === 0
+        ? true
+        : selectedMonths.includes(txDate.slice(0, 7));
 
       return matchesSearch && matchesFilter && matchesYear && matchesMonth;
     })
@@ -831,31 +932,69 @@ const Expenses = ({ onDataModified } = {}) => {
             <option value="desc">↓ Desc</option>
             <option value="asc">↑ Asc</option>
           </select>
+          {/* CSV Import/Export */}
+          <input
+            type="file"
+            accept=".csv,text/csv"
+            ref={importCSVRef}
+            onChange={handleImportCSV}
+            className="hidden"
+          />
+          <button
+            onClick={() => importCSVRef.current?.click()}
+            className="flex items-center gap-1.5 py-1.5 px-3 text-sm border border-gray-200 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-600 transition-colors"
+            title="Importar CSV"
+          >
+            <FaUpload className="w-3 h-3" />
+            <span className="hidden sm:inline">Importar</span>
+          </button>
+          <button
+            onClick={() => exportCSV(filteredExpenses)}
+            className="flex items-center gap-1.5 py-1.5 px-3 text-sm border border-gray-200 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-600 transition-colors"
+            title="Exportar CSV"
+          >
+            <FaDownload className="w-3 h-3" />
+            <span className="hidden sm:inline">Exportar</span>
+          </button>
           <button
             onClick={() => setShowModal(true)}
-            className="ml-auto btn-primary flex items-center gap-1.5 py-1.5 px-3 text-sm"
+            className="btn-primary flex items-center gap-1.5 py-1.5 px-3 text-sm"
           >
             <FaPlus className="w-3 h-3" />
             <span>Nuevo</span>
           </button>
         </div>
 
-        {/* Lista de gastos - estilo Gmail */}
-        <div className="divide-y divide-gray-100 dark:divide-gray-700/50">
+        {/* Header fijo estilo spreadsheet */}
+        {filteredExpenses.length > 0 && (
+          <div className="flex items-center gap-3 px-3 py-1 bg-gray-50 dark:bg-gray-800/80 border-b border-gray-200 dark:border-gray-600 text-[10px] font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400 sticky top-0 z-10">
+            <div className="flex-shrink-0 w-6 text-center">✓</div>
+            <div className="flex-1 min-w-0">Descripción</div>
+            <div className="flex-shrink-0 hidden sm:block w-[120px]">Categoría</div>
+            <div className="flex-shrink-0 hidden md:block w-[52px] text-center">Fecha</div>
+            <div className="flex-shrink-0 hidden lg:block w-[42px] text-right">%</div>
+            <div className="flex-shrink-0 w-[100px] text-right">Monto</div>
+            <div className="flex-shrink-0 w-[62px]"></div>
+          </div>
+        )}
+
+        {/* Lista de gastos - estilo spreadsheet */}
+        <div className="divide-y divide-gray-100 dark:divide-gray-700/30">
           {filteredExpenses.length === 0 ? (
-            <div className="text-center py-12">
-              <FaArrowDown className="w-12 h-12 text-fr-gray-400 dark:text-gray-500 mx-auto mb-4" />
-              <h3 className="text-lg font-medium text-fr-gray-900 dark:text-gray-100 mb-2">No hay gastos</h3>
-              <p className="text-fr-gray-500 dark:text-gray-400">Comienza agregando tu primer gasto</p>
+            <div className="text-center py-10">
+              <FaArrowDown className="w-10 h-10 text-fr-gray-400 dark:text-gray-500 mx-auto mb-3" />
+              <h3 className="text-base font-medium text-fr-gray-900 dark:text-gray-100 mb-1">No hay gastos</h3>
+              <p className="text-sm text-fr-gray-500 dark:text-gray-400">Comienza agregando tu primer gasto</p>
             </div>
           ) : (
-            filteredExpenses.map((expense) => {
+            <>
+            {filteredExpenses.map((expense, rowIndex) => {
               const category = categories.find(c => c.id === expense.category_id);
               const color = getCategoryColor(expense.category_id);
               const incomePercentage = totalIncome > 0 ? (expense.amount / totalIncome) * 100 : 0;
 
               return (
-                <div key={expense.id} className="flex items-center gap-3 py-2 px-3 hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors">
+                <div key={expense.id} className={`flex items-center gap-3 py-1.5 px-3 transition-colors hover:bg-blue-50/50 dark:hover:bg-blue-900/10 ${rowIndex % 2 === 1 ? 'bg-gray-50/60 dark:bg-gray-800/30' : ''}`}>
                   {/* Estado de pago compacto */}
                   <div className="flex-shrink-0 w-6 h-6">
                     <button
@@ -1055,7 +1194,24 @@ const Expenses = ({ onDataModified } = {}) => {
                   </div>
                 </div>
               );
-            })
+            })}
+            {/* Fila de totales estilo spreadsheet */}
+            <div className="flex items-center gap-3 py-1.5 px-3 bg-gray-100 dark:bg-gray-700/50 border-t-2 border-gray-300 dark:border-gray-500 font-semibold text-sm">
+              <div className="flex-shrink-0 w-6"></div>
+              <div className="flex-1 min-w-0 text-gray-700 dark:text-gray-300">
+                Total ({filteredExpenses.length} gastos)
+              </div>
+              <div className="flex-shrink-0 hidden sm:block w-[120px]"></div>
+              <div className="flex-shrink-0 hidden md:block w-[52px]"></div>
+              <div className="flex-shrink-0 hidden lg:block w-[42px] text-right text-gray-500 dark:text-gray-400 text-xs">
+                {totalIncome > 0 ? `${((totalExpenses / totalIncome) * 100).toFixed(1)}%` : '—'}
+              </div>
+              <div className="flex-shrink-0 w-[100px] text-right text-gray-900 dark:text-gray-100">
+                -{formatAmount(totalExpenses)}
+              </div>
+              <div className="flex-shrink-0 w-[62px]"></div>
+            </div>
+            </>
           )}
         </div>
       </div>
