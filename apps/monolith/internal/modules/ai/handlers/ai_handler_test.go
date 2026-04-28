@@ -13,6 +13,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/melegattip/financial-resume-monorepo/apps/monolith/internal/modules/ai/domain"
+	"github.com/melegattip/financial-resume-monorepo/apps/monolith/internal/modules/ai/service"
 )
 
 func init() { gin.SetMode(gin.TestMode) }
@@ -128,6 +129,49 @@ func TestHandleMonthlyCoaching_CacheHit(t *testing.T) {
 	assert.Equal(t, true, resp["cached"])
 	reportMap := resp["report"].(map[string]interface{})
 	assert.Equal(t, "positivo", reportMap["sentiment"])
+}
+
+// ---------------------------------------------------------------------------
+// HandleMonthlyCoaching — force bypass cache
+// ---------------------------------------------------------------------------
+
+func TestHandleMonthlyCoaching_ForceBypassesCache(t *testing.T) {
+	svc := service.NewAnalysisService(service.NewOpenAIClient("")) // mock mode
+	h := &AIHandler{
+		analysisService: svc,
+		monthlyCache:    make(map[string]domain.MonthlyCoachingReport),
+		emailSentMap:    make(map[string]bool),
+		educationCache:  make(map[string]domain.EducationContent),
+		insightsCache:   make(map[string]cachedInsights),
+	}
+
+	// Pre-populate the cache with a stale "positivo" report.
+	h.monthlyCache["user1_2026-02"] = domain.MonthlyCoachingReport{
+		Month:     "2026-02",
+		Sentiment: "positivo",
+	}
+
+	router := gin.New()
+	router.POST("/ai/monthly-coaching", func(c *gin.Context) {
+		c.Set("user_id", "user1")
+		h.HandleMonthlyCoaching(c)
+	})
+
+	body, _ := json.Marshal(domain.MonthlyCoachingRequest{
+		FinancialData: domain.FinancialAnalysisData{UserID: "user1"},
+		PreviousMonth: "2026-02",
+		Force:         true,
+	})
+	w := httptest.NewRecorder()
+	req, _ := http.NewRequest(http.MethodPost, "/ai/monthly-coaching", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	router.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusOK, w.Code)
+	var resp map[string]interface{}
+	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &resp))
+	// Force=true must bypass the cache: cached field must be false.
+	assert.Equal(t, false, resp["cached"])
 }
 
 // ---------------------------------------------------------------------------

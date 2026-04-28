@@ -349,7 +349,7 @@ func TestGenerateMonthlyCoaching_ValidResponse(t *testing.T) {
     }`
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
-		w.Write(makeOpenAIResponse(t, mockContent))
+		_, _ = w.Write(makeOpenAIResponse(t, mockContent))
 	}))
 	defer ts.Close()
 
@@ -370,7 +370,7 @@ func TestGenerateMonthlyCoaching_ValidResponse(t *testing.T) {
 func TestGenerateMonthlyCoaching_ParseFailure(t *testing.T) {
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
-		w.Write(makeOpenAIResponse(t, "not valid json at all"))
+		_, _ = w.Write(makeOpenAIResponse(t, "not valid json at all"))
 	}))
 	defer ts.Close()
 
@@ -388,7 +388,7 @@ func TestGenerateMonthlyCoaching_ParseFailure(t *testing.T) {
 func TestGenerateMonthlyCoaching_OpenAIError(t *testing.T) {
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusInternalServerError)
-		w.Write([]byte(`{"error":"server error"}`))
+		_, _ = w.Write([]byte(`{"error":"server error"}`))
 	}))
 	defer ts.Close()
 
