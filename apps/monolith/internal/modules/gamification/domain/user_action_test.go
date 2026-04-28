@@ -7,41 +7,42 @@ import (
 )
 
 func TestXPForAction_KnownActions(t *testing.T) {
+	// Expected values are calibrated for the 0–1000 scoring scale.
 	cases := []struct {
 		action string
 		xp     int
 	}{
-		{ActionCreateExpense, 8},
-		{ActionCreateIncome, 8},
-		{ActionUpdateExpense, 5},
-		{ActionUpdateIncome, 5},
-		{ActionDeleteExpense, 3},
-		{ActionDeleteIncome, 3},
-		{ActionCreateCategory, 10},
-		{ActionUpdateCategory, 5},
-		{ActionAssignCategory, 3},
-		{ActionDailyLogin, 5},
-		{ActionWeeklyStreak, 25},
-		{ActionMonthlyStreak, 100},
-		{ActionCompleteProfile, 50},
-		{ActionViewDashboard, 2},
+		{ActionCreateExpense, 2},
+		{ActionCreateIncome, 2},
+		{ActionUpdateExpense, 1},
+		{ActionUpdateIncome, 1},
+		{ActionDeleteExpense, 1},
+		{ActionDeleteIncome, 1},
+		{ActionCreateCategory, 2},
+		{ActionUpdateCategory, 1},
+		{ActionAssignCategory, 1},
+		{ActionDailyLogin, 1},
+		{ActionWeeklyStreak, 5},
+		{ActionMonthlyStreak, 18},
+		{ActionCompleteProfile, 9},
+		{ActionViewDashboard, 1},
 		{ActionViewExpenses, 1},
 		{ActionViewIncomes, 1},
 		{ActionViewCategories, 1},
-		{ActionViewAnalytics, 3},
-		{ActionViewMonthlyReport, 5},
-		{ActionViewCategoryBreakdown, 3},
-		{ActionExportData, 10},
-		// Pre-existing quality actions.
-		{ActionCreateSavingsGoal, 15},
-		{ActionDepositSavings, 8},
-		{ActionAchieveSavingsGoal, 100},
-		{ActionCreateBudget, 20},
-		{ActionStayWithinBudget, 15},
-		// New flywheel action types.
-		{ActionCreateRecurringTransaction, 30},
-		{ActionApplyAIRecommendation, 20},
-		{ActionCompleteMonthlyReview, 15},
+		{ActionViewAnalytics, 1},
+		{ActionViewMonthlyReport, 1},
+		{ActionViewCategoryBreakdown, 1},
+		{ActionExportData, 2},
+		// Quality financial actions.
+		{ActionCreateSavingsGoal, 3},
+		{ActionDepositSavings, 1},
+		{ActionAchieveSavingsGoal, 18},
+		{ActionCreateBudget, 4},
+		{ActionStayWithinBudget, 3},
+		// Flywheel action types.
+		{ActionCreateRecurringTransaction, 5},
+		{ActionApplyAIRecommendation, 4},
+		{ActionCompleteMonthlyReview, 3},
 	}
 
 	for _, tc := range cases {
@@ -69,7 +70,7 @@ func TestXPForAction_AchieveSavingsGoal_HighestReward(t *testing.T) {
 }
 
 func TestXPForAction_ReadEducationCard(t *testing.T) {
-	assert.Equal(t, 5, XPForAction(ActionReadEducationCard))
+	assert.Equal(t, 1, XPForAction(ActionReadEducationCard))
 }
 
 func TestActionReadEducationCard_Constant(t *testing.T) {

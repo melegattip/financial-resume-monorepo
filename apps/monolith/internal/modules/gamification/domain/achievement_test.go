@@ -126,7 +126,7 @@ func TestDefaultAchievements_ContainsFinancialLearner(t *testing.T) {
 	}
 	require.NotNil(t, found, "financial_learner achievement should be in DefaultAchievements")
 	assert.Equal(t, 3, found.Target)
-	assert.Equal(t, 50, found.Points)
+	assert.Equal(t, 9, found.Points)
 	assert.False(t, found.Completed)
 	assert.Equal(t, "user_test", found.UserID)
 }
