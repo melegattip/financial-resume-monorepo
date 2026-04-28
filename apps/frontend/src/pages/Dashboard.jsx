@@ -1086,7 +1086,7 @@ const Resumen = () => {
               const mBalance = mTotalInc - mTotalExp;
               const mLabel = formatMonthLabel(month);
               return (
-                <div key={month} className="card flex-shrink-0 w-[420px]">
+                <div key={month} className="card flex-shrink-0 w-[420px] min-w-[420px]">
                   {/* Encabezado del mes */}
                   <div className="flex items-center justify-between mb-3 pb-2 border-b border-gray-100 dark:border-gray-700">
                     <h3 className="font-semibold text-gray-900 dark:text-gray-100 text-sm">{mLabel}</h3>
@@ -1120,11 +1120,16 @@ const Resumen = () => {
                         </span>
                         <span className="text-xs font-bold text-gray-900 dark:text-gray-100">-{formatAmount(mTotalExp)}</span>
                       </div>
-                      <div className="space-y-0.5 max-h-80 overflow-y-auto">
+                      <div className="max-h-80 overflow-y-auto">
+                        <div className="flex items-center gap-1.5 px-1 py-0.5 text-[10px] font-semibold text-gray-400 dark:text-gray-500 border-b border-gray-100 dark:border-gray-700 sticky top-0 bg-white dark:bg-gray-800">
+                          <div className="w-4 flex-shrink-0" />
+                          <span className="flex-1">Descripción</span>
+                          <span>Monto</span>
+                        </div>
                         {sortTransactions(mExp, expenseSortBy, expenseSortOrder)
                           .filter(e => filterExpenseStatus === 'all' ? true : filterExpenseStatus === 'paid' ? e.paid : !e.paid)
                           .map((expense, idx) => (
-                            <div key={expense.id || idx} className="flex items-center gap-1.5 py-0.5 px-1 rounded hover:bg-gray-50 dark:hover:bg-gray-700/50 group">
+                            <div key={expense.id || idx} className={`flex items-center gap-1.5 py-0.5 px-1 hover:bg-blue-50/50 dark:hover:bg-blue-900/10 ${idx % 2 === 1 ? 'bg-gray-50/60 dark:bg-gray-800/30' : ''}`}>
                               <button onClick={(ev) => { ev.stopPropagation(); togglePaid(expense); }}
                                 className={`flex-shrink-0 w-4 h-4 rounded flex items-center justify-center ${expense.paid ? 'bg-green-100 dark:bg-green-900/30 text-green-600' : 'bg-red-100 dark:bg-red-900/30 text-red-500'}`}>
                                 {expense.paid ? <FaCheckCircle className="w-2.5 h-2.5" /> : <FaTimesCircle className="w-2.5 h-2.5" />}
@@ -1150,9 +1155,14 @@ const Resumen = () => {
                         </span>
                         <span className="text-xs font-bold text-green-600 dark:text-green-400">+{formatAmount(mTotalInc)}</span>
                       </div>
-                      <div className="space-y-0.5 max-h-80 overflow-y-auto">
+                      <div className="max-h-80 overflow-y-auto">
+                        <div className="flex items-center gap-1.5 px-1 py-0.5 text-[10px] font-semibold text-gray-400 dark:text-gray-500 border-b border-gray-100 dark:border-gray-700 sticky top-0 bg-white dark:bg-gray-800">
+                          <div className="w-4 flex-shrink-0" />
+                          <span className="flex-1">Descripción</span>
+                          <span>Monto</span>
+                        </div>
                         {sortTransactions(mInc, incomeSortBy, incomeSortOrder).map((income, idx) => (
-                          <div key={income.id || idx} className="flex items-center gap-1.5 py-0.5 px-1 rounded hover:bg-gray-50 dark:hover:bg-gray-700/50">
+                          <div key={income.id || idx} className={`flex items-center gap-1.5 py-0.5 px-1 hover:bg-blue-50/50 dark:hover:bg-blue-900/10 ${idx % 2 === 1 ? 'bg-gray-50/60 dark:bg-gray-800/30' : ''}`}>
                             <div className="flex-shrink-0 w-4 h-4 rounded bg-green-100 dark:bg-green-900/30 flex items-center justify-center">
                               <FaArrowUp className="w-2.5 h-2.5 text-green-600 dark:text-green-400" />
                             </div>
