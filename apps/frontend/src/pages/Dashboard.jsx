@@ -1077,7 +1077,7 @@ const Resumen = () => {
       {/* Vista multi-mes: scroll horizontal con una tarjeta por mes */}
       {isMultiMonth && activeTab === 'resumen' && (
         <div className="overflow-x-auto pb-2">
-          <div className="flex gap-3" style={{ minWidth: 'max-content' }}>
+          <div className="flex gap-4" style={{ minWidth: 'max-content' }}>
             {selectedMonths.map(month => {
               const mExp = filterForMonth(data.allExpenses || [], month);
               const mInc = filterForMonth(data.allIncomes || [], month);
@@ -1086,11 +1086,11 @@ const Resumen = () => {
               const mBalance = mTotalInc - mTotalExp;
               const mLabel = formatMonthLabel(month);
               return (
-                <div key={month} className="card flex-shrink-0 w-[420px] min-w-[420px]">
+                <div key={month} className="card flex-shrink-0" style={{ width: 'calc(100vw - 280px)', minWidth: '560px' }}>
                   {/* Encabezado del mes */}
                   <div className="flex items-center justify-between mb-3 pb-2 border-b border-gray-100 dark:border-gray-700">
-                    <h3 className="font-semibold text-gray-900 dark:text-gray-100 text-sm">{mLabel}</h3>
-                    <div className="flex items-center gap-2 text-xs font-medium">
+                    <h3 className="font-semibold text-gray-900 dark:text-gray-100">{mLabel}</h3>
+                    <div className="flex items-center gap-3 text-sm font-medium">
                       <span className="text-green-600 dark:text-green-400">+{formatAmount(mTotalInc)}</span>
                       <span className="text-gray-300 dark:text-gray-600">|</span>
                       <span className="text-gray-800 dark:text-gray-200">-{formatAmount(mTotalExp)}</span>
@@ -1101,35 +1101,36 @@ const Resumen = () => {
                   </div>
 
                   {/* Filtros compartidos */}
-                  <div className="flex gap-1 mb-2">
+                  <div className="flex gap-1 mb-3">
                     {[['all', 'Todos'], ['unpaid', 'Pendientes'], ['paid', 'Pagados']].map(([val, label]) => (
                       <button key={val} onClick={() => setFilterExpenseStatus(val)}
-                        className={`px-2 py-0.5 rounded-full text-xs font-medium transition-colors ${filterExpenseStatus === val ? 'bg-gray-800 dark:bg-gray-200 text-white dark:text-gray-900' : 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-600'}`}>
+                        className={`px-3 py-1 rounded-full text-xs font-medium transition-colors ${filterExpenseStatus === val ? 'bg-gray-800 dark:bg-gray-200 text-white dark:text-gray-900' : 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-600'}`}>
                         {label}
                       </button>
                     ))}
                   </div>
 
                   {/* 2 columnas: Gastos | Ingresos */}
-                  <div className="grid grid-cols-2 gap-2 divide-x divide-gray-100 dark:divide-gray-700">
+                  <div className="grid grid-cols-2 gap-3 divide-x divide-gray-100 dark:divide-gray-700">
                     {/* Gastos */}
-                    <div className="pr-2">
-                      <div className="flex items-center justify-between mb-1.5">
+                    <div className="pr-3">
+                      <div className="flex items-center justify-between mb-2">
                         <span className="text-xs font-semibold text-gray-700 dark:text-gray-300 flex items-center gap-1">
-                          <FaArrowDown className="w-2.5 h-2.5" /> Gastos ({mExp.length})
+                          <FaArrowDown className="w-2.5 h-2.5" /> Gastos ({mExp.filter(e => filterExpenseStatus === 'all' ? true : filterExpenseStatus === 'paid' ? e.paid : !e.paid).length})
                         </span>
-                        <span className="text-xs font-bold text-gray-900 dark:text-gray-100">-{formatAmount(mTotalExp)}</span>
+                        <span className="text-sm font-bold text-gray-900 dark:text-gray-100">-{formatAmount(mTotalExp)}</span>
                       </div>
-                      <div className="max-h-80 overflow-y-auto">
-                        <div className="flex items-center gap-1.5 px-1 py-0.5 text-[10px] font-semibold text-gray-400 dark:text-gray-500 border-b border-gray-100 dark:border-gray-700 sticky top-0 bg-white dark:bg-gray-800">
-                          <div className="w-4 flex-shrink-0" />
-                          <span className="flex-1">Descripción</span>
-                          <span>Monto</span>
-                        </div>
+                      {/* Cabecera tipo hoja de cálculo */}
+                      <div className="flex items-center gap-1.5 px-1 py-0.5 text-[10px] font-semibold text-gray-400 dark:text-gray-500 border-b border-gray-100 dark:border-gray-700 sticky top-0 bg-white dark:bg-gray-800">
+                        <div className="w-4 flex-shrink-0" />
+                        <span className="flex-1">Descripción</span>
+                        <span>Monto</span>
+                      </div>
+                      <div className="max-h-96 overflow-y-auto">
                         {sortTransactions(mExp, expenseSortBy, expenseSortOrder)
                           .filter(e => filterExpenseStatus === 'all' ? true : filterExpenseStatus === 'paid' ? e.paid : !e.paid)
                           .map((expense, idx) => (
-                            <div key={expense.id || idx} className={`flex items-center gap-1.5 py-0.5 px-1 hover:bg-blue-50/50 dark:hover:bg-blue-900/10 ${idx % 2 === 1 ? 'bg-gray-50/60 dark:bg-gray-800/30' : ''}`}>
+                            <div key={expense.id || idx} className={`flex items-center gap-1.5 py-1 px-1 hover:bg-blue-50/50 dark:hover:bg-blue-900/10 ${idx % 2 === 1 ? 'bg-gray-50/60 dark:bg-gray-800/30' : ''}`}>
                               <button onClick={(ev) => { ev.stopPropagation(); togglePaid(expense); }}
                                 className={`flex-shrink-0 w-4 h-4 rounded flex items-center justify-center ${expense.paid ? 'bg-green-100 dark:bg-green-900/30 text-green-600' : 'bg-red-100 dark:bg-red-900/30 text-red-500'}`}>
                                 {expense.paid ? <FaCheckCircle className="w-2.5 h-2.5" /> : <FaTimesCircle className="w-2.5 h-2.5" />}
@@ -1138,31 +1139,32 @@ const Resumen = () => {
                               <span className="text-xs font-semibold text-gray-900 dark:text-gray-100 whitespace-nowrap">-{formatAmount(expense.amount)}</span>
                             </div>
                           ))}
-                        {mExp.length === 0 && <p className="text-xs text-gray-400 text-center py-3">Sin gastos</p>}
+                        {mExp.length === 0 && <p className="text-xs text-gray-400 text-center py-4">Sin gastos</p>}
                       </div>
                       {mExp.length > 0 && (
-                        <div className="mt-2 pt-1.5 border-t border-gray-100 dark:border-gray-700 text-xs font-semibold text-right text-gray-700 dark:text-gray-300">
+                        <div className="mt-2 pt-1.5 border-t border-gray-100 dark:border-gray-700 text-sm font-bold text-right text-gray-700 dark:text-gray-300">
                           Total: -{formatAmount(mTotalExp)}
                         </div>
                       )}
                     </div>
 
                     {/* Ingresos */}
-                    <div className="pl-2">
-                      <div className="flex items-center justify-between mb-1.5">
+                    <div className="pl-3">
+                      <div className="flex items-center justify-between mb-2">
                         <span className="text-xs font-semibold text-green-600 dark:text-green-400 flex items-center gap-1">
                           <FaArrowUp className="w-2.5 h-2.5" /> Ingresos ({mInc.length})
                         </span>
-                        <span className="text-xs font-bold text-green-600 dark:text-green-400">+{formatAmount(mTotalInc)}</span>
+                        <span className="text-sm font-bold text-green-600 dark:text-green-400">+{formatAmount(mTotalInc)}</span>
                       </div>
-                      <div className="max-h-80 overflow-y-auto">
-                        <div className="flex items-center gap-1.5 px-1 py-0.5 text-[10px] font-semibold text-gray-400 dark:text-gray-500 border-b border-gray-100 dark:border-gray-700 sticky top-0 bg-white dark:bg-gray-800">
-                          <div className="w-4 flex-shrink-0" />
-                          <span className="flex-1">Descripción</span>
-                          <span>Monto</span>
-                        </div>
+                      {/* Cabecera tipo hoja de cálculo */}
+                      <div className="flex items-center gap-1.5 px-1 py-0.5 text-[10px] font-semibold text-gray-400 dark:text-gray-500 border-b border-gray-100 dark:border-gray-700 sticky top-0 bg-white dark:bg-gray-800">
+                        <div className="w-4 flex-shrink-0" />
+                        <span className="flex-1">Descripción</span>
+                        <span>Monto</span>
+                      </div>
+                      <div className="max-h-96 overflow-y-auto">
                         {sortTransactions(mInc, incomeSortBy, incomeSortOrder).map((income, idx) => (
-                          <div key={income.id || idx} className={`flex items-center gap-1.5 py-0.5 px-1 hover:bg-blue-50/50 dark:hover:bg-blue-900/10 ${idx % 2 === 1 ? 'bg-gray-50/60 dark:bg-gray-800/30' : ''}`}>
+                          <div key={income.id || idx} className={`flex items-center gap-1.5 py-1 px-1 hover:bg-blue-50/50 dark:hover:bg-blue-900/10 ${idx % 2 === 1 ? 'bg-gray-50/60 dark:bg-gray-800/30' : ''}`}>
                             <div className="flex-shrink-0 w-4 h-4 rounded bg-green-100 dark:bg-green-900/30 flex items-center justify-center">
                               <FaArrowUp className="w-2.5 h-2.5 text-green-600 dark:text-green-400" />
                             </div>
@@ -1170,10 +1172,10 @@ const Resumen = () => {
                             <span className="text-xs font-semibold text-green-600 dark:text-green-400 whitespace-nowrap">+{formatAmount(income.amount)}</span>
                           </div>
                         ))}
-                        {mInc.length === 0 && <p className="text-xs text-gray-400 text-center py-3">Sin ingresos</p>}
+                        {mInc.length === 0 && <p className="text-xs text-gray-400 text-center py-4">Sin ingresos</p>}
                       </div>
                       {mInc.length > 0 && (
-                        <div className="mt-2 pt-1.5 border-t border-gray-100 dark:border-gray-700 text-xs font-semibold text-right text-green-600 dark:text-green-400">
+                        <div className="mt-2 pt-1.5 border-t border-gray-100 dark:border-gray-700 text-sm font-bold text-right text-green-600 dark:text-green-400">
                           Total: +{formatAmount(mTotalInc)}
                         </div>
                       )}

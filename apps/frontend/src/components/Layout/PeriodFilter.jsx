@@ -60,7 +60,7 @@ const PeriodFilter = ({ compact = false }) => {
     const yearMonths = availableMonths.filter(m => m.startsWith(currentYear));
     setSelectedYear(currentYear);
     setSelectedMonths(yearMonths.length > 0 ? yearMonths : []);
-    setSelectedMonth(yearMonths[0] || ''); // most recent month (array is descending)
+    setSelectedMonth(yearMonths[0] || ''); // most recent month (descending order)
     setIsOpen(false);
   };
 

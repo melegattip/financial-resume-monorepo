@@ -81,14 +81,17 @@ export const PeriodProvider = ({ children }) => {
   const toggleMonth = useCallback((month) => {
     const [year] = month.split('-');
     setSelectedYear(year);
-    setSelectedMonth(month);
     setSelectedMonths(prev => {
+      let next;
       if (prev.includes(month)) {
-        const next = prev.filter(m => m !== month);
-        // If all deselected, keep the last one to avoid empty state
-        return next.length === 0 ? [month] : next;
+        next = prev.filter(m => m !== month);
+        if (next.length === 0) next = [month];
+      } else {
+        next = [...prev, month].sort();
       }
-      return [...prev, month].sort();
+      // Keep selectedMonth in sync with the most recent month in selection
+      setSelectedMonth(next[next.length - 1]);
+      return next;
     });
   }, []);
 
@@ -98,18 +101,23 @@ export const PeriodProvider = ({ children }) => {
     setSelectedMonths([]);
   }, []);
 
-  // Returns filter params. For multi-month, returns the first month (legacy compat).
-  // Components that support multi-month use selectedMonths directly.
+  // Returns filter params for API calls.
+  // For multi-month mode, omits the month so the API returns all months in the year.
   const getFilterParams = useCallback(() => {
     const params = {};
     if (selectedYear) params.year = selectedYear;
-    if (selectedMonth) {
+    if (selectedMonths.length === 1) {
+      const [year, month] = selectedMonths[0].split('-');
+      params.year = year;
+      params.month = month;
+    } else if (selectedMonths.length === 0 && selectedMonth) {
       const [year, month] = selectedMonth.split('-');
       params.year = year;
       params.month = month;
     }
+    // Multiple months: only year-level filter so API returns all months' data
     return params;
-  }, [selectedYear, selectedMonth]);
+  }, [selectedYear, selectedMonth, selectedMonths]);
 
   const getPeriodTitle = useCallback(() => {
     if (selectedMonths.length > 1) {
