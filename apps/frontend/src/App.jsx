@@ -27,6 +27,7 @@ import Register from './pages/Register';
 import ForgotPassword from './pages/ForgotPassword';
 import ResetPassword from './pages/ResetPassword';
 import VerifyEmail from './pages/VerifyEmail';
+import LandingPage from './pages/LandingPage';
 
 // Layout components
 import Layout from './components/Layout/Layout';
@@ -40,14 +41,17 @@ export function AppContent() {
   return (
     <>
       <Routes>
+        {/* Landing page pública */}
+        <Route path="/" element={<LandingPage />} />
+
         {/* Rutas públicas (solo para usuarios NO autenticados) */}
-        <Route 
-          path="/login" 
+        <Route
+          path="/login"
           element={
             <PublicOnlyRoute>
               <Login />
             </PublicOnlyRoute>
-          } 
+          }
         />
         <Route
           path="/register"
@@ -61,72 +65,61 @@ export function AppContent() {
         <Route path="/reset-password" element={<ResetPassword />} />
         <Route path="/verify-email" element={<VerifyEmail />} />
 
-        {/* Rutas protegidas (requieren autenticación) */}
-        <Route 
-          path="/" 
+        {/* Rutas protegidas (requieren autenticación) — layout sin path para no consumir URL */}
+        <Route
           element={
             <ProtectedRoute>
               <Layout />
             </ProtectedRoute>
           }
         >
-          <Route path="dashboard" element={<Resumen />} />
-          <Route 
-            path="insights" 
+          <Route path="/dashboard" element={<Resumen />} />
+          <Route
+            path="/insights"
             element={
               <FeatureGuard feature="AI_INSIGHTS">
                 <FinancialInsights />
               </FeatureGuard>
-            } 
+            }
           />
-          <Route path="expenses" element={<Expenses />} />
-          <Route path="incomes" element={<Incomes />} />
-          <Route path="categories" element={<Categories />} />
-          <Route 
-            path="budgets" 
+          <Route path="/expenses" element={<Expenses />} />
+          <Route path="/incomes" element={<Incomes />} />
+          <Route path="/categories" element={<Categories />} />
+          <Route
+            path="/budgets"
             element={
               <FeatureGuard feature="BUDGETS">
                 <Budgets />
               </FeatureGuard>
-            } 
+            }
           />
-          <Route 
-            path="savings-goals" 
+          <Route
+            path="/savings-goals"
             element={
               <FeatureGuard feature="SAVINGS_GOALS">
                 <SavingsGoals />
               </FeatureGuard>
-            } 
+            }
           />
-          <Route path="recurring-transactions" element={<RecurringTransactions />} />
-          <Route path="achievements" element={<Achievements />} />
-          <Route path="settings" element={<Settings />} />
-          <Route index element={<Navigate to="/dashboard" replace />} />
+          <Route path="/recurring-transactions" element={<RecurringTransactions />} />
+          <Route path="/achievements" element={<Achievements />} />
+          <Route path="/settings" element={<Settings />} />
         </Route>
 
-
-
-        {/* Ruta 404 - página no encontrada */}
-        <Route 
-          path="*" 
+        {/* Ruta 404 */}
+        <Route
+          path="*"
           element={
             <div className="min-h-screen flex items-center justify-center bg-fr-gray-50 dark:bg-gray-900">
               <div className="text-center">
                 <h1 className="text-4xl font-bold text-fr-gray-900 dark:text-gray-100 mb-4">404</h1>
                 <p className="text-fr-gray-600 dark:text-gray-400 mb-6">Página no encontrada</p>
-                <a 
-                  href="/" 
-                  className="btn-primary"
-                >
-                  Volver al inicio
-                </a>
+                <a href="/" className="btn-primary">Volver al inicio</a>
               </div>
             </div>
-          } 
+          }
         />
       </Routes>
-      
-      
     </>
   );
 }
