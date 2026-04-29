@@ -1,7 +1,7 @@
 package handlers
 
 import (
-	"errors"
+	"context"
 	"net/http"
 	"strings"
 
@@ -9,17 +9,29 @@ import (
 	"github.com/rs/zerolog"
 
 	"github.com/melegattip/financial-resume-monorepo/apps/monolith/internal/modules/auth/domain"
-	"github.com/melegattip/financial-resume-monorepo/apps/monolith/internal/modules/auth/services"
 )
+
+// authSvc is the subset of AuthService methods used by AuthHandler.
+// Using an interface decouples the handler from the concrete service and
+// makes handler-level unit tests possible without a real database.
+type authSvc interface {
+	Register(ctx context.Context, req *domain.RegisterRequest) (*domain.AuthResponse, error)
+	Login(ctx context.Context, req *domain.LoginRequest) (*domain.AuthResponse, error)
+	Check2FA(ctx context.Context, email string) (*domain.Check2FAResponse, error)
+	SwitchTenant(ctx context.Context, userID, tenantID string) (*domain.TokenPair, error)
+	VerifyEmail(ctx context.Context, token string) error
+	ResendVerificationEmail(ctx context.Context, email string) error
+}
 
 // AuthHandler handles HTTP requests for authentication endpoints.
 type AuthHandler struct {
-	authService *services.AuthService
+	authService authSvc
 	logger      zerolog.Logger
 }
 
 // NewAuthHandler creates a new AuthHandler.
-func NewAuthHandler(authService *services.AuthService, logger zerolog.Logger) *AuthHandler {
+// authService is accepted as the interface so tests can inject a mock.
+func NewAuthHandler(authService authSvc, logger zerolog.Logger) *AuthHandler {
 	return &AuthHandler{
 		authService: authService,
 		logger:      logger.With().Str("component", "auth").Logger(),
@@ -67,20 +79,21 @@ func (h *AuthHandler) Login(c *gin.Context) {
 	if err != nil {
 		h.logger.Error().Err(err).Str("email", req.Email).Msg("login failed")
 
+		msg := err.Error()
 		switch {
-		case errors.Is(err, services.ErrTwoFARequired):
+		case msg == "2FA_REQUIRED":
 			c.JSON(http.StatusOK, gin.H{
 				"twofa_required": true,
 				"message":        "2FA code required",
 			})
-		case errors.Is(err, services.ErrEmailNotVerified):
+		case msg == "EMAIL_NOT_VERIFIED":
 			c.JSON(http.StatusForbidden, gin.H{"error": "EMAIL_NOT_VERIFIED"})
-		case strings.Contains(err.Error(), "deactivated"):
-			c.JSON(http.StatusForbidden, gin.H{"error": err.Error()})
-		case strings.Contains(err.Error(), "locked"):
-			c.JSON(http.StatusLocked, gin.H{"error": err.Error()})
-		case errors.Is(err, services.ErrInvalidCredentials):
-			c.JSON(http.StatusUnauthorized, gin.H{"error": err.Error()})
+		case strings.Contains(msg, "deactivated"):
+			c.JSON(http.StatusForbidden, gin.H{"error": msg})
+		case strings.Contains(msg, "locked"):
+			c.JSON(http.StatusLocked, gin.H{"error": msg})
+		case msg == "invalid email or password":
+			c.JSON(http.StatusUnauthorized, gin.H{"error": msg})
 		default:
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Internal server error"})
 		}

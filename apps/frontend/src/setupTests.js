@@ -13,23 +13,8 @@ jest.mock('react-router-dom', () => ({
   useLocation: () => ({ pathname: '/' }),
 }));
 
-// Mock para lucide-react
-jest.mock('lucide-react', () => ({
-  User: () => <div data-testid="user-icon" />,
-  Settings: () => <div data-testid="settings-icon" />,
-  LogOut: () => <div data-testid="logout-icon" />,
-  DollarSign: () => <div data-testid="dollar-icon" />,
-  TrendingUp: () => <div data-testid="trending-up-icon" />,
-  TrendingDown: () => <div data-testid="trending-down-icon" />,
-  Plus: () => <div data-testid="plus-icon" />,
-  Edit: () => <div data-testid="edit-icon" />,
-  Trash2: () => <div data-testid="trash-icon" />,
-  Search: () => <div data-testid="search-icon" />,
-  Filter: () => <div data-testid="filter-icon" />,
-  Calendar: () => <div data-testid="calendar-icon" />,
-  Menu: () => <div data-testid="menu-icon" />,
-  X: () => <div data-testid="x-icon" />,
-}));
+// lucide-react is not installed — skip the mock to avoid resolver errors.
+// If lucide-react is added as a dependency in the future, restore this mock.
 
 // Mock para recharts
 jest.mock('recharts', () => ({
