@@ -1086,9 +1086,9 @@ const Resumen = () => {
               const mBalance = mTotalInc - mTotalExp;
               const mLabel = formatMonthLabel(month);
               return (
-                <div key={month} className="card flex-shrink-0" style={{ width: 'calc(100vw - 280px)', minWidth: '560px' }}>
+                <div key={month} className="card flex-shrink-0 p-0 overflow-hidden" style={{ width: 'calc(100vw - 280px)', minWidth: '900px' }}>
                   {/* Encabezado del mes */}
-                  <div className="flex items-center justify-between mb-3 pb-2 border-b border-gray-100 dark:border-gray-700">
+                  <div className="flex items-center justify-between px-4 py-2.5 border-b border-gray-100 dark:border-gray-700">
                     <h3 className="font-semibold text-gray-900 dark:text-gray-100">{mLabel}</h3>
                     <div className="flex items-center gap-3 text-sm font-medium">
                       <span className="text-green-600 dark:text-green-400">+{formatAmount(mTotalInc)}</span>
@@ -1101,77 +1101,116 @@ const Resumen = () => {
                   </div>
 
                   {/* Filtros compartidos */}
-                  <div className="flex gap-1 mb-3">
+                  <div className="flex gap-1 px-4 py-2 border-b border-gray-100 dark:border-gray-700 bg-gray-50/50 dark:bg-gray-800/30">
                     {[['all', 'Todos'], ['unpaid', 'Pendientes'], ['paid', 'Pagados']].map(([val, label]) => (
                       <button key={val} onClick={() => setFilterExpenseStatus(val)}
-                        className={`px-3 py-1 rounded-full text-xs font-medium transition-colors ${filterExpenseStatus === val ? 'bg-gray-800 dark:bg-gray-200 text-white dark:text-gray-900' : 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-600'}`}>
+                        className={`px-3 py-0.5 rounded-full text-xs font-medium transition-colors ${filterExpenseStatus === val ? 'bg-gray-800 dark:bg-gray-200 text-white dark:text-gray-900' : 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-600'}`}>
                         {label}
                       </button>
                     ))}
                   </div>
 
                   {/* 2 columnas: Gastos | Ingresos */}
-                  <div className="grid grid-cols-2 gap-3 divide-x divide-gray-100 dark:divide-gray-700">
+                  <div className="grid grid-cols-2 divide-x divide-gray-100 dark:divide-gray-700">
                     {/* Gastos */}
-                    <div className="pr-3">
-                      <div className="flex items-center justify-between mb-2">
+                    <div>
+                      {/* Sub-cabecera */}
+                      <div className="flex items-center justify-between px-3 py-1.5 bg-gray-50 dark:bg-gray-800/50 border-b border-gray-100 dark:border-gray-700">
                         <span className="text-xs font-semibold text-gray-700 dark:text-gray-300 flex items-center gap-1">
                           <FaArrowDown className="w-2.5 h-2.5" /> Gastos ({mExp.filter(e => filterExpenseStatus === 'all' ? true : filterExpenseStatus === 'paid' ? e.paid : !e.paid).length})
                         </span>
-                        <span className="text-sm font-bold text-gray-900 dark:text-gray-100">-{formatAmount(mTotalExp)}</span>
+                        <span className="text-xs font-bold text-gray-900 dark:text-gray-100">-{formatAmount(mTotalExp)}</span>
                       </div>
-                      {/* Cabecera tipo hoja de cálculo */}
-                      <div className="flex items-center gap-1.5 px-1 py-0.5 text-[10px] font-semibold text-gray-400 dark:text-gray-500 border-b border-gray-100 dark:border-gray-700 sticky top-0 bg-white dark:bg-gray-800">
-                        <div className="w-4 flex-shrink-0" />
+                      {/* Cabecera columnas */}
+                      <div className="flex items-center gap-2 px-3 py-0.5 text-[10px] font-semibold text-gray-400 dark:text-gray-500 border-b border-gray-100 dark:border-gray-700 bg-white dark:bg-gray-800">
+                        <div className="w-5 flex-shrink-0" />
                         <span className="flex-1">Descripción</span>
-                        <span>Monto</span>
+                        <span className="w-[90px] hidden lg:block">Categoría</span>
+                        <span className="w-[46px] text-center">Fecha</span>
+                        <span className="w-[42px] text-right">%</span>
+                        <span className="w-[90px] text-right">Monto</span>
                       </div>
                       <div className="max-h-96 overflow-y-auto">
                         {sortTransactions(mExp, expenseSortBy, expenseSortOrder)
                           .filter(e => filterExpenseStatus === 'all' ? true : filterExpenseStatus === 'paid' ? e.paid : !e.paid)
-                          .map((expense, idx) => (
-                            <div key={expense.id || idx} className={`flex items-center gap-1.5 py-1 px-1 hover:bg-blue-50/50 dark:hover:bg-blue-900/10 ${idx % 2 === 1 ? 'bg-gray-50/60 dark:bg-gray-800/30' : ''}`}>
-                              <button onClick={(ev) => { ev.stopPropagation(); togglePaid(expense); }}
-                                className={`flex-shrink-0 w-4 h-4 rounded flex items-center justify-center ${expense.paid ? 'bg-green-100 dark:bg-green-900/30 text-green-600' : 'bg-red-100 dark:bg-red-900/30 text-red-500'}`}>
-                                {expense.paid ? <FaCheckCircle className="w-2.5 h-2.5" /> : <FaTimesCircle className="w-2.5 h-2.5" />}
-                              </button>
-                              <span className="flex-1 text-xs text-gray-800 dark:text-gray-200 truncate" title={expense.description}>{expense.description}</span>
-                              <span className="text-xs font-semibold text-gray-900 dark:text-gray-100 whitespace-nowrap">-{formatAmount(expense.amount)}</span>
-                            </div>
-                          ))}
+                          .map((expense, idx) => {
+                            const cat = data.categories.find(c => c.id === expense.category_id);
+                            const col = getCategoryColor(expense.category_id);
+                            return (
+                              <div key={expense.id || idx} className={`flex items-center gap-2 py-1 px-3 hover:bg-blue-50/50 dark:hover:bg-blue-900/10 transition-colors ${idx % 2 === 1 ? 'bg-gray-50/60 dark:bg-gray-800/30' : ''}`}>
+                                <button onClick={(ev) => { ev.stopPropagation(); togglePaid(expense); }}
+                                  className={`flex-shrink-0 w-5 h-5 rounded flex items-center justify-center ${expense.paid ? 'bg-green-100 dark:bg-green-900/30 text-green-600' : 'bg-red-100 dark:bg-red-900/30 text-red-500'}`}
+                                  title={expense.paid ? 'Marcar pendiente' : 'Hacer pago'}>
+                                  {expense.paid ? <FaCheckCircle className="w-2.5 h-2.5" /> : <FaTimesCircle className="w-2.5 h-2.5" />}
+                                </button>
+                                <span className="flex-1 text-xs text-gray-800 dark:text-gray-200 truncate" title={expense.description}>{expense.description}</span>
+                                <div className="w-[90px] hidden lg:flex items-center gap-1 flex-shrink-0 overflow-hidden">
+                                  {cat && <span className={`px-1.5 py-0.5 rounded-full text-[10px] font-medium truncate ${col.bg} ${col.text} border ${col.border}`}>{cat.name}</span>}
+                                </div>
+                                <span className="w-[46px] flex-shrink-0 text-[10px] text-gray-500 dark:text-gray-400 text-center">
+                                  {(() => { const raw = expense.transaction_date || expense.due_date; return raw ? new Date(raw.split('T')[0] + 'T12:00:00').toLocaleDateString('es-AR', { day: 'numeric', month: 'short' }) : '—'; })()}
+                                </span>
+                                <span className="w-[42px] flex-shrink-0 text-[10px] text-gray-500 dark:text-gray-400 text-right">
+                                  {mTotalInc > 0 ? formatPercentage((expense.amount / mTotalInc) * 100) : '—'}
+                                </span>
+                                <span className="w-[90px] flex-shrink-0 text-xs font-semibold text-gray-900 dark:text-gray-100 text-right whitespace-nowrap">
+                                  -{formatAmount(expense.amount_paid > 0 && !expense.paid ? expense.amount - expense.amount_paid : expense.amount)}
+                                </span>
+                              </div>
+                            );
+                          })}
                         {mExp.length === 0 && <p className="text-xs text-gray-400 text-center py-4">Sin gastos</p>}
                       </div>
                       {mExp.length > 0 && (
-                        <div className="mt-2 pt-1.5 border-t border-gray-100 dark:border-gray-700 text-sm font-bold text-right text-gray-700 dark:text-gray-300">
+                        <div className="px-3 py-1.5 border-t border-gray-100 dark:border-gray-700 text-xs font-bold text-right text-gray-700 dark:text-gray-300 bg-gray-50 dark:bg-gray-800/50">
                           Total: -{formatAmount(mTotalExp)}
                         </div>
                       )}
                     </div>
 
                     {/* Ingresos */}
-                    <div className="pl-3">
-                      <div className="flex items-center justify-between mb-2">
+                    <div>
+                      {/* Sub-cabecera */}
+                      <div className="flex items-center justify-between px-3 py-1.5 bg-gray-50 dark:bg-gray-800/50 border-b border-gray-100 dark:border-gray-700">
                         <span className="text-xs font-semibold text-green-600 dark:text-green-400 flex items-center gap-1">
                           <FaArrowUp className="w-2.5 h-2.5" /> Ingresos ({mInc.length})
                         </span>
-                        <span className="text-sm font-bold text-green-600 dark:text-green-400">+{formatAmount(mTotalInc)}</span>
+                        <span className="text-xs font-bold text-green-600 dark:text-green-400">+{formatAmount(mTotalInc)}</span>
                       </div>
-                      {/* Cabecera tipo hoja de cálculo */}
-                      <div className="flex items-center gap-1.5 px-1 py-0.5 text-[10px] font-semibold text-gray-400 dark:text-gray-500 border-b border-gray-100 dark:border-gray-700 sticky top-0 bg-white dark:bg-gray-800">
-                        <div className="w-4 flex-shrink-0" />
+                      {/* Cabecera columnas */}
+                      <div className="flex items-center gap-2 px-3 py-0.5 text-[10px] font-semibold text-gray-400 dark:text-gray-500 border-b border-gray-100 dark:border-gray-700 bg-white dark:bg-gray-800">
+                        <div className="w-5 flex-shrink-0" />
                         <span className="flex-1">Descripción</span>
-                        <span>Monto</span>
+                        <span className="w-[90px] hidden lg:block">Categoría</span>
+                        <span className="w-[46px] text-center">Fecha</span>
+                        <span className="w-[42px] text-right">%</span>
+                        <span className="w-[90px] text-right">Monto</span>
                       </div>
                       <div className="max-h-96 overflow-y-auto">
-                        {sortTransactions(mInc, incomeSortBy, incomeSortOrder).map((income, idx) => (
-                          <div key={income.id || idx} className={`flex items-center gap-1.5 py-1 px-1 hover:bg-blue-50/50 dark:hover:bg-blue-900/10 ${idx % 2 === 1 ? 'bg-gray-50/60 dark:bg-gray-800/30' : ''}`}>
-                            <div className="flex-shrink-0 w-4 h-4 rounded bg-green-100 dark:bg-green-900/30 flex items-center justify-center">
-                              <FaArrowUp className="w-2.5 h-2.5 text-green-600 dark:text-green-400" />
+                        {sortTransactions(mInc, incomeSortBy, incomeSortOrder).map((income, idx) => {
+                          const cat = data.categories.find(c => c.id === income.category_id);
+                          const col = getCategoryColor(income.category_id);
+                          return (
+                            <div key={income.id || idx} className={`flex items-center gap-2 py-1 px-3 hover:bg-blue-50/50 dark:hover:bg-blue-900/10 transition-colors ${idx % 2 === 1 ? 'bg-gray-50/60 dark:bg-gray-800/30' : ''}`}>
+                              <div className="flex-shrink-0 w-5 h-5 rounded bg-green-100 dark:bg-green-900/30 flex items-center justify-center">
+                                <FaArrowUp className="w-2.5 h-2.5 text-green-600 dark:text-green-400" />
+                              </div>
+                              <span className="flex-1 text-xs text-gray-800 dark:text-gray-200 truncate" title={income.description}>{income.description}</span>
+                              <div className="w-[90px] hidden lg:flex items-center gap-1 flex-shrink-0 overflow-hidden">
+                                {cat && <span className={`px-1.5 py-0.5 rounded-full text-[10px] font-medium truncate ${col.bg} ${col.text} border ${col.border}`}>{cat.name}</span>}
+                              </div>
+                              <span className="w-[46px] flex-shrink-0 text-[10px] text-gray-500 dark:text-gray-400 text-center">
+                                {income.received_date ? new Date(income.received_date.split('T')[0] + 'T12:00:00').toLocaleDateString('es-AR', { day: 'numeric', month: 'short' }) : '—'}
+                              </span>
+                              <span className="w-[42px] flex-shrink-0 text-[10px] text-gray-500 dark:text-gray-400 text-right">
+                                {mTotalInc > 0 ? formatPercentage((income.amount / mTotalInc) * 100) : '—'}
+                              </span>
+                              <span className="w-[90px] flex-shrink-0 text-xs font-semibold text-green-600 dark:text-green-400 text-right whitespace-nowrap">
+                                +{formatAmount(income.amount)}
+                              </span>
                             </div>
-                            <span className="flex-1 text-xs text-gray-800 dark:text-gray-200 truncate" title={income.description}>{income.description}</span>
-                            <span className="text-xs font-semibold text-green-600 dark:text-green-400 whitespace-nowrap">+{formatAmount(income.amount)}</span>
-                          </div>
-                        ))}
+                          );
+                        })}
                         {mInc.length === 0 && <p className="text-xs text-gray-400 text-center py-4">Sin ingresos</p>}
                       </div>
                       {mInc.length > 0 && (
