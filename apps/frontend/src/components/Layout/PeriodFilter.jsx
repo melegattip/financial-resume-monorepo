@@ -8,6 +8,7 @@ const PeriodFilter = ({ compact = false }) => {
     selectedMonth,
     selectedMonths,
     availableYears,
+    availableMonths,
     balancesHidden,
     setSelectedYear,
     setSelectedMonth,
@@ -56,9 +57,11 @@ const PeriodFilter = ({ compact = false }) => {
 
   const handleThisYear = () => {
     const currentYear = new Date().getFullYear().toString();
+    const yearMonths = availableMonths.filter(m => m.startsWith(currentYear));
     setSelectedYear(currentYear);
-    setSelectedMonth('');
-    setSelectedMonths([]);
+    setSelectedMonths(yearMonths.length > 0 ? yearMonths : []);
+    setSelectedMonth(yearMonths[0] || ''); // most recent month (array is descending)
+    setIsOpen(false);
   };
 
   const multiCount = selectedMonths.length;

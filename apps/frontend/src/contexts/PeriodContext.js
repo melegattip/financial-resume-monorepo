@@ -29,8 +29,10 @@ export const PeriodProvider = ({ children }) => {
     const addDate = (dateStr) => {
       if (!dateStr) return;
       const date = new Date(dateStr);
-      if (!isNaN(date.getTime())) {
-        newYears.add(date.getFullYear().toString());
+      const year = date.getFullYear();
+      // Skip Go zero-time values and unrealistic years
+      if (!isNaN(date.getTime()) && year >= 2000 && year <= 2100) {
+        newYears.add(year.toString());
         newMonths.add(date.toISOString().slice(0, 7));
       }
     };
@@ -118,16 +120,17 @@ export const PeriodProvider = ({ children }) => {
       });
       return `${names.join(', ')} ${selectedYear}`;
     }
-    if (selectedMonth) {
-      const [year, month] = selectedMonth.split('-');
+    if (selectedMonths.length === 1) {
+      const [year, month] = selectedMonths[0].split('-');
       const date = new Date(parseInt(year), parseInt(month) - 1, 1);
       const formatted = date.toLocaleDateString('es-AR', { year: 'numeric', month: 'long' });
       return formatted.charAt(0).toUpperCase() + formatted.slice(1);
-    } else if (selectedYear) {
+    }
+    if (selectedYear) {
       return `Año ${selectedYear}`;
     }
     return 'Todos los períodos';
-  }, [selectedMonth, selectedMonths, selectedYear]);
+  }, [selectedMonths, selectedYear]);
 
   const hasActiveFilters = selectedMonth || selectedYear;
   const isMultiMonth = selectedMonths.length > 1;
